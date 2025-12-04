@@ -1,18 +1,32 @@
 import socket
 import subprocess
 import platform
+import logging
+
+logger = logging.getLogger(__name__)
 
 class CheckService:
+    @staticmethod
+    def _get_ping_command(host, timeout):
+        """Get platform-specific ping command"""
+        system = platform.system().lower()
+        
+        if system == 'windows':
+            # Windows: ping -n 1 -w <timeout_ms> <host>
+            return ['ping', '-n', '1', '-w', str(timeout * 1000), host]
+        else:
+            # Linux/Unix: ping -c 1 -W <timeout_sec> <host>
+            return ['ping', '-c', '1', '-W', str(timeout), host]
+    
     @staticmethod
     def ping_check(host, timeout=3):
         """Check if host is reachable via ping"""
         try:
-            param = '-n' if platform.system().lower() == 'windows' else '-c'
-            command = ['ping', param, '1', '-W' if platform.system().lower() != 'windows' else '-w', str(timeout * 1000 if platform.system().lower() == 'windows' else timeout), host]
+            command = CheckService._get_ping_command(host, timeout)
             result = subprocess.run(command, capture_output=True, text=True, timeout=timeout + 1)
             return result.returncode == 0
         except Exception as e:
-            print(f"Ping check failed for {host}: {str(e)}")
+            logger.error(f"Ping check failed for {host}: {str(e)}")
             return False
     
     @staticmethod
@@ -25,7 +39,7 @@ class CheckService:
             sock.close()
             return result == 0
         except Exception as e:
-            print(f"Port check failed for {host}:{port}: {str(e)}")
+            logger.error(f"Port check failed for {host}:{port} - {str(e)}")
             return False
     
     @staticmethod

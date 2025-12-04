@@ -1,6 +1,9 @@
 import paramiko
 import socket
 from io import StringIO
+import logging
+
+logger = logging.getLogger(__name__)
 
 class SSHService:
     def __init__(self, host, port, username, password):
@@ -14,7 +17,11 @@ class SSHService:
         """Establish SSH connection"""
         try:
             self.client = paramiko.SSHClient()
+            # SECURITY NOTE: AutoAddPolicy accepts all host keys automatically
+            # In production, consider using WarningPolicy or loading known_hosts
             self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            logger.warning(f"Connecting to {self.host}:{self.port} with AutoAddPolicy (accepts any host key)")
+            
             self.client.connect(
                 hostname=self.host,
                 port=self.port,
@@ -24,7 +31,7 @@ class SSHService:
             )
             return True
         except Exception as e:
-            print(f"SSH connection failed: {str(e)}")
+            logger.error(f"SSH connection failed to {self.host}:{self.port} - {str(e)}")
             return False
     
     def disconnect(self):
@@ -43,11 +50,11 @@ class SSHService:
             error = stderr.read().decode().strip()
             
             if error:
-                print(f"Command error: {error}")
+                logger.warning(f"Command error on {self.host}: {error}")
             
             return output
         except Exception as e:
-            print(f"Command execution failed: {str(e)}")
+            logger.error(f"Command execution failed on {self.host}: {str(e)}")
             return None
     
     def get_system_info(self):
@@ -99,7 +106,7 @@ class SSHService:
             
             return info
         except Exception as e:
-            print(f"Failed to get system info: {str(e)}")
+            logger.error(f"Failed to get system info from {self.host}: {str(e)}")
             return None
         finally:
             self.disconnect()
