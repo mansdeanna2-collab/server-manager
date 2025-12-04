@@ -20,7 +20,7 @@
             Dashboard
           </el-menu-item>
           <el-menu-item index="/servers">
-            <el-icon><Server /></el-icon>
+            <el-icon><OfficeBuilding /></el-icon>
             Servers
           </el-menu-item>
         </el-menu>
@@ -43,7 +43,7 @@
           <div class="stats-grid">
             <div class="stat-card">
               <div class="stat-card-icon" style="color: #409EFF;">
-                <el-icon><Server /></el-icon>
+                <el-icon><OfficeBuilding /></el-icon>
               </div>
               <div class="stat-card-title">Total Servers</div>
               <div class="stat-card-value">{{ stats.total }}</div>
@@ -127,8 +127,8 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
-  Monitor, Odometer, Server, User, ArrowDown, Refresh,
-  CircleCheck, CircleClose, QuestionFilled
+  Monitor, Odometer, User, ArrowDown, Refresh,
+  CircleCheck, CircleClose, QuestionFilled, OfficeBuilding
 } from '@element-plus/icons-vue'
 import { serversAPI, authAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'

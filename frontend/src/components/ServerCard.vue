@@ -38,7 +38,7 @@
 </template>
 
 <script setup>
-import StatusBadge from './StatusBadge.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Connection, User, Monitor, Document, View, Refresh } from '@element-plus/icons-vue'
 
 defineProps({

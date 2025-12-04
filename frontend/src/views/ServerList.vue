@@ -20,7 +20,7 @@
             Dashboard
           </el-menu-item>
           <el-menu-item index="/servers">
-            <el-icon><Server /></el-icon>
+            <el-icon><OfficeBuilding /></el-icon>
             Servers
           </el-menu-item>
         </el-menu>
@@ -197,8 +197,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Monitor, Odometer, Server, User, ArrowDown, Plus, Refresh,
-  Search, View, Edit, Delete
+  Monitor, Odometer, User, ArrowDown, Plus, Refresh,
+  Search, View, Edit, Delete, OfficeBuilding
 } from '@element-plus/icons-vue'
 import { serversAPI, authAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
