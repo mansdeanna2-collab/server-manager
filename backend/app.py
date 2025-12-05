@@ -28,7 +28,7 @@ def create_app():
     migrate = Migrate(app, db)
     
     # Configure CORS with specific origins for production
-    cors_origins = os.getenv('CORS_ORIGINS', '*').split(',')
+    cors_origins = Config.CORS_ORIGINS.split(',') if Config.CORS_ORIGINS else ['*']
     CORS(app, resources={
         r"/api/*": {
             "origins": cors_origins,
@@ -39,12 +39,16 @@ def create_app():
     })
     
     # Configure rate limiting
-    limiter = Limiter(
-        app=app,
-        key_func=get_remote_address,
-        default_limits=["200 per day", "50 per hour"],
-        storage_uri=os.getenv('RATELIMIT_STORAGE_URL', 'memory://')
-    )
+    if Config.RATELIMIT_ENABLED:
+        limiter = Limiter(
+            app=app,
+            key_func=get_remote_address,
+            default_limits=["200 per day", "50 per hour"],
+            storage_uri=Config.RATELIMIT_STORAGE_URL
+        )
+        logger.info("Rate limiting enabled")
+    else:
+        logger.info("Rate limiting disabled")
     
     # Register blueprints
     app.register_blueprint(auth_bp)
