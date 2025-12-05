@@ -28,7 +28,7 @@ class SSHService:
                 hostname=self.host,
                 port=self.port,
                 username=self.username,
-                ******
+                password=self.password,
                 timeout=self.timeout,
                 banner_timeout=30,
                 auth_timeout=30
