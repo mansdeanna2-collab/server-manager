@@ -2,15 +2,17 @@ import paramiko
 import socket
 from io import StringIO
 import logging
+from config import Config
 
 logger = logging.getLogger(__name__)
 
 class SSHService:
-    def __init__(self, host, port, username, password):
+    def __init__(self, host, port, username, password, timeout=None):
         self.host = host
         self.port = port
         self.username = username
         self.password = password
+        self.timeout = timeout or Config.SSH_TIMEOUT
         self.client = None
     
     def connect(self):
@@ -26,12 +28,24 @@ class SSHService:
                 hostname=self.host,
                 port=self.port,
                 username=self.username,
-                password=self.password,
-                timeout=10
+                ******
+                timeout=self.timeout,
+                banner_timeout=30,
+                auth_timeout=30
             )
+            logger.info(f"Successfully connected to {self.host}:{self.port}")
             return True
-        except Exception as e:
+        except paramiko.AuthenticationException:
+            logger.error(f"Authentication failed for {self.host}:{self.port}")
+            return False
+        except paramiko.SSHException as e:
             logger.error(f"SSH connection failed to {self.host}:{self.port} - {str(e)}")
+            return False
+        except socket.timeout:
+            logger.error(f"Connection timeout to {self.host}:{self.port}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error connecting to {self.host}:{self.port} - {str(e)}")
             return False
     
     def disconnect(self):

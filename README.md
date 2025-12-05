@@ -1,6 +1,31 @@
 # Server Manager
 
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/mansdeanna2-collab/server-manager)
+[![Python](https://img.shields.io/badge/python-3.9+-green.svg)](https://www.python.org/)
+[![Vue](https://img.shields.io/badge/vue-3.5+-brightgreen.svg)](https://vuejs.org/)
+[![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
+
 A comprehensive server management system with a beautiful web interface for managing and monitoring multiple servers.
+
+## 📦 Version 2.0.0 Updates
+
+### What's New
+- ⬆️ **Upgraded Dependencies**: All packages updated to latest stable versions
+  - Flask 3.0.0 → 3.1.0
+  - Vue 3.4.0 → 3.5.13
+  - Axios 1.6.2 → 1.7.9
+  - Element Plus 2.5.0 → 2.9.1
+  - And more...
+- 🔒 **Enhanced Security**: Added rate limiting and better error handling
+- 🔧 **Improved Configuration**: Environment variables with .env.example files
+- 📊 **Better Logging**: Comprehensive logging throughout the application
+- 🔄 **Database Migrations**: Added Flask-Migrate support
+- 🎯 **API Improvements**: Better error responses and token refresh endpoint
+- 🛡️ **CORS Configuration**: Configurable origins for production use
+- 📝 **Code Quality**: Added ESLint configuration for frontend
+
+### Breaking Changes
+None - fully backward compatible with version 1.0.0
 
 ## 🚀 Features
 
@@ -41,19 +66,22 @@ A comprehensive server management system with a beautiful web interface for mana
 ## 📋 Tech Stack
 
 ### Backend
-- **Framework**: Python Flask 3.0
+- **Framework**: Python Flask 3.1.0
 - **Database**: SQLite with SQLAlchemy ORM
-- **Authentication**: JWT (PyJWT)
-- **SSH Connection**: Paramiko
-- **Security**: Bcrypt for user passwords, Cryptography for server password encryption
-- **CORS**: Flask-CORS
+- **Migrations**: Flask-Migrate 4.0.7
+- **Authentication**: JWT (PyJWT 2.10.1)
+- **SSH Connection**: Paramiko 3.5.0
+- **Security**: Bcrypt 4.2.1 for user passwords, Cryptography 44.0.0 for server password encryption
+- **CORS**: Flask-CORS 5.0.0
+- **Rate Limiting**: Flask-Limiter 3.8.0
 
 ### Frontend
-- **Framework**: Vue 3 (Composition API)
-- **UI Library**: Element Plus
-- **Build Tool**: Vite
-- **HTTP Client**: Axios
-- **Router**: Vue Router 4
+- **Framework**: Vue 3.5.13 (Composition API)
+- **UI Library**: Element Plus 2.9.1
+- **Build Tool**: Vite 6.0.5
+- **HTTP Client**: Axios 1.7.9
+- **Router**: Vue Router 4.5.0
+- **Code Quality**: ESLint 9.17.0
 
 ## 🛠️ Installation & Setup
 

@@ -1,9 +1,11 @@
 import axios from 'axios'
+import { ElMessage } from 'element-plus'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -19,6 +21,7 @@ api.interceptors.request.use(
     return config
   },
   (error) => {
+    console.error('Request error:', error)
     return Promise.reject(error)
   }
 )
@@ -27,11 +30,38 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      window.location.href = '/login'
+    const { response } = error
+    
+    if (!response) {
+      ElMessage.error('Network error. Please check your connection.')
+      return Promise.reject(error)
     }
+    
+    switch (response.status) {
+      case 401:
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        if (window.location.pathname !== '/login') {
+          ElMessage.warning('Session expired. Please login again.')
+          window.location.href = '/login'
+        }
+        break
+      case 403:
+        ElMessage.error('Access denied')
+        break
+      case 404:
+        ElMessage.error('Resource not found')
+        break
+      case 429:
+        ElMessage.error('Too many requests. Please try again later.')
+        break
+      case 500:
+        ElMessage.error('Server error. Please try again later.')
+        break
+      default:
+        ElMessage.error(response.data?.message || 'An error occurred')
+    }
+    
     return Promise.reject(error)
   }
 )
@@ -40,7 +70,8 @@ api.interceptors.response.use(
 export const authAPI = {
   login: (credentials) => api.post('/auth/login', credentials),
   logout: () => api.post('/auth/logout'),
-  getCurrentUser: () => api.get('/auth/me')
+  getCurrentUser: () => api.get('/auth/me'),
+  refreshToken: () => api.post('/auth/refresh')
 }
 
 // Servers API

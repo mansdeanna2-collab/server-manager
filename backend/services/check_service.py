@@ -2,6 +2,7 @@ import socket
 import subprocess
 import platform
 import logging
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -19,25 +20,33 @@ class CheckService:
             return ['ping', '-c', '1', '-W', str(timeout), host]
     
     @staticmethod
-    def ping_check(host, timeout=3):
+    def ping_check(host, timeout=None):
         """Check if host is reachable via ping"""
+        timeout = timeout or Config.PING_TIMEOUT
         try:
             command = CheckService._get_ping_command(host, timeout)
             result = subprocess.run(command, capture_output=True, text=True, timeout=timeout + 1)
             return result.returncode == 0
+        except subprocess.TimeoutExpired:
+            logger.error(f"Ping timeout for {host}")
+            return False
         except Exception as e:
             logger.error(f"Ping check failed for {host}: {str(e)}")
             return False
     
     @staticmethod
-    def port_check(host, port, timeout=5):
+    def port_check(host, port, timeout=None):
         """Check if a specific port is open"""
+        timeout = timeout or Config.PORT_TIMEOUT
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(timeout)
             result = sock.connect_ex((host, port))
             sock.close()
             return result == 0
+        except socket.timeout:
+            logger.error(f"Port check timeout for {host}:{port}")
+            return False
         except Exception as e:
             logger.error(f"Port check failed for {host}:{port} - {str(e)}")
             return False
