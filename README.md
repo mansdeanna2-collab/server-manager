@@ -128,6 +128,43 @@ npm run dev
 
 The frontend will be available at `http://localhost:3000`
 
+## 🚀 Production Deployment
+
+### Ubuntu 22.04 Deployment
+
+For production deployment on Ubuntu 22.04, we provide a comprehensive deployment guide and automated script:
+
+**📖 [Complete Ubuntu 22.04 Deployment Guide](DEPLOYMENT_UBUNTU.md)**
+
+This guide covers:
+- System requirements and prerequisites
+- Step-by-step installation instructions
+- Production configuration with Nginx and Gunicorn
+- SSL/TLS setup with Let's Encrypt
+- Security hardening
+- Monitoring and maintenance
+- Troubleshooting
+
+**Quick Deployment:**
+```bash
+# 1. Clone the repository
+git clone https://github.com/mansdeanna2-collab/server-manager.git
+cd server-manager
+
+# 2. Run the automated deployment script
+sudo bash deploy-ubuntu.sh
+```
+
+The script will automatically:
+- ✅ Install all required dependencies (Python 3.11, Node.js 20, Nginx)
+- ✅ Set up the backend with Gunicorn
+- ✅ Build and deploy the frontend
+- ✅ Configure Nginx as reverse proxy
+- ✅ Set up systemd services for auto-start
+- ✅ Configure firewall rules
+
+**Manual deployment instructions are also available in [DEPLOYMENT_UBUNTU.md](DEPLOYMENT_UBUNTU.md)**
+
 ### Docker Deployment (Optional)
 
 Run both frontend and backend using Docker Compose:
