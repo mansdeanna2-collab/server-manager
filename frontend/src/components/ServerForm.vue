@@ -19,21 +19,57 @@
       label="端口"
       prop="port"
     >
-      <el-input-number
-        v-model="form.port"
-        :min="1"
-        :max="65535"
-      />
+      <div class="input-with-shortcuts">
+        <el-input-number
+          v-model="form.port"
+          :min="1"
+          :max="65535"
+        />
+        <div class="shortcuts">
+          <el-button
+            size="small"
+            :type="form.port === 22 ? 'primary' : 'default'"
+            @click="form.port = 22"
+          >
+            22 (SSH)
+          </el-button>
+          <el-button
+            size="small"
+            :type="form.port === 3389 ? 'primary' : 'default'"
+            @click="form.port = 3389"
+          >
+            3389 (RDP)
+          </el-button>
+        </div>
+      </div>
     </el-form-item>
     
     <el-form-item
       label="用户名"
       prop="username"
     >
-      <el-input
-        v-model="form.username"
-        placeholder="例如：root"
-      />
+      <div class="input-with-shortcuts">
+        <el-input
+          v-model="form.username"
+          placeholder="例如：root"
+        />
+        <div class="shortcuts">
+          <el-button
+            size="small"
+            :type="form.username === 'root' ? 'primary' : 'default'"
+            @click="form.username = 'root'"
+          >
+            root
+          </el-button>
+          <el-button
+            size="small"
+            :type="form.username === 'Administrator' ? 'primary' : 'default'"
+            @click="form.username = 'Administrator'"
+          >
+            Administrator
+          </el-button>
+        </div>
+      </div>
     </el-form-item>
     
     <el-form-item
@@ -133,3 +169,17 @@ const submitForm = async () => {
   })
 }
 </script>
+
+<style scoped>
+.input-with-shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.shortcuts {
+  display: flex;
+  gap: 8px;
+}
+</style>
