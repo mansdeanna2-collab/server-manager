@@ -106,3 +106,40 @@ def refresh_token(current_user):
     except Exception as e:
         logger.error(f"Token refresh error: {str(e)}")
         return jsonify({'message': 'Token refresh failed'}), 500
+
+
+@auth_bp.route('/change-password', methods=['POST'])
+@token_required
+def change_password(current_user):
+    """修改用户密码"""
+    from models import db
+    try:
+        data = request.get_json()
+
+        if not data:
+            return jsonify({'message': '请提供请求数据'}), 400
+
+        old_password = data.get('old_password')
+        new_password = data.get('new_password')
+
+        if not old_password or not new_password:
+            return jsonify({'message': '请提供旧密码和新密码'}), 400
+
+        # Verify old password
+        if not current_user.check_password(old_password):
+            logger.warning(f"Failed password change attempt for user: {current_user.username}")
+            return jsonify({'message': '旧密码错误'}), 401
+
+        # Validate new password length
+        if len(new_password) < 6:
+            return jsonify({'message': '新密码长度不能少于6个字符'}), 400
+
+        # Set new password
+        current_user.set_password(new_password)
+        db.session.commit()
+
+        logger.info(f"User {current_user.username} changed password successfully")
+        return jsonify({'message': '密码修改成功'}), 200
+    except Exception as e:
+        logger.error(f"Password change error: {str(e)}")
+        return jsonify({'message': '密码修改失败', 'error': str(e)}), 500

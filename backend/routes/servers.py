@@ -49,6 +49,11 @@ def create_server(_current_user):
     if not data.get('ip_address') or not data.get('username') or not data.get('password'):
         return jsonify({'message': 'IP address, username, and password are required'}), 400
 
+    # Check for duplicate IP address
+    existing_server = Server.query.filter_by(ip_address=data['ip_address']).first()
+    if existing_server:
+        return jsonify({'message': f'服务器IP {data["ip_address"]} 已存在'}), 400
+
     # Encrypt password before storing
     encrypted_password = password_encryptor.encrypt(data['password'])
 
@@ -90,7 +95,11 @@ def update_server(_current_user, server_id):
 
     data = request.get_json()
 
-    if 'ip_address' in data:
+    # Check for duplicate IP address when updating IP
+    if 'ip_address' in data and data['ip_address'] != server.ip_address:
+        existing_server = Server.query.filter_by(ip_address=data['ip_address']).first()
+        if existing_server:
+            return jsonify({'message': f'服务器IP {data["ip_address"]} 已存在'}), 400
         server.ip_address = data['ip_address']
     if 'port' in data:
         server.port = data['port']
