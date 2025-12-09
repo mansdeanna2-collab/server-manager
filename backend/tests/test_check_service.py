@@ -83,3 +83,19 @@ def test_check_server_status_includes_region_and_port_type(monkeypatch):
     assert status['port_type']['type'] == 'SSH'
     assert status['port_type']['icon'] == '🐧'
     assert 'detail' in status
+
+
+def test_rdp_port_does_not_attempt_ssh_auth(monkeypatch):
+    """RDP (port 3389) should not attempt SSH authentication"""
+    monkeypatch.setattr(CheckService, 'ping_check', staticmethod(lambda host, timeout=None: True))
+    monkeypatch.setattr(CheckService, 'port_check', staticmethod(lambda host, port, timeout=None: True))
+
+    # Pass credentials that would fail SSH auth - but RDP should skip SSH check
+    status = CheckService.check_server_status('192.168.1.100', 3389, 'user', 'password')
+
+    # For RDP port, auth should be None (not attempted) and no SSH error should occur
+    assert status['port'] is True
+    assert status['overall'] == 'online'
+    assert status['port_type']['type'] == 'RDP'
+    assert status['auth'] is None  # SSH auth should not be attempted for RDP
+    assert status['error_type'] is None  # No error because SSH auth was skipped
