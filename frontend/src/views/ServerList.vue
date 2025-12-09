@@ -66,7 +66,7 @@
             
             <el-input
               v-model="searchText"
-              placeholder="按IP或用户名搜索"
+              placeholder="按IP、用户名或备注搜索"
               class="search-input"
               :prefix-icon="Search"
               clearable
@@ -351,6 +351,22 @@
             </template>
           </el-table-column>
           <el-table-column
+            prop="notes"
+            label="备注"
+            min-width="120"
+          >
+            <template #default="scope">
+              <span
+                v-if="scope.row.notes"
+                class="notes-text"
+              >{{ scope.row.notes }}</span>
+              <span
+                v-else
+                class="no-info"
+              >-</span>
+            </template>
+          </el-table-column>
+          <el-table-column
             label="操作"
             width="280"
             fixed="right"
@@ -398,77 +414,82 @@
     <!-- Terminal Connection Dialog -->
     <el-dialog
       v-model="terminalDialogVisible"
-      title="终端连接"
-      width="700px"
+      :title="`终端 - ${terminalServer?.ip_address || ''}`"
+      width="900px"
       class="terminal-dialog"
       append-to-body
+      :close-on-click-modal="false"
+      @closed="handleTerminalDialogClosed"
     >
       <div
         v-if="terminalServer"
-        class="terminal-container"
+        class="terminal-dialog-content"
       >
-        <div class="terminal-info">
-          <div class="terminal-server-info">
-            <el-descriptions
-              :column="2"
-              border
-              size="small"
-            >
-              <el-descriptions-item label="IP地址">
-                <span class="mono-text">{{ terminalServer.ip_address }}</span>
-              </el-descriptions-item>
-              <el-descriptions-item label="端口">
-                <el-tag
-                  :type="getPortTagType(terminalServer.port)"
-                  size="small"
-                  effect="dark"
-                >
-                  {{ terminalServer.port }}
-                </el-tag>
-              </el-descriptions-item>
-              <el-descriptions-item label="用户名">
-                <span class="mono-text">{{ terminalServer.username }}</span>
-              </el-descriptions-item>
-              <el-descriptions-item label="状态">
-                <StatusBadge
-                  :status="terminalServer.status"
-                  size="small"
-                />
-              </el-descriptions-item>
-            </el-descriptions>
-          </div>
-          
-          <div class="terminal-command-section">
-            <h4>SSH 连接命令</h4>
-            <div class="ssh-command-box">
-              <code class="ssh-command">{{ getSshCommand(terminalServer) }}</code>
-              <el-button
-                type="primary"
+        <div class="terminal-header-info">
+          <el-descriptions
+            :column="4"
+            border
+            size="small"
+          >
+            <el-descriptions-item label="IP地址">
+              <span class="mono-text">{{ terminalServer.ip_address }}</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="端口">
+              <el-tag
+                :type="getPortTagType(terminalServer.port)"
                 size="small"
-                @click="copySshCommand(terminalServer)"
+                effect="dark"
               >
-                <el-icon><CopyDocument /></el-icon>
-                复制
-              </el-button>
-            </div>
-          </div>
-          
-          <div class="terminal-tips">
-            <el-alert
-              title="连接提示"
-              type="info"
-              :closable="false"
-              show-icon
-            >
-              <template #default>
-                <p>1. 复制上方SSH命令到终端执行</p>
-                <p>2. 输入服务器密码完成连接</p>
-                <p v-if="terminalServer.port === 3389">
-                  💡 端口3389为Windows RDP，请使用远程桌面连接
-                </p>
-              </template>
-            </el-alert>
-          </div>
+                {{ terminalServer.port }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="用户名">
+              <span class="mono-text">{{ terminalServer.username }}</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="状态">
+              <StatusBadge
+                :status="terminalServer.status"
+                size="small"
+              />
+            </el-descriptions-item>
+          </el-descriptions>
+        </div>
+        
+        <Terminal
+          v-if="terminalServer.port !== 3389"
+          ref="terminalRef"
+          :server="terminalServer"
+          :visible="terminalDialogVisible"
+          @connected="handleTerminalConnected"
+          @disconnected="handleTerminalDisconnected"
+          @error="handleTerminalError"
+        />
+        
+        <div
+          v-else
+          class="rdp-info"
+        >
+          <el-alert
+            title="Windows 远程桌面"
+            type="warning"
+            :closable="false"
+            show-icon
+          >
+            <template #default>
+              <p>端口 3389 为 Windows RDP 服务，请使用系统远程桌面连接。</p>
+              <div class="rdp-command-box">
+                <code class="rdp-command">{{ getSshCommand(terminalServer) }}</code>
+                <el-button
+                  type="primary"
+                  size="small"
+                  @click="copySshCommand(terminalServer)"
+                >
+                  <el-icon><CopyDocument /></el-icon>
+                  复制命令
+                </el-button>
+              </div>
+            </template>
+          </el-alert>
         </div>
       </div>
     </el-dialog>
@@ -486,6 +507,7 @@ import {
 import { serversAPI, authAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
 import ServerForm from '@/components/ServerForm.vue'
+import Terminal from '@/components/Terminal.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -500,6 +522,7 @@ const currentServer = ref(null)
 const selectedServer = ref(null)
 const selectedSegment = ref(null)
 const terminalServer = ref(null)
+const terminalRef = ref(null)
 const refreshing = ref(false)
 const currentUser = ref(null)
 
@@ -632,7 +655,8 @@ const filteredServers = computed(() => {
   const search = searchText.value.toLowerCase()
   return servers.value.filter(server =>
     server.ip_address.toLowerCase().includes(search) ||
-    server.username.toLowerCase().includes(search)
+    server.username.toLowerCase().includes(search) ||
+    (server.notes && server.notes.toLowerCase().includes(search))
   )
 })
 
@@ -730,6 +754,25 @@ const viewSegment = (segment) => {
 const openTerminal = (server) => {
   terminalServer.value = server
   terminalDialogVisible.value = true
+}
+
+const handleTerminalDialogClosed = () => {
+  // 关闭对话框时断开终端连接
+  if (terminalRef.value) {
+    terminalRef.value.disconnect()
+  }
+}
+
+const handleTerminalConnected = () => {
+  ElMessage.success('终端连接成功')
+}
+
+const handleTerminalDisconnected = () => {
+  ElMessage.info('终端已断开')
+}
+
+const handleTerminalError = (errorMsg) => {
+  ElMessage.error(errorMsg || '终端连接失败')
 }
 
 const getSshCommand = (server) => {
@@ -1021,6 +1064,17 @@ const handleCommand = async (command) => {
   font-weight: 500;
 }
 
+/* Notes text in table */
+.notes-text {
+  color: #606266;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+  max-width: 150px;
+}
+
 /* Action buttons in table */
 .action-buttons {
   display: flex;
@@ -1083,54 +1137,39 @@ const handleCommand = async (command) => {
   padding: 20px;
 }
 
-.terminal-container {
-  padding: 10px;
-}
-
-.terminal-info {
+.terminal-dialog-content {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
-.terminal-server-info {
-  margin-bottom: 10px;
+.terminal-header-info {
+  margin-bottom: 8px;
 }
 
-.terminal-command-section h4 {
-  margin: 0 0 12px 0;
-  color: #303133;
-  font-weight: 600;
+.rdp-info {
+  margin-top: 16px;
 }
 
-.ssh-command-box {
+.rdp-command-box {
   display: flex;
   align-items: center;
   gap: 12px;
   background: #1e1e1e;
-  padding: 16px 20px;
-  border-radius: 8px;
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-top: 12px;
 }
 
-.ssh-command {
+.rdp-command {
   flex: 1;
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
   font-size: 14px;
   color: #67c23a;
-  word-break: break-all;
 }
 
 .mono-text {
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-}
-
-.terminal-tips {
-  margin-top: 10px;
-}
-
-.terminal-tips p {
-  margin: 4px 0;
-  font-size: 13px;
 }
 
 /* Segment dialog styles */

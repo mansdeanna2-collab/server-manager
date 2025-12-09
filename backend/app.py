@@ -3,6 +3,7 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_migrate import Migrate
+from flask_socketio import SocketIO
 from models import db
 from models.user import User
 from routes.auth import auth_bp
@@ -17,6 +18,9 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Initialize SocketIO globally
+socketio = SocketIO()
 
 
 def create_app():
@@ -39,6 +43,13 @@ def create_app():
         }
     })
 
+    # Initialize SocketIO with CORS settings
+    socketio.init_app(
+        app,
+        cors_allowed_origins=cors_origins if cors_origins != ['*'] else "*",
+        async_mode='gevent'
+    )
+
     # Configure rate limiting
     if Config.RATELIMIT_ENABLED:
         Limiter(
@@ -54,6 +65,10 @@ def create_app():
     # Register blueprints
     app.register_blueprint(auth_bp)
     app.register_blueprint(servers_bp)
+
+    # Register terminal WebSocket events
+    from routes.terminal import register_terminal_events
+    register_terminal_events(socketio)
 
     # Create tables and default admin user
     with app.app_context():
@@ -109,4 +124,4 @@ if __name__ == '__main__':
     debug = os.getenv('DEBUG', 'True').lower() == 'true'
 
     logger.info(f"Starting Server Manager API on {host}:{port}")
-    app.run(host=host, port=port, debug=debug)
+    socketio.run(app, host=host, port=port, debug=debug)
