@@ -286,6 +286,7 @@
       v-model="dialogVisible"
       :title="isEdit ? '编辑服务器' : '新增服务器'"
       width="600px"
+      class="form-dialog"
     >
       <ServerForm
         :server="currentServer"
@@ -300,6 +301,7 @@
       v-model="detailDialogVisible"
       title="服务器详情"
       width="700px"
+      class="detail-dialog"
     >
       <div
         v-if="selectedServer"
@@ -424,6 +426,21 @@
       <div v-if="selectedSegment">
         <div class="segment-header">
           <span class="segment-count">共 {{ selectedSegment.count }} 台服务器</span>
+          <div class="segment-sort-options">
+            <el-radio-group
+              v-model="segmentDialogSortBy"
+              size="small"
+            >
+              <el-radio-button value="time">
+                <el-icon><Clock /></el-icon>
+                按时间
+              </el-radio-button>
+              <el-radio-button value="ip">
+                <el-icon><Sort /></el-icon>
+                按IP
+              </el-radio-button>
+            </el-radio-group>
+          </div>
         </div>
         <el-table
           :data="paginatedSegmentServers"
@@ -866,6 +883,7 @@
       v-model="passwordDialogVisible"
       title="修改密码"
       width="400px"
+      class="password-dialog"
     >
       <el-form
         ref="passwordFormRef"
@@ -930,7 +948,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Monitor, Odometer, User, ArrowDown, Plus, Refresh,
   Search, View, Edit, Delete, OfficeBuilding, Connection, CopyDocument, Loading,
-  CircleCheck, CircleClose, Download, QuestionFilled, WarningFilled, Cpu, Star, EditPen
+  CircleCheck, CircleClose, Download, QuestionFilled, WarningFilled, Cpu, Star, EditPen,
+  Clock, Sort
 } from '@element-plus/icons-vue'
 import { serversAPI, authAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -997,6 +1016,9 @@ const PAGE_SIZE = 10
 const segmentsCurrentPage = ref(1)
 const segmentDialogCurrentPage = ref(1)
 const filteredDialogCurrentPage = ref(1)
+
+// IP段对话框排序选项
+const segmentDialogSortBy = ref('time') // 'time' | 'ip'
 
 // IP段收藏和备注功能
 const FAVORITES_KEY = 'server_segment_favorites'
@@ -1191,6 +1213,31 @@ const compareIpSegments = (a, b) => {
   return partsA.length - partsB.length
 }
 
+// Compare IP addresses numerically (e.g., 38.181.53.2 to 38.181.53.10)
+const compareIpAddresses = (a, b) => {
+  // Handle null/undefined ip_address
+  if (!a?.ip_address || !b?.ip_address) {
+    if (!a?.ip_address && !b?.ip_address) return 0
+    return !a?.ip_address ? 1 : -1
+  }
+  
+  const partsA = a.ip_address.split('.').map(Number)
+  const partsB = b.ip_address.split('.').map(Number)
+  
+  // Compare up to 4 octets, handling cases where IP may have fewer parts
+  for (let i = 0; i < 4; i++) {
+    const numA = i < partsA.length ? partsA[i] : 0
+    const numB = i < partsB.length ? partsB[i] : 0
+    // Handle NaN values (invalid IP parts)
+    const valA = isNaN(numA) ? 0 : numA
+    const valB = isNaN(numB) ? 0 : numB
+    if (valA !== valB) {
+      return valA - valB
+    }
+  }
+  return 0
+}
+
 const getLastUpdateTime = (server) => {
   if (!server) return null
   return server.last_checked || server.updated_at || server.created_at
@@ -1214,8 +1261,8 @@ const normalCount = computed(() => servers.value.filter(isNormalServer).length)
 const offlineCount = computed(() => servers.value.filter(s => s.status === 'offline' && s.username !== 'Administrator').length)
 // 未知
 const unknownCount = computed(() => servers.value.filter(s => s.status === 'unknown').length)
-// 错误: 有error_type的 (排除Administrator用户)
-const errorCount = computed(() => servers.value.filter(s => s.error_type && s.username !== 'Administrator').length)
+// 错误: 在线且有error_type的 (排除Administrator用户和离线的服务器)
+const errorCount = computed(() => servers.value.filter(s => s.status === 'online' && s.error_type && s.username !== 'Administrator').length)
 // 电脑 (Windows RDP) - 包含Administrator用户的错误和离线状态
 const computerCount = computed(() => servers.value.filter(s => s.port === 3389).length)
 
@@ -1236,8 +1283,8 @@ const showFilteredServersDialog = (filterType) => {
     result = result.filter(server => server.status === 'unknown')
     title = '未知状态服务器'
   } else if (filterType === 'error') {
-    // 错误服务器：排除Administrator用户
-    result = result.filter(server => server.error_type && server.username !== 'Administrator')
+    // 错误服务器：在线但有error_type的（排除Administrator用户和离线的服务器）
+    result = result.filter(server => server.status === 'online' && server.error_type && server.username !== 'Administrator')
     title = '错误服务器'
   } else if (filterType === 'computer') {
     // 电脑对话框：显示所有Windows RDP服务器（包含Administrator的错误和离线状态）
@@ -1259,6 +1306,20 @@ const showFilteredServersDialog = (filterType) => {
         return 3  // 其他状态
       }
       const priorityDiff = getStatusPriority(a) - getStatusPriority(b)
+      if (priorityDiff !== 0) return priorityDiff
+      // 同优先级按更新时间排序
+      return getUpdatedTimestamp(b) - getUpdatedTimestamp(a)
+    })
+  } else if (filterType === 'error') {
+    // 错误对话框排序：端口关闭 -> 密码错误 -> 其他类型错误
+    filteredDialogServers.value = [...result].sort((a, b) => {
+      // 定义错误类型优先级：端口关闭(0) -> 密码错误(1) -> 其他错误(2)
+      const getErrorPriority = (server) => {
+        if (server.error_type === 'port_closed') return 0      // 端口关闭
+        if (server.error_type === 'auth_failed') return 1      // 密码错误
+        return 2                                                // 其他类型错误
+      }
+      const priorityDiff = getErrorPriority(a) - getErrorPriority(b)
       if (priorityDiff !== 0) return priorityDiff
       // 同优先级按更新时间排序
       return getUpdatedTimestamp(b) - getUpdatedTimestamp(a)
@@ -1364,12 +1425,25 @@ const paginatedSegments = computed(() => {
   return groupedServers.value.slice(start, end)
 })
 
+// Sorted servers for segment dialog based on sortBy option
+const sortedSegmentServers = computed(() => {
+  if (!selectedSegment.value) return []
+  const servers = [...selectedSegment.value.servers]
+  if (segmentDialogSortBy.value === 'ip') {
+    // 按IP地址从小到大排序
+    return servers.sort(compareIpAddresses)
+  } else {
+    // 按时间排序（默认，最新的在前）
+    return servers.sort((a, b) => getUpdatedTimestamp(b) - getUpdatedTimestamp(a))
+  }
+})
+
 // Paginated servers for segment dialog
 const paginatedSegmentServers = computed(() => {
   if (!selectedSegment.value) return []
   const start = (segmentDialogCurrentPage.value - 1) * PAGE_SIZE
   const end = start + PAGE_SIZE
-  return selectedSegment.value.servers.slice(start, end)
+  return sortedSegmentServers.value.slice(start, end)
 })
 
 // Paginated servers for filtered dialog
@@ -1848,9 +1922,61 @@ const handleChangePassword = async () => {
   flex-shrink: 0;
 }
 
+.search-input :deep(.el-input__wrapper) {
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 4px 16px;
+}
+
+.search-input :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.15);
+}
+
+.search-input :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.25);
+}
+
 .filter-buttons {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-buttons :deep(.el-button) {
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.filter-buttons :deep(.el-button:hover) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.filter-buttons :deep(.el-button--success) {
+  background: linear-gradient(135deg, #67c23a 0%, #529b2e 100%);
+  border-color: #67c23a;
+}
+
+.filter-buttons :deep(.el-button--danger) {
+  background: linear-gradient(135deg, #f56c6c 0%, #dd6161 100%);
+  border-color: #f56c6c;
+}
+
+.filter-buttons :deep(.el-button--info) {
+  background: linear-gradient(135deg, #909399 0%, #73767a 100%);
+  border-color: #909399;
+}
+
+.filter-buttons :deep(.el-button--warning) {
+  background: linear-gradient(135deg, #e6a23c 0%, #cf9236 100%);
+  border-color: #e6a23c;
+}
+
+.filter-buttons :deep(.el-button--primary) {
+  background: linear-gradient(135deg, #409EFF 0%, #337ecc 100%);
+  border-color: #409EFF;
 }
 
 @media (max-width: 768px) {
@@ -2049,7 +2175,105 @@ const handleChangePassword = async () => {
   color: #c0c4cc;
 }
 
+/* Form dialog styles (Add/Edit Server) */
+.form-dialog :deep(.el-dialog) {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.form-dialog :deep(.el-dialog__header) {
+  background: linear-gradient(135deg, #409EFF 0%, #337ecc 100%);
+  color: white;
+  padding: 20px 24px;
+  margin: 0;
+}
+
+.form-dialog :deep(.el-dialog__title) {
+  color: white;
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.form-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
+  color: white;
+}
+
+.form-dialog :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.form-dialog :deep(.el-dialog__body) {
+  padding: 24px;
+  background: #f8fafc;
+}
+
+/* Password dialog styles */
+.password-dialog :deep(.el-dialog) {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.password-dialog :deep(.el-dialog__header) {
+  background: linear-gradient(135deg, #f56c6c 0%, #dd6161 100%);
+  color: white;
+  padding: 20px 24px;
+  margin: 0;
+}
+
+.password-dialog :deep(.el-dialog__title) {
+  color: white;
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.password-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
+  color: white;
+}
+
+.password-dialog :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.password-dialog :deep(.el-dialog__body) {
+  padding: 24px;
+  background: #f8fafc;
+}
+
 /* Server detail dialog */
+.detail-dialog :deep(.el-dialog) {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.detail-dialog :deep(.el-dialog__header) {
+  background: linear-gradient(135deg, #67c23a 0%, #529b2e 100%);
+  color: white;
+  padding: 20px 24px;
+  margin: 0;
+}
+
+.detail-dialog :deep(.el-dialog__title) {
+  color: white;
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.detail-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
+  color: white;
+}
+
+.detail-dialog :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.detail-dialog :deep(.el-dialog__body) {
+  padding: 24px;
+  background: #f8fafc;
+}
+
 .server-detail {
   padding: 10px;
 }
@@ -2101,6 +2325,25 @@ const handleChangePassword = async () => {
   font-size: 14px;
 }
 
+.segment-sort-options {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.segment-sort-options :deep(.el-radio-button__inner) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 16px;
+}
+
+.segment-sort-options :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  background: linear-gradient(135deg, #409EFF 0%, #337ecc 100%);
+  border-color: #409EFF;
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.3);
+}
+
 /* Clickable note styles */
 .clickable-note {
   cursor: pointer;
@@ -2129,8 +2372,37 @@ const handleChangePassword = async () => {
 }
 
 /* Terminal dialog styles */
+.terminal-dialog :deep(.el-dialog) {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+
+.terminal-dialog :deep(.el-dialog__header) {
+  background: linear-gradient(135deg, #303133 0%, #1a1a1a 100%);
+  color: white;
+  padding: 16px 24px;
+  margin: 0;
+}
+
+.terminal-dialog :deep(.el-dialog__title) {
+  color: #67c23a;
+  font-weight: 600;
+  font-size: 16px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+}
+
+.terminal-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
+  color: #909399;
+}
+
+.terminal-dialog :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
+  color: #f56c6c;
+}
+
 .terminal-dialog :deep(.el-dialog__body) {
   padding: 20px;
+  background: #1e1e1e;
 }
 
 .terminal-dialog-content {
@@ -2169,13 +2441,69 @@ const handleChangePassword = async () => {
 }
 
 /* Segment dialog styles */
+.segment-dialog :deep(.el-dialog) {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.segment-dialog :deep(.el-dialog__header) {
+  background: linear-gradient(135deg, #409EFF 0%, #337ecc 100%);
+  color: white;
+  padding: 20px 24px;
+  margin: 0;
+}
+
+.segment-dialog :deep(.el-dialog__title) {
+  color: white;
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.segment-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
+  color: white;
+}
+
+.segment-dialog :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
+  color: rgba(255, 255, 255, 0.8);
+}
+
 .segment-dialog :deep(.el-dialog__body) {
-  padding: 20px;
+  padding: 24px;
+  background: #f8fafc;
 }
 
 /* Filtered dialog styles */
+.filtered-dialog :deep(.el-dialog) {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.filtered-dialog :deep(.el-dialog__header) {
+  background: linear-gradient(135deg, #e6a23c 0%, #cf9236 100%);
+  color: white;
+  padding: 20px 24px;
+  margin: 0;
+}
+
+.filtered-dialog :deep(.el-dialog__title) {
+  color: white;
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.filtered-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
+  color: white;
+}
+
+.filtered-dialog :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
+  color: rgba(255, 255, 255, 0.8);
+}
+
 .filtered-dialog :deep(.el-dialog__body) {
-  padding: 20px;
+  padding: 24px;
+  background: #f8fafc;
 }
 
 /* Animations */
@@ -2197,17 +2525,34 @@ const handleChangePassword = async () => {
 
 /* Table styling */
 :deep(.el-table) {
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid #ebeef5;
 }
 
 :deep(.el-table th) {
-  background-color: #f5f7fa !important;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%) !important;
   font-weight: 600;
+  color: #303133;
+  border-bottom: 2px solid #dcdfe6;
+}
+
+:deep(.el-table th .cell) {
+  font-size: 13px;
+  letter-spacing: 0.3px;
 }
 
 :deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
-  background: #fafafa;
+  background: #fafbfc;
+}
+
+:deep(.el-table__body tr:hover > td) {
+  background-color: #ecf5ff !important;
+}
+
+:deep(.el-table td) {
+  border-bottom: 1px solid #f0f2f5;
 }
 
 /* Pagination container */
@@ -2217,6 +2562,15 @@ const handleChangePassword = async () => {
   margin-top: 20px;
   padding-top: 16px;
   border-top: 1px solid #ebeef5;
+}
+
+.pagination-container :deep(.el-pagination.is-background .el-pager li:not(.is-disabled).is-active) {
+  background: linear-gradient(135deg, #409EFF 0%, #337ecc 100%);
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.3);
+}
+
+.pagination-container :deep(.el-pagination.is-background .el-pager li:not(.is-disabled):hover) {
+  color: #409EFF;
 }
 
 /* Segments container */
