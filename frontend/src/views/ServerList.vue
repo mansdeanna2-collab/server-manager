@@ -214,6 +214,9 @@
         <div class="detail-header">
           <div class="detail-title">
             <h3>{{ selectedServer.ip_address }}</h3>
+            <p class="detail-updated">
+              更新时间：{{ formatDate(getLastUpdateTime(selectedServer)) }}
+            </p>
           </div>
           <StatusBadge
             :status="selectedServer.status"
@@ -334,6 +337,9 @@
             <template #default="scope">
               <div class="ip-cell">
                 <span class="ip-text">{{ scope.row.ip_address }}</span>
+                <span class="updated-time">
+                  更新时间：{{ formatDate(getLastUpdateTime(scope.row)) }}
+                </span>
               </div>
             </template>
           </el-table-column>
@@ -711,6 +717,18 @@ const compareIpSegments = (a, b) => {
   return partsA.length - partsB.length
 }
 
+const getLastUpdateTime = (server) => {
+  if (!server) return null
+  return server.last_checked || server.updated_at || server.created_at
+}
+
+const getUpdatedTimestamp = (server) => {
+  const timeStr = getLastUpdateTime(server)
+  if (!timeStr) return Number.NEGATIVE_INFINITY
+  const time = new Date(timeStr).getTime()
+  return isNaN(time) ? Number.NEGATIVE_INFINITY : time
+}
+
 // Filter servers by search text
 const filteredServers = computed(() => {
   if (!searchText.value) return servers.value
@@ -727,7 +745,7 @@ const filteredServers = computed(() => {
 const groupedServers = computed(() => {
   const filtered = filteredServers.value
   const segmentMap = new Map()
-  
+
   // Group servers by IP segment
   filtered.forEach(server => {
     const segment = getIpSegment(server.ip_address)
@@ -736,18 +754,21 @@ const groupedServers = computed(() => {
     }
     segmentMap.get(segment).push(server)
   })
-  
+
   // Convert to tree structure for el-table
   const result = []
   segmentMap.forEach((serverList, segment) => {
     // Count online and offline in single pass
     let onlineCount = 0
     let offlineCount = 0
-    for (const s of serverList) {
+    const sortedServers = [...serverList].sort(
+      (a, b) => getUpdatedTimestamp(b) - getUpdatedTimestamp(a)
+    )
+    for (const s of sortedServers) {
       if (s.status === 'online') onlineCount++
       else if (s.status === 'offline') offlineCount++
     }
-    
+
     result.push({
       segmentKey: `segment-${segment}`,
       segment: segment,
@@ -756,16 +777,21 @@ const groupedServers = computed(() => {
       onlineCount: onlineCount,
       offlineCount: offlineCount,
       hasChildren: true,
-      servers: serverList.map(s => ({
+      latestUpdated: getUpdatedTimestamp(sortedServers[0]),
+      servers: sortedServers.map(s => ({
         ...s,
         segmentKey: `server-${s.id}`
       }))
     })
   })
-  
-  // Sort by segment numerically
-  result.sort(compareIpSegments)
-  
+
+  // Sort by latest update time, fallback to numeric segment order
+  result.sort((a, b) => {
+    const diff = (b.latestUpdated || 0) - (a.latestUpdated || 0)
+    if (diff !== 0) return diff
+    return compareIpSegments(a, b)
+  })
+
   return result
 })
 
@@ -782,12 +808,21 @@ const loadServers = async () => {
   loadError.value = ''
   try {
     const response = await serversAPI.getAll()
-    servers.value = response.data.map(s => ({
-      ...s,
-      checking: false,
-      checkDetail: s.checkDetail || '',
-      error_type: s.error_type || ''
-    }))
+    const existingServerMap = new Map()
+    servers.value.forEach(item => {
+      existingServerMap.set(item.id, item)
+    })
+    servers.value = response.data.map(s => {
+      const existing = existingServerMap.get(s.id)
+      const checkDetail = s.check_detail ?? existing?.checkDetail ?? ''
+      const errorType = s.error_type ?? existing?.error_type ?? ''
+      return {
+        ...s,
+        checking: false,
+        checkDetail,
+        error_type: errorType
+      }
+    })
   } catch (error) {
     const message = error.response?.data?.message || error.message || '网络连接失败'
     loadError.value = message
@@ -827,11 +862,17 @@ const checkServer = async (server) => {
   try {
     const response = await serversAPI.check(server.id)
     const status = response.data.status
-    
+
     // Update server status in both servers list and segment
     server.status = status.overall
-    server.checkDetail = status.detail
-    server.error_type = status.error_type
+    server.checkDetail = response.data.check_detail ?? status.detail ?? ''
+    server.error_type = response.data.error_type ?? status.error_type ?? ''
+    if (response.data.last_checked) {
+      server.last_checked = response.data.last_checked
+    }
+    if (response.data.updated_at) {
+      server.updated_at = response.data.updated_at
+    }
     
     // Show result message based on status
     if (status.overall === 'online') {
@@ -1129,8 +1170,9 @@ const handleCommand = async (command) => {
 /* IP cell styles */
 .ip-cell {
   display: flex;
-  align-items: center;
   gap: 8px;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 .ip-text {
@@ -1138,6 +1180,12 @@ const handleCommand = async (command) => {
   font-size: 13px;
   color: #303133;
   font-weight: 500;
+}
+
+.updated-time {
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.2;
 }
 
 /* Port cell styles */
@@ -1213,6 +1261,12 @@ const handleCommand = async (command) => {
   font-size: 20px;
   color: #303133;
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+}
+
+.detail-updated {
+  margin: 0;
+  color: #909399;
+  font-size: 13px;
 }
 
 .detail-actions {

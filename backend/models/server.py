@@ -23,7 +23,16 @@ class Server(db.Model):
     updated_at = db.Column(
         db.DateTime,
         default=datetime.utcnow,
-        onupdate=datetime.utcnow
+        onupdate=datetime.utcnow,
+        index=True
+    )
+    check_detail = db.Column(
+        db.Text,
+        comment='最近一次检测的详细说明'
+    )
+    error_type = db.Column(
+        db.String(50),
+        comment='最近一次检测的错误类型代码（如auth_failed, port_closed）'
     )
 
     def to_dict(self):
@@ -42,5 +51,7 @@ class Server(db.Model):
             'disk_info': self.disk_info,
             'uptime': self.uptime,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'check_detail': self.check_detail,
+            'error_type': self.error_type
         }
