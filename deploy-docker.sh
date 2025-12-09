@@ -33,7 +33,7 @@ pushd "$ROOT_DIR" >/dev/null || error "Failed to change to project directory: $R
 
 [[ -f "$COMPOSE_FILE" ]] || error "Compose file not found: $COMPOSE_FILE"
 "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" up -d --build
-popd >/dev/null
+popd >/dev/null || error "Failed to return to previous directory"
 
 info "Deployment finished! / 部署完成！"
 info "Frontend: http://localhost:3000"
