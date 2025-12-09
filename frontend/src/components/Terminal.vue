@@ -213,11 +213,12 @@ const connect = () => {
   }
 
   socket = io(`${wsUrl}/terminal`, {
-    transports: ['websocket', 'polling'],
+    transports: ['polling', 'websocket'],
     reconnection: true,
     reconnectionAttempts: 3,
     reconnectionDelay: 1000,
-    timeout: 20000
+    timeout: 20000,
+    upgrade: true
   })
 
   socket.on('connect', () => {
