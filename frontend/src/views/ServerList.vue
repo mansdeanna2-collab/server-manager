@@ -950,13 +950,8 @@ const showFilteredServersDialog = (filterType) => {
     title = '电脑 (Windows RDP)'
   }
   
-  // Sort by update time
-  result = [...result].sort((a, b) => getUpdatedTimestamp(b) - getUpdatedTimestamp(a))
-  
-  filteredDialogServers.value = result.map(s => ({
-    ...s,
-    checking: false
-  }))
+  // Sort by update time - use original server objects to maintain shared state
+  filteredDialogServers.value = [...result].sort((a, b) => getUpdatedTimestamp(b) - getUpdatedTimestamp(a))
   filteredDialogTitle.value = title
   filteredDialogVisible.value = true
 }
