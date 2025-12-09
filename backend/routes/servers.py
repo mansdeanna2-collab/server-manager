@@ -6,10 +6,12 @@ from utils.crypto import PasswordEncryption
 from utils import china_now
 from services.ssh_service import SSHService
 from services.check_service import CheckService
+from extensions import limiter
 from config import Config
 import logging
 import os
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 servers_bp = Blueprint('servers', __name__, url_prefix='/api/servers')
 logger = logging.getLogger(__name__)
@@ -171,39 +173,107 @@ def check_server(_current_user, server_id):
     }), 200
 
 
-@servers_bp.route('/check-all', methods=['POST'])
-@token_required
-def check_all_servers(_current_user):
-    """检查所有服务器状态"""
-    servers = Server.query.all()
-    results = []
-
-    for server in servers:
-        password = password_encryptor.decrypt(server.encrypted_password)
+def _check_single_server(server_data):
+    """Check a single server status (for use in thread pool).
+    
+    Args:
+        server_data: tuple of (server_id, ip_address, port, username, encrypted_password)
+    
+    Returns:
+        dict with server check results
+    """
+    server_id, ip_address, port, username, encrypted_password = server_data
+    
+    try:
+        password = password_encryptor.decrypt(encrypted_password)
         status_info = CheckService.check_server_status(
-            server.ip_address,
-            server.port,
-            server.username,
+            ip_address,
+            port,
+            username,
             password
         )
+        
+        return {
+            'server_id': server_id,
+            'ip_address': ip_address,
+            'status_info': status_info,
+            'success': True
+        }
+    except Exception as e:
+        logger.error(f"Error checking server {ip_address}: {str(e)}")
+        return {
+            'server_id': server_id,
+            'ip_address': ip_address,
+            'status_info': {
+                'overall': 'offline',
+                'detail': f'检测出错: {str(e)}',
+                'error_type': 'check_error'
+            },
+            'success': False
+        }
 
-        server.status = status_info['overall']
-        server.last_checked = china_now()
-        server.check_detail = status_info.get('detail')
-        server.error_type = _normalize_error_type(status_info.get('error_type'))
 
-        results.append({
-            'server_id': server.id,
-            'ip_address': server.ip_address,
-            'status': status_info,
-            'last_checked': server.last_checked.isoformat() if server.last_checked else None,
-            'updated_at': server.updated_at.isoformat() if server.updated_at else None,
-            'check_detail': server.check_detail,
-            'error_type': server.error_type
-        })
-
+@servers_bp.route('/check-all', methods=['POST'])
+@limiter.exempt
+@token_required
+def check_all_servers(_current_user):
+    """检查所有服务器状态（并发执行）
+    
+    This endpoint is exempt from rate limiting because:
+    1. It checks all servers in a single request (batched operation)
+    2. The actual network checks are done concurrently using ThreadPoolExecutor
+    3. Users should be able to check all their servers without rate limit concerns
+    """
+    servers = Server.query.all()
+    results = []
+    
+    if not servers:
+        return jsonify(results), 200
+    
+    # Prepare server data for concurrent checking
+    server_data_list = [
+        (server.id, server.ip_address, server.port, server.username, server.encrypted_password)
+        for server in servers
+    ]
+    
+    # Create a mapping for quick lookup
+    server_map = {server.id: server for server in servers}
+    
+    # Use ThreadPoolExecutor for concurrent checking
+    max_workers = min(Config.CHECK_MAX_WORKERS, len(servers))
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_server = {
+            executor.submit(_check_single_server, data): data[0]
+            for data in server_data_list
+        }
+        
+        # Collect results as they complete
+        for future in as_completed(future_to_server):
+            result = future.result()
+            server_id = result['server_id']
+            server = server_map.get(server_id)
+            
+            if server:
+                status_info = result['status_info']
+                server.status = status_info['overall']
+                server.last_checked = china_now()
+                server.check_detail = status_info.get('detail')
+                server.error_type = _normalize_error_type(status_info.get('error_type'))
+                
+                results.append({
+                    'server_id': server_id,
+                    'ip_address': result['ip_address'],
+                    'status': status_info,
+                    'last_checked': server.last_checked.isoformat() if server.last_checked else None,
+                    'updated_at': server.updated_at.isoformat() if server.updated_at else None,
+                    'check_detail': server.check_detail,
+                    'error_type': server.error_type
+                })
+    
     db.session.commit()
-
+    
     return jsonify(results), 200
 
 

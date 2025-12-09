@@ -39,6 +39,10 @@ class Config:
     PING_TIMEOUT = int(os.getenv('PING_TIMEOUT', 3))
     PORT_TIMEOUT = int(os.getenv('PORT_TIMEOUT', 5))
 
+    # Concurrent server checking configuration
+    # Maximum number of concurrent workers for checking servers
+    CHECK_MAX_WORKERS = int(os.getenv('CHECK_MAX_WORKERS', 10))
+
     # Server Import Configuration
     # In Docker: mount host directory to /app/server_files and set SERVER_FILES_DIR=/app/server_files
     # On host: set SERVER_FILES_DIR to actual path (e.g., /home/Python/服务器)
