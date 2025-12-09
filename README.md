@@ -170,6 +170,39 @@ docker compose up -d --build
 
 > If your Docker installation uses the legacy binary, replace `docker compose` with `docker-compose`.
 
+### Importing Server Files from Host Directory
+
+To import servers from files, you need to either:
+
+**Option 1: Use the default `./server_files` directory**
+
+Place your server JSON files in the `server_files` directory at the project root. The files should be `.txt` files in JSON format.
+
+**Option 2: Mount a custom directory**
+
+Set the `SERVER_FILES_HOST_DIR` environment variable to point to your host directory:
+```bash
+export SERVER_FILES_HOST_DIR=/path/to/your/server/files
+docker compose up -d --build
+```
+
+Or create a `.env` file in the project root:
+```
+SERVER_FILES_HOST_DIR=/path/to/your/server/files
+```
+
+**Server file format:**
+Each `.txt` file should contain JSON data like:
+```json
+{
+  "ips": ["192.168.1.100"],
+  "password": "your_password",
+  "os_name": "CentOS"
+}
+```
+
+For Windows servers, set `os_name` or `os_id` to include "windows" to automatically use RDP port 3389 and Administrator username.
+
 ## 🔐 Default Credentials
 
 - **Username**: `admin`

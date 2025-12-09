@@ -40,7 +40,9 @@ class Config:
     PORT_TIMEOUT = int(os.getenv('PORT_TIMEOUT', 5))
 
     # Server Import Configuration
-    SERVER_FILES_DIR = os.getenv('SERVER_FILES_DIR', '/home/Python/服务器')
+    # In Docker: mount host directory to /app/server_files and set SERVER_FILES_DIR=/app/server_files
+    # On host: set SERVER_FILES_DIR to actual path (e.g., /home/Python/服务器)
+    SERVER_FILES_DIR = os.getenv('SERVER_FILES_DIR', '/app/server_files')
 
     # Warn if using default keys
     if ENCRYPTION_KEY == default_key and not TESTING:

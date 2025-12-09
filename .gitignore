@@ -67,3 +67,9 @@ coverage.xml
 
 # Docker
 .docker/
+
+# Server files - keep directory but ignore actual server files
+server_files/*.txt
+server_files/*.json
+!server_files/.gitkeep
+!server_files/README.md
