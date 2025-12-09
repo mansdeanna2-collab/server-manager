@@ -4,7 +4,7 @@
       <template #header>
         <div class="login-header">
           <el-icon :size="40" color="#409EFF"><Monitor /></el-icon>
-          <h2>Server Manager</h2>
+          <h2>服务器管理</h2>
         </div>
       </template>
       
@@ -12,7 +12,7 @@
         <el-form-item prop="username">
           <el-input
             v-model="loginForm.username"
-            placeholder="Username"
+            placeholder="用户名"
             size="large"
             :prefix-icon="User"
           />
@@ -22,7 +22,7 @@
           <el-input
             v-model="loginForm.password"
             type="password"
-            placeholder="Password"
+            placeholder="密码"
             size="large"
             :prefix-icon="Lock"
             show-password
@@ -38,14 +38,14 @@
             :loading="loading"
             @click="handleLogin"
           >
-            Login
+            登录
           </el-button>
         </el-form-item>
       </el-form>
       
       <div class="login-hint">
         <el-text size="small" type="info">
-          Default credentials: admin / admin123
+          默认账号：admin / admin123
         </el-text>
       </div>
     </el-card>
@@ -70,10 +70,10 @@ const loginForm = reactive({
 
 const rules = {
   username: [
-    { required: true, message: 'Please input username', trigger: 'blur' }
+    { required: true, message: '请输入用户名', trigger: 'blur' }
   ],
   password: [
-    { required: true, message: 'Please input password', trigger: 'blur' }
+    { required: true, message: '请输入密码', trigger: 'blur' }
   ]
 }
 
@@ -88,10 +88,10 @@ const handleLogin = async () => {
         localStorage.setItem('token', response.data.token)
         localStorage.setItem('user', JSON.stringify(response.data.user))
         
-        ElMessage.success('Login successful')
+        ElMessage.success('登录成功')
         router.push('/dashboard')
       } catch (error) {
-        ElMessage.error(error.response?.data?.message || 'Login failed')
+        ElMessage.error(error.response?.data?.message || '登录失败')
       } finally {
         loading.value = false
       }

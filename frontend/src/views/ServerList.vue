@@ -4,7 +4,7 @@
       <el-header style="background: #409EFF; color: white; display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 10px;">
           <el-icon :size="30"><Monitor /></el-icon>
-          <h2 style="margin: 0;">Server Manager</h2>
+          <h2 style="margin: 0;">服务器管理</h2>
         </div>
         <el-menu
           mode="horizontal"
@@ -17,22 +17,22 @@
         >
           <el-menu-item index="/dashboard">
             <el-icon><Odometer /></el-icon>
-            Dashboard
+            仪表盘
           </el-menu-item>
           <el-menu-item index="/servers">
             <el-icon><OfficeBuilding /></el-icon>
-            Servers
+            服务器
           </el-menu-item>
         </el-menu>
         <el-dropdown @command="handleCommand">
           <span class="user-dropdown">
             <el-icon><User /></el-icon>
-            {{ currentUser?.username || 'Admin' }}
+            {{ currentUser?.username || '管理员' }}
             <el-icon><ArrowDown /></el-icon>
           </span>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="logout">Logout</el-dropdown-item>
+              <el-dropdown-item command="logout">退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -43,15 +43,15 @@
           <el-card>
             <template #header>
               <div class="card-header">
-                <span>Server List</span>
+                <span>服务器列表</span>
                 <div>
                   <el-button type="primary" @click="showAddDialog">
                     <el-icon><Plus /></el-icon>
-                    Add Server
+                    新增服务器
                   </el-button>
                   <el-button @click="loadServers">
                     <el-icon><Refresh /></el-icon>
-                    Refresh
+                    刷新
                   </el-button>
                 </div>
               </div>
@@ -59,33 +59,33 @@
             
             <el-input
               v-model="searchText"
-              placeholder="Search by IP or username"
+              placeholder="按IP或用户名搜索"
               style="margin-bottom: 20px; max-width: 300px;"
               :prefix-icon="Search"
               clearable
             />
             
-            <el-empty v-if="filteredServers.length === 0" description="No servers found" />
+            <el-empty v-if="filteredServers.length === 0" description="未找到服务器" />
             
             <el-table v-else :data="filteredServers" style="width: 100%">
-              <el-table-column prop="ip_address" label="IP Address" width="150" />
-              <el-table-column prop="port" label="Port" width="100" />
-              <el-table-column prop="username" label="Username" width="120" />
-              <el-table-column label="Status" width="120">
+              <el-table-column prop="ip_address" label="IP地址" width="150" />
+              <el-table-column prop="port" label="端口" width="100" />
+              <el-table-column prop="username" label="用户名" width="120" />
+              <el-table-column label="状态" width="120">
                 <template #default="scope">
                   <StatusBadge :status="scope.row.status" />
                 </template>
               </el-table-column>
-              <el-table-column prop="os_info" label="OS Info" />
-              <el-table-column prop="notes" label="Notes" />
-              <el-table-column label="Actions" width="300">
+              <el-table-column prop="os_info" label="系统信息" />
+              <el-table-column prop="notes" label="备注" />
+              <el-table-column label="操作" width="300">
                 <template #default="scope">
                   <el-button
                     size="small"
                     @click="viewServer(scope.row)"
                   >
                     <el-icon><View /></el-icon>
-                    View
+                    查看
                   </el-button>
                   <el-button
                     size="small"
@@ -93,7 +93,7 @@
                     @click="editServer(scope.row)"
                   >
                     <el-icon><Edit /></el-icon>
-                    Edit
+                    编辑
                   </el-button>
                   <el-button
                     size="small"
@@ -102,7 +102,7 @@
                     :loading="scope.row.checking"
                   >
                     <el-icon><Refresh /></el-icon>
-                    Check
+                    检测
                   </el-button>
                   <el-button
                     size="small"
@@ -110,7 +110,7 @@
                     @click="deleteServer(scope.row)"
                   >
                     <el-icon><Delete /></el-icon>
-                    Delete
+                    删除
                   </el-button>
                 </template>
               </el-table-column>
@@ -123,7 +123,7 @@
     <!-- Add/Edit Server Dialog -->
     <el-dialog
       v-model="dialogVisible"
-      :title="isEdit ? 'Edit Server' : 'Add Server'"
+      :title="isEdit ? '编辑服务器' : '新增服务器'"
       width="600px"
     >
       <ServerForm
@@ -137,42 +137,42 @@
     <!-- View Server Detail Dialog -->
     <el-dialog
       v-model="detailDialogVisible"
-      title="Server Details"
+      title="服务器详情"
       width="700px"
     >
       <div v-if="selectedServer">
         <el-descriptions :column="2" border>
-          <el-descriptions-item label="IP Address">
+          <el-descriptions-item label="IP地址">
             {{ selectedServer.ip_address }}
           </el-descriptions-item>
-          <el-descriptions-item label="Port">
+          <el-descriptions-item label="端口">
             {{ selectedServer.port }}
           </el-descriptions-item>
-          <el-descriptions-item label="Username">
+          <el-descriptions-item label="用户名">
             {{ selectedServer.username }}
           </el-descriptions-item>
-          <el-descriptions-item label="Status">
+          <el-descriptions-item label="状态">
             <StatusBadge :status="selectedServer.status" />
           </el-descriptions-item>
-          <el-descriptions-item label="OS Info" :span="2">
-            {{ selectedServer.os_info || 'N/A' }}
+          <el-descriptions-item label="系统信息" :span="2">
+            {{ selectedServer.os_info || '暂无' }}
           </el-descriptions-item>
-          <el-descriptions-item label="CPU Info" :span="2">
-            {{ selectedServer.cpu_info || 'N/A' }}
+          <el-descriptions-item label="CPU 信息" :span="2">
+            {{ selectedServer.cpu_info || '暂无' }}
           </el-descriptions-item>
-          <el-descriptions-item label="Memory Info" :span="2">
-            {{ selectedServer.memory_info || 'N/A' }}
+          <el-descriptions-item label="内存信息" :span="2">
+            {{ selectedServer.memory_info || '暂无' }}
           </el-descriptions-item>
-          <el-descriptions-item label="Disk Info" :span="2">
-            {{ selectedServer.disk_info || 'N/A' }}
+          <el-descriptions-item label="磁盘信息" :span="2">
+            {{ selectedServer.disk_info || '暂无' }}
           </el-descriptions-item>
-          <el-descriptions-item label="Uptime" :span="2">
-            {{ selectedServer.uptime || 'N/A' }}
+          <el-descriptions-item label="运行时间" :span="2">
+            {{ selectedServer.uptime || '暂无' }}
           </el-descriptions-item>
-          <el-descriptions-item label="Notes" :span="2">
-            {{ selectedServer.notes || 'N/A' }}
+          <el-descriptions-item label="备注" :span="2">
+            {{ selectedServer.notes || '暂无' }}
           </el-descriptions-item>
-          <el-descriptions-item label="Last Checked" :span="2">
+          <el-descriptions-item label="最近检查" :span="2">
             {{ formatDate(selectedServer.last_checked) }}
           </el-descriptions-item>
         </el-descriptions>
@@ -184,7 +184,7 @@
             :loading="refreshing"
           >
             <el-icon><Refresh /></el-icon>
-            Refresh System Info
+            刷新系统信息
           </el-button>
         </div>
       </div>
@@ -241,7 +241,7 @@ const loadServers = async () => {
     const response = await serversAPI.getAll()
     servers.value = response.data.map(s => ({ ...s, checking: false }))
   } catch (error) {
-    ElMessage.error('Failed to load servers')
+    ElMessage.error('加载服务器失败')
   }
 }
 
@@ -266,36 +266,36 @@ const handleSubmit = async (formData) => {
   try {
     if (isEdit.value) {
       await serversAPI.update(currentServer.value.id, formData)
-      ElMessage.success('Server updated successfully')
+      ElMessage.success('服务器更新成功')
     } else {
       await serversAPI.create(formData)
-      ElMessage.success('Server added successfully')
+      ElMessage.success('服务器新增成功')
     }
     dialogVisible.value = false
     await loadServers()
   } catch (error) {
-    ElMessage.error(error.response?.data?.message || 'Operation failed')
+    ElMessage.error(error.response?.data?.message || '操作失败')
   }
 }
 
 const deleteServer = async (server) => {
   try {
     await ElMessageBox.confirm(
-      `Are you sure you want to delete server ${server.ip_address}?`,
-      'Warning',
+      `确认删除服务器 ${server.ip_address} 吗？`,
+      '警告',
       {
-        confirmButtonText: 'Delete',
-        cancelButtonText: 'Cancel',
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
         type: 'warning'
       }
     )
     
     await serversAPI.delete(server.id)
-    ElMessage.success('Server deleted successfully')
+    ElMessage.success('删除服务器成功')
     await loadServers()
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('Failed to delete server')
+      ElMessage.error('删除服务器失败')
     }
   }
 }
@@ -306,9 +306,9 @@ const checkServer = async (server) => {
     const response = await serversAPI.check(server.id)
     server.status = response.data.status.overall
     server.last_checked = new Date().toISOString()
-    ElMessage.success(`Server ${server.ip_address} checked`)
+    ElMessage.success(`已检测服务器 ${server.ip_address}`)
   } catch (error) {
-    ElMessage.error('Failed to check server')
+    ElMessage.error('检测服务器失败')
   } finally {
     server.checking = false
   }
@@ -325,17 +325,17 @@ const refreshSystemInfo = async () => {
     selectedServer.value.memory_info = response.data.memory
     selectedServer.value.disk_info = response.data.disk
     selectedServer.value.uptime = response.data.uptime
-    ElMessage.success('System info refreshed')
+    ElMessage.success('系统信息已刷新')
     await loadServers()
   } catch (error) {
-    ElMessage.error('Failed to refresh system info')
+    ElMessage.error('刷新系统信息失败')
   } finally {
     refreshing.value = false
   }
 }
 
 const formatDate = (dateStr) => {
-  if (!dateStr) return 'Never'
+  if (!dateStr) return '从未'
   const date = new Date(dateStr)
   return date.toLocaleString()
 }

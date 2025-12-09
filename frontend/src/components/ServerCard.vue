@@ -9,11 +9,11 @@
     <div class="server-info">
       <div class="info-item">
         <el-icon><Connection /></el-icon>
-        <span>Port: {{ server.port }}</span>
+        <span>端口：{{ server.port }}</span>
       </div>
       <div class="info-item">
         <el-icon><User /></el-icon>
-        <span>User: {{ server.username }}</span>
+        <span>用户：{{ server.username }}</span>
       </div>
       <div class="info-item" v-if="server.os_info">
         <el-icon><Monitor /></el-icon>
@@ -27,11 +27,11 @@
     <div class="card-actions">
       <el-button size="small" @click="$emit('view', server)">
         <el-icon><View /></el-icon>
-        View
+        查看
       </el-button>
       <el-button size="small" type="primary" @click="$emit('check', server)">
         <el-icon><Refresh /></el-icon>
-        Check
+        检测
       </el-button>
     </div>
   </el-card>
