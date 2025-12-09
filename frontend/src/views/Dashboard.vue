@@ -123,8 +123,42 @@
               </div>
             </template>
             
+            <!-- Loading State -->
+            <div
+              v-if="loading"
+              class="loading-container"
+            >
+              <el-icon
+                class="loading-icon"
+                :size="40"
+              >
+                <Loading />
+              </el-icon>
+              <p class="loading-text">
+                正在加载服务器...
+              </p>
+            </div>
+            
+            <!-- Error State -->
+            <el-result
+              v-else-if="loadError"
+              icon="error"
+              title="加载失败"
+              :sub-title="loadError"
+            >
+              <template #extra>
+                <el-button
+                  type="primary"
+                  @click="loadServers"
+                >
+                  <el-icon><Refresh /></el-icon>
+                  重新加载
+                </el-button>
+              </template>
+            </el-result>
+            
             <el-empty
-              v-if="servers.length === 0"
+              v-else-if="servers.length === 0"
               description="未找到服务器"
             />
             
@@ -201,7 +235,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   Monitor, Odometer, User, ArrowDown, Refresh,
-  CircleCheck, CircleClose, QuestionFilled, OfficeBuilding
+  CircleCheck, CircleClose, QuestionFilled, OfficeBuilding, Loading
 } from '@element-plus/icons-vue'
 import { serversAPI, authAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -211,6 +245,8 @@ const route = useRoute()
 const servers = ref([])
 const checkingAll = ref(false)
 const currentUser = ref(null)
+const loading = ref(false)
+const loadError = ref('')
 
 const activeMenu = computed(() => route.path)
 
@@ -230,6 +266,8 @@ onMounted(async () => {
 })
 
 const loadServers = async () => {
+  loading.value = true
+  loadError.value = ''
   try {
     const response = await serversAPI.getAll()
     servers.value = response.data.map(s => ({
@@ -239,8 +277,12 @@ const loadServers = async () => {
       error_type: s.error_type || ''
     }))
     calculateStats()
-  } catch (_error) {
-    ElMessage.error('加载服务器失败')
+  } catch (error) {
+    const message = error.response?.data?.message || error.message || '网络连接失败'
+    loadError.value = message
+    ElMessage.error(`加载服务器失败: ${message}`)
+  } finally {
+    loading.value = false
   }
 }
 
