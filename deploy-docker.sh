@@ -29,12 +29,13 @@ else
 fi
 
 info "Using Docker Compose to build and start services... / 使用 Docker Compose 构建并启动服务..."
-cd "$ROOT_DIR" || error "Failed to change to project directory: $ROOT_DIR"
+pushd "$ROOT_DIR" >/dev/null || error "Failed to change to project directory: $ROOT_DIR"
 
 [[ -f "$COMPOSE_FILE" ]] || error "Compose file not found: $COMPOSE_FILE"
 "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" up -d --build
+popd >/dev/null
 
 info "Deployment finished! / 部署完成！"
 info "Frontend: http://localhost:3000"
 info "Backend: http://localhost:5000"
-info "Default account: admin / admin123"
+info "Default account: admin / admin123 (please change after login / 登录后请立即修改密码)"
