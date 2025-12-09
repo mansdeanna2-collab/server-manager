@@ -36,8 +36,8 @@ def test_check_single_server_failure(monkeypatch):
     """Test _check_single_server handles exceptions gracefully."""
     from routes.servers import _check_single_server, password_encryptor
     
-    # Mock password decryption to raise an exception
-    monkeypatch.setattr(password_encryptor, 'decrypt', lambda x: None)
+    # Mock password decryption to return a password (so we can reach the status check)
+    monkeypatch.setattr(password_encryptor, 'decrypt', lambda x: 'test_password')
     
     # Mock the status check to raise an exception
     def raise_error(*args):
