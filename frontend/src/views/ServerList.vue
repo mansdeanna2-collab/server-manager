@@ -75,83 +75,149 @@
             />
             
             <el-empty
-              v-if="filteredServers.length === 0"
+              v-if="groupedServers.length === 0"
               description="未找到服务器"
             />
             
             <el-table
               v-else
-              :data="filteredServers"
+              :data="groupedServers"
               style="width: 100%"
+              row-key="segmentKey"
+              :tree-props="{ children: 'servers', hasChildren: 'hasChildren' }"
+              default-expand-all
             >
               <el-table-column
-                prop="ip_address"
                 label="IP地址"
-                width="150"
-              />
+                width="200"
+              >
+                <template #default="scope">
+                  <span
+                    v-if="scope.row.isSegment"
+                    class="ip-segment"
+                  >
+                    {{ scope.row.segment }}.x
+                    <el-tag
+                      size="small"
+                      type="info"
+                      style="margin-left: 8px;"
+                    >
+                      {{ scope.row.count }} 台
+                    </el-tag>
+                  </span>
+                  <span v-else>{{ scope.row.ip_address }}</span>
+                </template>
+              </el-table-column>
               <el-table-column
                 prop="port"
                 label="端口"
                 width="100"
-              />
+              >
+                <template #default="scope">
+                  <span v-if="!scope.row.isSegment">{{ scope.row.port }}</span>
+                </template>
+              </el-table-column>
               <el-table-column
                 prop="username"
                 label="用户名"
                 width="120"
-              />
+              >
+                <template #default="scope">
+                  <span v-if="!scope.row.isSegment">{{ scope.row.username }}</span>
+                </template>
+              </el-table-column>
               <el-table-column
                 label="状态"
                 width="120"
               >
                 <template #default="scope">
-                  <StatusBadge :status="scope.row.status" />
+                  <template v-if="scope.row.isSegment">
+                    <el-tag
+                      v-if="scope.row.onlineCount > 0"
+                      type="success"
+                      size="small"
+                    >
+                      {{ scope.row.onlineCount }} 在线
+                    </el-tag>
+                    <el-tag
+                      v-if="scope.row.offlineCount > 0"
+                      type="danger"
+                      size="small"
+                      style="margin-left: 4px;"
+                    >
+                      {{ scope.row.offlineCount }} 离线
+                    </el-tag>
+                  </template>
+                  <StatusBadge
+                    v-else
+                    :status="scope.row.status"
+                  />
                 </template>
               </el-table-column>
               <el-table-column
                 prop="os_info"
                 label="系统信息"
-              />
+              >
+                <template #default="scope">
+                  <span v-if="!scope.row.isSegment">{{ scope.row.os_info }}</span>
+                </template>
+              </el-table-column>
               <el-table-column
                 prop="notes"
                 label="备注"
-              />
+              >
+                <template #default="scope">
+                  <span v-if="!scope.row.isSegment">{{ scope.row.notes }}</span>
+                </template>
+              </el-table-column>
               <el-table-column
                 label="操作"
                 width="300"
               >
                 <template #default="scope">
-                  <el-button
-                    size="small"
-                    @click="viewServer(scope.row)"
-                  >
-                    <el-icon><View /></el-icon>
-                    查看
-                  </el-button>
-                  <el-button
-                    size="small"
-                    type="primary"
-                    @click="editServer(scope.row)"
-                  >
-                    <el-icon><Edit /></el-icon>
-                    编辑
-                  </el-button>
-                  <el-button
-                    size="small"
-                    type="success"
-                    :loading="scope.row.checking"
-                    @click="checkServer(scope.row)"
-                  >
-                    <el-icon><Refresh /></el-icon>
-                    检测
-                  </el-button>
-                  <el-button
-                    size="small"
-                    type="danger"
-                    @click="deleteServer(scope.row)"
-                  >
-                    <el-icon><Delete /></el-icon>
-                    删除
-                  </el-button>
+                  <template v-if="scope.row.isSegment">
+                    <el-button
+                      size="small"
+                      @click="viewSegment(scope.row)"
+                    >
+                      <el-icon><View /></el-icon>
+                      查看
+                    </el-button>
+                  </template>
+                  <template v-else>
+                    <el-button
+                      size="small"
+                      @click="viewServer(scope.row)"
+                    >
+                      <el-icon><View /></el-icon>
+                      查看
+                    </el-button>
+                    <el-button
+                      size="small"
+                      type="primary"
+                      @click="editServer(scope.row)"
+                    >
+                      <el-icon><Edit /></el-icon>
+                      编辑
+                    </el-button>
+                    <el-button
+                      size="small"
+                      type="success"
+                      :loading="scope.row.checking"
+                      @click="checkServer(scope.row)"
+                    >
+                      <el-icon><Refresh /></el-icon>
+                      检测
+                    </el-button>
+                    <el-button
+                      size="small"
+                      type="danger"
+                      @click="deleteServer(scope.row)"
+                    >
+                      <el-icon><Delete /></el-icon>
+                      删除
+                    </el-button>
+                  </template>
                 </template>
               </el-table-column>
             </el-table>
@@ -253,6 +319,74 @@
         </div>
       </div>
     </el-dialog>
+    
+    <!-- View Segment Servers Dialog -->
+    <el-dialog
+      v-model="segmentDialogVisible"
+      :title="selectedSegment ? `IP段 ${selectedSegment.segment}.x 的服务器` : 'IP段服务器'"
+      width="900px"
+    >
+      <div v-if="selectedSegment">
+        <el-table
+          :data="selectedSegment.servers"
+          style="width: 100%"
+        >
+          <el-table-column
+            prop="ip_address"
+            label="IP地址"
+            width="150"
+          />
+          <el-table-column
+            prop="port"
+            label="端口"
+            width="100"
+          />
+          <el-table-column
+            prop="username"
+            label="用户名"
+            width="120"
+          />
+          <el-table-column
+            label="状态"
+            width="120"
+          >
+            <template #default="scope">
+              <StatusBadge :status="scope.row.status" />
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="os_info"
+            label="系统信息"
+          />
+          <el-table-column
+            prop="notes"
+            label="备注"
+          />
+          <el-table-column
+            label="操作"
+            width="180"
+          >
+            <template #default="scope">
+              <el-button
+                size="small"
+                @click="viewServerFromSegment(scope.row)"
+              >
+                <el-icon><View /></el-icon>
+                详情
+              </el-button>
+              <el-button
+                size="small"
+                type="primary"
+                @click="editServerFromSegment(scope.row)"
+              >
+                <el-icon><Edit /></el-icon>
+                编辑
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -274,14 +408,41 @@ const servers = ref([])
 const searchText = ref('')
 const dialogVisible = ref(false)
 const detailDialogVisible = ref(false)
+const segmentDialogVisible = ref(false)
 const isEdit = ref(false)
 const currentServer = ref(null)
 const selectedServer = ref(null)
+const selectedSegment = ref(null)
 const refreshing = ref(false)
 const currentUser = ref(null)
 
 const activeMenu = computed(() => route.path)
 
+// Get IP segment (first 3 octets) from IP address
+const getIpSegment = (ipAddress) => {
+  if (!ipAddress || typeof ipAddress !== 'string') {
+    return ''
+  }
+  const parts = ipAddress.split('.')
+  if (parts.length >= 3) {
+    return `${parts[0]}.${parts[1]}.${parts[2]}`
+  }
+  return ipAddress
+}
+
+// Compare IP segments numerically
+const compareIpSegments = (a, b) => {
+  const partsA = a.segment.split('.').map(Number)
+  const partsB = b.segment.split('.').map(Number)
+  for (let i = 0; i < Math.min(partsA.length, partsB.length); i++) {
+    if (partsA[i] !== partsB[i]) {
+      return partsA[i] - partsB[i]
+    }
+  }
+  return partsA.length - partsB.length
+}
+
+// Filter servers by search text
 const filteredServers = computed(() => {
   if (!searchText.value) return servers.value
   
@@ -290,6 +451,52 @@ const filteredServers = computed(() => {
     server.ip_address.toLowerCase().includes(search) ||
     server.username.toLowerCase().includes(search)
   )
+})
+
+// Group servers by IP segment
+const groupedServers = computed(() => {
+  const filtered = filteredServers.value
+  const segmentMap = new Map()
+  
+  // Group servers by IP segment
+  filtered.forEach(server => {
+    const segment = getIpSegment(server.ip_address)
+    if (!segmentMap.has(segment)) {
+      segmentMap.set(segment, [])
+    }
+    segmentMap.get(segment).push(server)
+  })
+  
+  // Convert to tree structure for el-table
+  const result = []
+  segmentMap.forEach((serverList, segment) => {
+    // Count online and offline in single pass
+    let onlineCount = 0
+    let offlineCount = 0
+    for (const s of serverList) {
+      if (s.status === 'online') onlineCount++
+      else if (s.status === 'offline') offlineCount++
+    }
+    
+    result.push({
+      segmentKey: `segment-${segment}`,
+      segment: segment,
+      isSegment: true,
+      count: serverList.length,
+      onlineCount: onlineCount,
+      offlineCount: offlineCount,
+      hasChildren: true,
+      servers: serverList.map(s => ({
+        ...s,
+        segmentKey: `server-${s.id}`
+      }))
+    })
+  })
+  
+  // Sort by segment numerically
+  result.sort(compareIpSegments)
+  
+  return result
 })
 
 onMounted(async () => {
@@ -324,6 +531,22 @@ const editServer = (server) => {
 const viewServer = (server) => {
   selectedServer.value = server
   detailDialogVisible.value = true
+}
+
+const viewSegment = (segment) => {
+  selectedSegment.value = segment
+  segmentDialogVisible.value = true
+}
+
+const viewServerFromSegment = (server) => {
+  selectedServer.value = server
+  detailDialogVisible.value = true
+}
+
+const editServerFromSegment = (server) => {
+  isEdit.value = true
+  currentServer.value = server
+  dialogVisible.value = true
 }
 
 const handleSubmit = async (formData) => {
@@ -435,5 +658,10 @@ const handleCommand = async (command) => {
 .user-dropdown:hover {
   background-color: rgba(255, 255, 255, 0.1);
   border-radius: 4px;
+}
+
+.ip-segment {
+  font-weight: bold;
+  color: #409EFF;
 }
 </style>
