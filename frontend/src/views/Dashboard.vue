@@ -1,14 +1,12 @@
 <template>
   <div class="page-container">
     <el-container>
-      <el-header style="background: #409EFF; color: white; display: flex; align-items: center; justify-content: space-between;">
-        <div style="display: flex; align-items: center; gap: 10px;">
+      <el-header class="header-container">
+        <div class="header-logo">
           <el-icon :size="30">
             <Monitor />
           </el-icon>
-          <h2 style="margin: 0;">
-            服务器管理
-          </h2>
+          <h2>服务器管理</h2>
         </div>
         <el-menu
           mode="horizontal"
@@ -16,7 +14,7 @@
           background-color="#409EFF"
           text-color="#fff"
           active-text-color="#ffd04b"
-          style="border: none; flex: 1; margin-left: 50px;"
+          class="header-menu"
           @select="handleMenuSelect"
         >
           <el-menu-item index="/dashboard">
@@ -47,77 +45,137 @@
         </el-dropdown>
       </el-header>
       
-      <el-main>
+      <el-main class="main-content">
         <div class="content-wrapper">
+          <!-- 欢迎横幅 -->
+          <div class="welcome-banner">
+            <div class="welcome-content">
+              <h1 class="welcome-title">
+                👋 欢迎回来，{{ currentUser?.username || '管理员' }}
+              </h1>
+              <p class="welcome-subtitle">
+                这是您的服务器管理仪表盘，随时监控服务器状态
+              </p>
+            </div>
+            <div class="welcome-decoration">
+              <div class="decoration-circle circle-1" />
+              <div class="decoration-circle circle-2" />
+              <div class="decoration-circle circle-3" />
+            </div>
+          </div>
+          
+          <!-- 统计卡片 -->
           <div class="stats-grid">
-            <div class="stat-card">
-              <div
-                class="stat-card-icon"
-                style="color: #409EFF;"
-              >
-                <el-icon><OfficeBuilding /></el-icon>
+            <div class="stat-card stat-card-total">
+              <div class="stat-card-bg" />
+              <div class="stat-card-content">
+                <div class="stat-card-icon-wrapper stat-icon-total">
+                  <el-icon :size="28">
+                    <OfficeBuilding />
+                  </el-icon>
+                </div>
+                <div class="stat-card-info">
+                  <div class="stat-card-value">
+                    {{ stats.total }}
+                  </div>
+                  <div class="stat-card-title">
+                    服务器总数
+                  </div>
+                </div>
               </div>
-              <div class="stat-card-title">
-                服务器总数
-              </div>
-              <div class="stat-card-value">
-                {{ stats.total }}
-              </div>
-            </div>
-            
-            <div class="stat-card">
-              <div
-                class="stat-card-icon"
-                style="color: #67C23A;"
-              >
-                <el-icon><CircleCheck /></el-icon>
-              </div>
-              <div class="stat-card-title">
-                正常
-              </div>
-              <div class="stat-card-value">
-                {{ stats.online }}
+              <div class="stat-card-trend">
+                <el-icon><DataAnalysis /></el-icon>
+                全部服务器
               </div>
             </div>
             
-            <div class="stat-card">
-              <div
-                class="stat-card-icon"
-                style="color: #F56C6C;"
-              >
-                <el-icon><CircleClose /></el-icon>
+            <div class="stat-card stat-card-online">
+              <div class="stat-card-bg" />
+              <div class="stat-card-content">
+                <div class="stat-card-icon-wrapper stat-icon-online">
+                  <el-icon :size="28">
+                    <CircleCheck />
+                  </el-icon>
+                </div>
+                <div class="stat-card-info">
+                  <div class="stat-card-value">
+                    {{ stats.online }}
+                  </div>
+                  <div class="stat-card-title">
+                    正常运行
+                  </div>
+                </div>
               </div>
-              <div class="stat-card-title">
-                离线
-              </div>
-              <div class="stat-card-value">
-                {{ stats.offline }}
+              <div class="stat-card-trend trend-success">
+                <el-icon><TrendCharts /></el-icon>
+                {{ onlinePercentage }}% 运行率
               </div>
             </div>
             
-            <div class="stat-card">
-              <div
-                class="stat-card-icon"
-                style="color: #909399;"
-              >
-                <el-icon><QuestionFilled /></el-icon>
+            <div class="stat-card stat-card-offline">
+              <div class="stat-card-bg" />
+              <div class="stat-card-content">
+                <div class="stat-card-icon-wrapper stat-icon-offline">
+                  <el-icon :size="28">
+                    <CircleClose />
+                  </el-icon>
+                </div>
+                <div class="stat-card-info">
+                  <div class="stat-card-value">
+                    {{ stats.offline }}
+                  </div>
+                  <div class="stat-card-title">
+                    离线
+                  </div>
+                </div>
               </div>
-              <div class="stat-card-title">
-                未知
+              <div class="stat-card-trend trend-danger">
+                <el-icon><Warning /></el-icon>
+                需要关注
               </div>
-              <div class="stat-card-value">
-                {{ stats.unknown }}
+            </div>
+            
+            <div class="stat-card stat-card-unknown">
+              <div class="stat-card-bg" />
+              <div class="stat-card-content">
+                <div class="stat-card-icon-wrapper stat-icon-unknown">
+                  <el-icon :size="28">
+                    <QuestionFilled />
+                  </el-icon>
+                </div>
+                <div class="stat-card-info">
+                  <div class="stat-card-value">
+                    {{ stats.unknown }}
+                  </div>
+                  <div class="stat-card-title">
+                    未知状态
+                  </div>
+                </div>
+              </div>
+              <div class="stat-card-trend trend-info">
+                <el-icon><InfoFilled /></el-icon>
+                待检测
               </div>
             </div>
           </div>
           
-          <el-card>
+          <!-- 服务器列表卡片 -->
+          <el-card class="server-list-card">
             <template #header>
               <div class="card-header">
-                <span>近期服务器</span>
+                <div class="card-header-title">
+                  <el-icon
+                    class="card-header-icon"
+                    :size="20"
+                  >
+                    <List />
+                  </el-icon>
+                  <span>近期服务器</span>
+                </div>
                 <el-button
                   type="primary"
                   :loading="checkingAll"
+                  class="check-all-btn"
                   @click="checkAllServers"
                 >
                   <el-icon><Refresh /></el-icon>
@@ -169,17 +227,32 @@
               <el-table
                 :data="paginatedServers"
                 style="width: 100%"
+                stripe
+                class="server-table"
               >
                 <el-table-column
-                  prop="ip_address"
                   label="IP地址"
-                  width="150"
-                />
+                  width="160"
+                >
+                  <template #default="scope">
+                    <span class="ip-text">{{ scope.row.ip_address }}</span>
+                  </template>
+                </el-table-column>
                 <el-table-column
-                  prop="port"
                   label="端口"
                   width="100"
-                />
+                >
+                  <template #default="scope">
+                    <el-tag
+                      :type="getPortTagType(scope.row.port)"
+                      size="small"
+                      effect="dark"
+                      round
+                    >
+                      {{ scope.row.port }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
                 <el-table-column
                   prop="username"
                   label="用户名"
@@ -198,15 +271,27 @@
                   </template>
                 </el-table-column>
                 <el-table-column
-                  prop="os_info"
                   label="操作系统"
-                />
+                >
+                  <template #default="scope">
+                    <span v-if="scope.row.os_info">
+                      {{ getOsIcon(scope.row.os_info) }} {{ scope.row.os_info }}
+                    </span>
+                    <span
+                      v-else
+                      class="no-info"
+                    >暂无</span>
+                  </template>
+                </el-table-column>
                 <el-table-column
                   label="最近检查"
                   width="180"
                 >
                   <template #default="scope">
-                    {{ formatDate(scope.row.last_checked) }}
+                    <span class="check-time">
+                      <el-icon><Timer /></el-icon>
+                      {{ formatDate(scope.row.last_checked) }}
+                    </span>
                   </template>
                 </el-table-column>
                 <el-table-column
@@ -220,6 +305,7 @@
                       :loading="scope.row.checking"
                       @click="checkServer(scope.row)"
                     >
+                      <el-icon><Search /></el-icon>
                       检测
                     </el-button>
                   </template>
@@ -310,8 +396,9 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
-  Monitor, Odometer, User, ArrowDown, Refresh,
-  CircleCheck, CircleClose, QuestionFilled, OfficeBuilding, Loading
+  ArrowDown, CircleCheck, CircleClose, DataAnalysis, InfoFilled, List,
+  Loading, Monitor, Odometer, OfficeBuilding, QuestionFilled, Refresh,
+  Search, Timer, TrendCharts, User, Warning
 } from '@element-plus/icons-vue'
 import { serversAPI, authAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -358,11 +445,53 @@ const passwordRules = {
 
 const activeMenu = computed(() => route.path)
 
+// 端口类型颜色映射
+const PORT_TYPE_MAP = {
+  22: 'success',
+  3389: 'primary',
+  23: 'warning',
+  21: 'info',
+  80: 'info',
+  443: 'success',
+  3306: 'warning',
+  5432: 'primary'
+}
+
+const getPortTagType = (port) => {
+  return PORT_TYPE_MAP[port] || 'info'
+}
+
+// OS图标映射常量
+const OS_ICONS = {
+  default: '💻',
+  linux: '🐧',
+  redhat: '🎩',
+  windows: '🪟',
+  mac: '🍎'
+}
+
+// 根据OS信息获取图标
+const getOsIcon = (osInfo) => {
+  if (!osInfo) return OS_ICONS.default
+  const osLower = osInfo.toLowerCase()
+  if (osLower.includes('ubuntu') || osLower.includes('debian')) return OS_ICONS.linux
+  if (osLower.includes('centos') || osLower.includes('red hat') || osLower.includes('rhel')) return OS_ICONS.redhat
+  if (osLower.includes('windows')) return OS_ICONS.windows
+  if (osLower.includes('mac') || osLower.includes('darwin')) return OS_ICONS.mac
+  if (osLower.includes('linux')) return OS_ICONS.linux
+  return OS_ICONS.default
+}
+
 const stats = reactive({
   total: 0,
   online: 0,
   offline: 0,
   unknown: 0
+})
+
+// 运行率百分比计算
+const onlinePercentage = computed(() => {
+  return stats.total > 0 ? Math.round(stats.online / stats.total * 100) : 0
 })
 
 // Computed property for paginated servers
@@ -510,25 +639,376 @@ const handleChangePassword = async () => {
 </script>
 
 <style scoped>
+/* 页面容器 */
+.page-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e7ed 100%);
+}
+
+/* 头部样式 */
+.header-container {
+  background: linear-gradient(135deg, #409EFF 0%, #337ecc 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 4px 20px 0 rgba(64, 158, 255, 0.3);
+}
+
+.header-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header-logo h2 {
+  margin: 0;
+  font-weight: 600;
+}
+
+.header-menu {
+  border: none;
+  flex: 1;
+  margin-left: 50px;
+}
+
 .user-dropdown {
   display: flex;
   align-items: center;
   gap: 5px;
   cursor: pointer;
-  padding: 10px;
+  padding: 10px 15px;
   color: white;
+  transition: all 0.3s;
+  border-radius: 8px;
 }
 
 .user-dropdown:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.15);
 }
 
+/* 主内容区 */
+.main-content {
+  background: transparent;
+}
+
+.content-wrapper {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* 欢迎横幅 */
+.welcome-banner {
+  position: relative;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  padding: 32px 40px;
+  margin-bottom: 24px;
+  overflow: hidden;
+  box-shadow: 0 10px 40px 0 rgba(102, 126, 234, 0.3);
+}
+
+.welcome-content {
+  position: relative;
+  z-index: 1;
+}
+
+.welcome-title {
+  color: white;
+  font-size: 28px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+}
+
+.welcome-subtitle {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 15px;
+  margin: 0;
+}
+
+.welcome-decoration {
+  position: absolute;
+  right: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.decoration-circle {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.circle-1 {
+  width: 120px;
+  height: 120px;
+  right: 0;
+  top: -30px;
+}
+
+.circle-2 {
+  width: 80px;
+  height: 80px;
+  right: 100px;
+  top: 20px;
+}
+
+.circle-3 {
+  width: 60px;
+  height: 60px;
+  right: 60px;
+  top: -60px;
+}
+
+/* 统计卡片网格 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 1200px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 统计卡片 */
+.stat-card {
+  position: relative;
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 30px 0 rgba(0, 0, 0, 0.1);
+}
+
+.stat-card-bg {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  transform: translate(30%, -30%);
+  opacity: 0.1;
+}
+
+.stat-card-total .stat-card-bg {
+  background: linear-gradient(135deg, #409EFF 0%, #337ecc 100%);
+}
+
+.stat-card-online .stat-card-bg {
+  background: linear-gradient(135deg, #67C23A 0%, #529b2e 100%);
+}
+
+.stat-card-offline .stat-card-bg {
+  background: linear-gradient(135deg, #F56C6C 0%, #dd6161 100%);
+}
+
+.stat-card-unknown .stat-card-bg {
+  background: linear-gradient(135deg, #909399 0%, #73767a 100%);
+}
+
+.stat-card-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  position: relative;
+  z-index: 1;
+}
+
+.stat-card-icon-wrapper {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.stat-icon-total {
+  background: linear-gradient(135deg, #409EFF 0%, #337ecc 100%);
+  box-shadow: 0 4px 15px 0 rgba(64, 158, 255, 0.4);
+}
+
+.stat-icon-online {
+  background: linear-gradient(135deg, #67C23A 0%, #529b2e 100%);
+  box-shadow: 0 4px 15px 0 rgba(103, 194, 58, 0.4);
+}
+
+.stat-icon-offline {
+  background: linear-gradient(135deg, #F56C6C 0%, #dd6161 100%);
+  box-shadow: 0 4px 15px 0 rgba(245, 108, 108, 0.4);
+}
+
+.stat-icon-unknown {
+  background: linear-gradient(135deg, #909399 0%, #73767a 100%);
+  box-shadow: 0 4px 15px 0 rgba(144, 147, 153, 0.4);
+}
+
+.stat-card-info {
+  flex: 1;
+}
+
+.stat-card-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #303133;
+  line-height: 1.2;
+}
+
+.stat-card-title {
+  font-size: 14px;
+  color: #909399;
+  margin-top: 4px;
+}
+
+.stat-card-trend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #909399;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.trend-success {
+  color: #67C23A;
+}
+
+.trend-danger {
+  color: #F56C6C;
+}
+
+.trend-info {
+  color: #909399;
+}
+
+/* 服务器列表卡片 */
+.server-list-card {
+  border-radius: 16px;
+  box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.05);
+  border: none;
+}
+
+.server-list-card :deep(.el-card__header) {
+  border-bottom: 1px solid #f0f0f0;
+  padding: 20px 24px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.card-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.card-header-icon {
+  color: #409EFF;
+}
+
+.check-all-btn {
+  border-radius: 8px;
+  padding: 10px 20px;
+}
+
+/* 服务器表格 */
+.server-table {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.server-table :deep(.el-table__header th) {
+  background-color: #f8f9fa !important;
+  font-weight: 600;
+  color: #606266;
+}
+
+.server-table :deep(.el-table__row:hover td) {
+  background-color: #f5f7fa !important;
+}
+
+.ip-text {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 13px;
+  color: #409EFF;
+  font-weight: 500;
+}
+
+.check-time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #909399;
+  font-size: 13px;
+}
+
+.no-info {
+  color: #c0c4cc;
+}
+
+/* 分页容器 */
 .pagination-container {
   display: flex;
   justify-content: center;
   margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid #ebeef5;
+  padding-top: 20px;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* 加载状态 */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #909399;
+}
+
+.loading-icon {
+  color: #409EFF;
+  animation: rotate 1s linear infinite;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  margin-top: 16px;
+  font-size: 14px;
+  color: #606266;
 }
 </style>
