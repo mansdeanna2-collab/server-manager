@@ -570,6 +570,16 @@
       <div v-if="filteredDialogServers.length > 0">
         <div class="segment-header">
           <span class="segment-count">共 {{ filteredDialogServers.length }} 台服务器</span>
+          <el-button
+            v-if="filteredDialogType === 'normal'"
+            type="success"
+            size="small"
+            :loading="batchGettingSystemInfo"
+            @click="batchGetSystemInfo"
+          >
+            <el-icon><Cpu /></el-icon>
+            一键获取系统信息
+          </el-button>
         </div>
         <el-table
           :data="paginatedFilteredServers"
@@ -892,7 +902,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Monitor, Odometer, User, ArrowDown, Plus, Refresh,
   Search, View, Edit, Delete, OfficeBuilding, Connection, CopyDocument, Loading,
-  CircleCheck, CircleClose, Download, QuestionFilled, WarningFilled
+  CircleCheck, CircleClose, Download, QuestionFilled, WarningFilled, Cpu
 } from '@element-plus/icons-vue'
 import { serversAPI, authAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -910,6 +920,8 @@ const terminalDialogVisible = ref(false)
 const filteredDialogVisible = ref(false)
 const filteredDialogTitle = ref('')
 const filteredDialogServers = ref([])
+const filteredDialogType = ref('')
+const batchGettingSystemInfo = ref(false)
 const passwordDialogVisible = ref(false)
 const changingPassword = ref(false)
 const passwordFormRef = ref(null)
@@ -1127,12 +1139,41 @@ const showFilteredServersDialog = (filterType) => {
     result = result.filter(server => server.error_type)
     title = '错误服务器'
   } else if (filterType === 'computer') {
-    result = result.filter(server => server.port === 3389)
+    // 电脑对话框：过滤掉离线和错误状态中用户名为Administrator的服务器
+    result = result.filter(server => {
+      if (server.port !== 3389) return false
+      // 如果是离线或错误状态，且用户名是Administrator，则不显示
+      if ((server.status === 'offline' || server.error_type) && server.username === 'Administrator') {
+        return false
+      }
+      return true
+    })
     title = '电脑 (Windows RDP)'
   }
   
-  // Sort by update time - use original server objects to maintain shared state
-  filteredDialogServers.value = [...result].sort((a, b) => getUpdatedTimestamp(b) - getUpdatedTimestamp(a))
+  // 根据filterType设置排序逻辑
+  filteredDialogType.value = filterType
+  
+  if (filterType === 'computer') {
+    // 电脑对话框排序：✓在线 > ✓在线/端口关闭 > ✗离线
+    filteredDialogServers.value = [...result].sort((a, b) => {
+      // 定义状态优先级
+      const getStatusPriority = (server) => {
+        if (server.status === 'online' && !server.error_type) return 0  // ✓在线
+        if (server.status === 'online' && server.error_type) return 1   // ✓在线/端口关闭(有错误)
+        if (server.status === 'offline') return 2                        // ✗离线
+        return 3  // 其他状态
+      }
+      const priorityDiff = getStatusPriority(a) - getStatusPriority(b)
+      if (priorityDiff !== 0) return priorityDiff
+      // 同优先级按更新时间排序
+      return getUpdatedTimestamp(b) - getUpdatedTimestamp(a)
+    })
+  } else {
+    // 其他对话框按更新时间排序
+    filteredDialogServers.value = [...result].sort((a, b) => getUpdatedTimestamp(b) - getUpdatedTimestamp(a))
+  }
+  
   filteredDialogTitle.value = title
   filteredDialogCurrentPage.value = 1
   filteredDialogVisible.value = true
@@ -1486,6 +1527,53 @@ const refreshSystemInfo = async () => {
   }
 }
 
+// 批量获取正常服务器的系统信息
+const batchGetSystemInfo = async () => {
+  if (filteredDialogServers.value.length === 0) return
+  
+  batchGettingSystemInfo.value = true
+  
+  try {
+    // 创建所有请求的Promise数组
+    const promises = filteredDialogServers.value.map(server => 
+      serversAPI.getSystemInfo(server.id)
+        .then(response => ({ server, response, success: true }))
+        .catch(() => ({ server, success: false }))
+    )
+    
+    // 并发执行所有请求
+    const results = await Promise.all(promises)
+    
+    let successCount = 0
+    let failCount = 0
+    
+    // 处理结果
+    results.forEach(result => {
+      if (result.success) {
+        result.server.os_info = result.response.data.os
+        result.server.cpu_info = result.response.data.cpu
+        result.server.memory_info = result.response.data.memory
+        result.server.disk_info = result.response.data.disk
+        result.server.uptime = result.response.data.uptime
+        successCount++
+      } else {
+        failCount++
+      }
+    })
+    
+    if (successCount > 0) {
+      ElMessage.success(`成功获取 ${successCount} 台服务器的系统信息${failCount > 0 ? `，${failCount} 台失败` : ''}`)
+      await loadServers()
+    } else if (failCount > 0) {
+      ElMessage.error(`获取系统信息失败，共 ${failCount} 台服务器`)
+    }
+  } catch (_error) {
+    ElMessage.error('批量获取系统信息失败')
+  } finally {
+    batchGettingSystemInfo.value = false
+  }
+}
+
 const formatDate = (dateStr) => {
   if (!dateStr) return '从未'
   const date = new Date(dateStr)
@@ -1784,11 +1872,8 @@ const handleChangePassword = async () => {
 .notes-text {
   color: #606266;
   font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  display: block;
-  max-width: 150px;
+  word-break: break-word;
+  white-space: pre-wrap;
 }
 
 /* Action buttons in table */
@@ -1843,6 +1928,7 @@ const handleChangePassword = async () => {
 .segment-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 15px;
   margin-bottom: 20px;
   padding-bottom: 15px;

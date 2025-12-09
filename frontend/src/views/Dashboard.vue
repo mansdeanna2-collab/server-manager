@@ -73,7 +73,7 @@
                 <el-icon><CircleCheck /></el-icon>
               </div>
               <div class="stat-card-title">
-                在线
+                正常
               </div>
               <div class="stat-card-value">
                 {{ stats.online }}
@@ -165,66 +165,79 @@
               description="未找到服务器"
             />
             
-            <el-table
-              v-else
-              :data="servers"
-              style="width: 100%"
-            >
-              <el-table-column
-                prop="ip_address"
-                label="IP地址"
-                width="150"
-              />
-              <el-table-column
-                prop="port"
-                label="端口"
-                width="100"
-              />
-              <el-table-column
-                prop="username"
-                label="用户名"
-                width="120"
-              />
-              <el-table-column
-                label="状态"
-                width="120"
+            <template v-else>
+              <el-table
+                :data="paginatedServers"
+                style="width: 100%"
               >
-                <template #default="scope">
-                  <StatusBadge
-                    :status="scope.row.status"
-                    :detail="scope.row.checkDetail"
-                    :error-type="scope.row.error_type"
-                  />
-                </template>
-              </el-table-column>
-              <el-table-column
-                prop="os_info"
-                label="操作系统"
-              />
-              <el-table-column
-                label="最近检查"
-                width="180"
+                <el-table-column
+                  prop="ip_address"
+                  label="IP地址"
+                  width="150"
+                />
+                <el-table-column
+                  prop="port"
+                  label="端口"
+                  width="100"
+                />
+                <el-table-column
+                  prop="username"
+                  label="用户名"
+                  width="120"
+                />
+                <el-table-column
+                  label="状态"
+                  width="120"
+                >
+                  <template #default="scope">
+                    <StatusBadge
+                      :status="scope.row.status"
+                      :detail="scope.row.checkDetail"
+                      :error-type="scope.row.error_type"
+                    />
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  prop="os_info"
+                  label="操作系统"
+                />
+                <el-table-column
+                  label="最近检查"
+                  width="180"
+                >
+                  <template #default="scope">
+                    {{ formatDate(scope.row.last_checked) }}
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  label="操作"
+                  width="100"
+                >
+                  <template #default="scope">
+                    <el-button
+                      size="small"
+                      type="primary"
+                      :loading="scope.row.checking"
+                      @click="checkServer(scope.row)"
+                    >
+                      检测
+                    </el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <div
+                v-if="servers.length > PAGE_SIZE"
+                class="pagination-container"
               >
-                <template #default="scope">
-                  {{ formatDate(scope.row.last_checked) }}
-                </template>
-              </el-table-column>
-              <el-table-column
-                label="操作"
-                width="100"
-              >
-                <template #default="scope">
-                  <el-button
-                    size="small"
-                    type="primary"
-                    :loading="scope.row.checking"
-                    @click="checkServer(scope.row)"
-                  >
-                    检测
-                  </el-button>
-                </template>
-              </el-table-column>
-            </el-table>
+                <el-pagination
+                  v-model:current-page="currentPage"
+                  :page-size="PAGE_SIZE"
+                  :total="servers.length"
+                  layout="prev, pager, next"
+                  background
+                />
+              </div>
+            </template>
           </el-card>
         </div>
       </el-main>
@@ -313,6 +326,8 @@ const loadError = ref('')
 const passwordDialogVisible = ref(false)
 const changingPassword = ref(false)
 const passwordFormRef = ref(null)
+const currentPage = ref(1)
+const PAGE_SIZE = 10
 const passwordForm = reactive({
   old_password: '',
   new_password: '',
@@ -348,6 +363,13 @@ const stats = reactive({
   online: 0,
   offline: 0,
   unknown: 0
+})
+
+// Computed property for paginated servers
+const paginatedServers = computed(() => {
+  const start = (currentPage.value - 1) * PAGE_SIZE
+  const end = start + PAGE_SIZE
+  return servers.value.slice(start, end)
 })
 
 onMounted(async () => {
@@ -499,5 +521,13 @@ const handleChangePassword = async () => {
 .user-dropdown:hover {
   background-color: rgba(255, 255, 255, 0.1);
   border-radius: 4px;
+}
+
+.pagination-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #ebeef5;
 }
 </style>
