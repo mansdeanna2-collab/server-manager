@@ -22,7 +22,7 @@ def verify_token(token):
     if not token:
         return None
     try:
-        data = jwt.decode(token, Config.SECRET_KEY, algorithms=['HS256'])
+        data = jwt.decode(token, Config.JWT_SECRET_KEY, algorithms=['HS256'])
         return data
     except jwt.ExpiredSignatureError:
         logger.warning("Token expired")
