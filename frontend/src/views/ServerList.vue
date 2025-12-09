@@ -158,7 +158,9 @@
                     size="small"
                     effect="dark"
                   >
-                    ✓ 在线 {{ segment.onlineCount }}
+                    ✓ 在线 {{ segment.onlineCount }}<template v-if="segment.errorCount > 0">
+                      / <span class="error-count">✗ 错误 {{ segment.errorCount }}</span>
+                    </template>
                   </el-tag>
                   <el-tag
                     v-if="segment.offlineCount > 0"
@@ -763,15 +765,23 @@ const groupedServers = computed(() => {
   // Convert to tree structure for el-table
   const result = []
   segmentMap.forEach((serverList, segment) => {
-    // Count online and offline in single pass
+    // Count online, offline, and error servers in single pass
     let onlineCount = 0
     let offlineCount = 0
+    let errorCount = 0
     const sortedServers = [...serverList].sort(
       (a, b) => getUpdatedTimestamp(b) - getUpdatedTimestamp(a)
     )
     for (const s of sortedServers) {
-      if (s.status === 'online') onlineCount++
-      else if (s.status === 'offline') offlineCount++
+      if (s.status === 'online') {
+        onlineCount++
+        // Count servers that have error_type as having errors
+        if (s.error_type) {
+          errorCount++
+        }
+      } else if (s.status === 'offline') {
+        offlineCount++
+      }
     }
 
     result.push({
@@ -781,6 +791,7 @@ const groupedServers = computed(() => {
       count: serverList.length,
       onlineCount: onlineCount,
       offlineCount: offlineCount,
+      errorCount: errorCount,
       hasChildren: true,
       latestUpdated: getUpdatedTimestamp(sortedServers[0]),
       servers: sortedServers.map(s => ({
@@ -1171,6 +1182,11 @@ const handleCommand = async (command) => {
   display: flex;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.error-count {
+  color: #f56c6c;
+  font-weight: 600;
 }
 
 .segment-card-time {

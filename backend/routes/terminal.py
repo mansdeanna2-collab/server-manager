@@ -91,8 +91,10 @@ def register_terminal_events(socketio):
         )
 
         # 连接服务器
-        if not terminal.connect():
-            emit('terminal_error', {'message': '无法连接到服务器，请检查服务器状态'})
+        connect_result = terminal.connect()
+        if not connect_result.get('success'):
+            error_msg = connect_result.get('message', '无法连接到服务器')
+            emit('terminal_error', {'message': error_msg})
             return
 
         # 存储会话
