@@ -403,7 +403,8 @@ const loadServers = async () => {
 
 const calculateStats = () => {
   stats.total = servers.value.length
-  stats.online = servers.value.filter(s => s.status === 'online').length
+  // 正常: root用户 + 在线 + 无错误 (与服务器列表的"正常"按钮一致)
+  stats.online = servers.value.filter(s => s.username === 'root' && s.status === 'online' && !s.error_type).length
   stats.offline = servers.value.filter(s => s.status === 'offline').length
   stats.unknown = servers.value.filter(s => s.status === 'unknown').length
 }
