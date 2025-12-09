@@ -3,6 +3,7 @@ import logging
 import socket
 import threading
 import time
+import errno
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,11 @@ class TerminalService:
         self._stop_event = threading.Event()
 
     def connect(self):
-        """建立SSH连接并获取PTY通道"""
+        """建立SSH连接并获取PTY通道
+        
+        Returns:
+            dict: {'success': bool, 'error_type': str|None, 'message': str}
+        """
         try:
             self.client = paramiko.SSHClient()
             # SECURITY NOTE: AutoAddPolicy accepts all host keys automatically
@@ -42,13 +47,32 @@ class TerminalService:
             self.channel.settimeout(0.0)
 
             logger.info(f"Terminal connected to {self.host}:{self.port}")
-            return True
+            return {'success': True, 'error_type': None, 'message': '连接成功'}
         except paramiko.AuthenticationException:
             logger.error(f"Terminal auth failed for {self.host}:{self.port}")
-            return False
+            return {'success': False, 'error_type': 'auth_failed', 'message': '认证失败：用户名或密码错误'}
+        except paramiko.SSHException as e:
+            logger.error(f"Terminal SSH error for {self.host}:{self.port} - {str(e)}")
+            return {'success': False, 'error_type': 'ssh_error', 'message': f'SSH协议错误：{str(e)}'}
+        except socket.timeout:
+            logger.error(f"Terminal connection timeout to {self.host}:{self.port}")
+            return {'success': False, 'error_type': 'timeout', 'message': '连接超时：服务器无响应'}
+        except ConnectionRefusedError:
+            logger.error(f"Terminal connection refused by {self.host}:{self.port}")
+            return {'success': False, 'error_type': 'connection_refused', 'message': '连接被拒绝：端口可能未开放'}
+        except OSError as e:
+            logger.error(f"Terminal OS error for {self.host}:{self.port} - {str(e)}")
+            # Use errno for reliable error detection
+            if e.errno == errno.ENETUNREACH:
+                return {'success': False, 'error_type': 'network_unreachable', 'message': '网络不可达：无法访问服务器'}
+            if e.errno == errno.EHOSTUNREACH:
+                return {'success': False, 'error_type': 'host_unreachable', 'message': '主机不可达：无法访问服务器'}
+            if e.errno == errno.ECONNREFUSED:
+                return {'success': False, 'error_type': 'connection_refused', 'message': '连接被拒绝：端口可能未开放'}
+            return {'success': False, 'error_type': 'os_error', 'message': f'系统错误：{str(e)}'}
         except Exception as e:
             logger.error(f"Terminal connection failed to {self.host}:{self.port} - {str(e)}")
-            return False
+            return {'success': False, 'error_type': 'unknown', 'message': f'连接失败：{str(e)}'}
 
     def send_input(self, data):
         """发送输入数据到终端"""
