@@ -90,7 +90,9 @@ export const serversAPI = {
   checkAll: () => api.post('/servers/check-all'),
   verifyPassword: (id) => api.post(`/servers/${id}/verify-password`),
   checkPort: (id) => api.post(`/servers/${id}/check-port`),
-  getSystemInfo: (id) => api.get(`/servers/${id}/system-info`)
+  getSystemInfo: (id) => api.get(`/servers/${id}/system-info`),
+  getIpRegion: (ipAddress) => api.get(`/servers/ip-region/${ipAddress}`),
+  getPortType: (port) => api.get(`/servers/port-type/${port}`)
 }
 
 export default api
