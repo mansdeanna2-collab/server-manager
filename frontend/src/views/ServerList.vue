@@ -87,13 +87,27 @@
               <div class="filter-buttons">
                 <el-button
                   type="success"
-                  @click="showFilteredServersDialog('online')"
+                  @click="showFilteredServersDialog('normal')"
                 >
                   <el-icon><CircleCheck /></el-icon>
-                  在线 {{ onlineCount }}
+                  正常 {{ normalCount }}
                 </el-button>
                 <el-button
                   type="danger"
+                  @click="showFilteredServersDialog('offline')"
+                >
+                  <el-icon><CircleClose /></el-icon>
+                  离线 {{ offlineCount }}
+                </el-button>
+                <el-button
+                  type="info"
+                  @click="showFilteredServersDialog('unknown')"
+                >
+                  <el-icon><QuestionFilled /></el-icon>
+                  未知 {{ unknownCount }}
+                </el-button>
+                <el-button
+                  type="warning"
                   @click="showFilteredServersDialog('error')"
                 >
                   <el-icon><WarningFilled /></el-icon>
@@ -169,61 +183,75 @@
             <!-- IP段卡片网格布局 - 每行2个 -->
             <div
               v-if="!loading && !loadError && groupedServers.length > 0"
-              class="segments-grid"
+              class="segments-container"
             >
+              <div class="segments-grid">
+                <div
+                  v-for="segment in paginatedSegments"
+                  :key="segment.segmentKey"
+                  class="segment-card"
+                  @click="viewSegment(segment)"
+                >
+                  <div class="segment-card-header">
+                    <span class="ip-segment-title">{{ segment.segment }}.x</span>
+                    <el-tag
+                      size="small"
+                      type="info"
+                      effect="plain"
+                      class="count-tag"
+                    >
+                      {{ segment.count }} 台
+                    </el-tag>
+                  </div>
+                  <div class="segment-card-status">
+                    <el-tag
+                      v-if="segment.onlineCount > 0"
+                      type="success"
+                      size="small"
+                      effect="dark"
+                    >
+                      ✓ 在线 {{ segment.onlineCount }}<template v-if="segment.errorCount > 0">
+                        / <span class="error-count">✗ 错误 {{ segment.errorCount }}</span>
+                      </template>
+                    </el-tag>
+                    <el-tag
+                      v-if="segment.offlineCount > 0"
+                      type="danger"
+                      size="small"
+                      effect="dark"
+                    >
+                      ✗ 离线 {{ segment.offlineCount }}
+                    </el-tag>
+                  </div>
+                  <div class="segment-card-time">
+                    <span class="segment-updated-time">
+                      更新时间：{{ formatSegmentTime(segment.latestUpdated) }}
+                    </span>
+                  </div>
+                  <div class="segment-card-action">
+                    <el-button
+                      size="small"
+                      type="primary"
+                      plain
+                      @click.stop="viewSegment(segment)"
+                    >
+                      <el-icon><View /></el-icon>
+                      查看详情
+                    </el-button>
+                  </div>
+                </div>
+              </div>
               <div
-                v-for="segment in groupedServers"
-                :key="segment.segmentKey"
-                class="segment-card"
-                @click="viewSegment(segment)"
+                v-if="groupedServers.length > PAGE_SIZE"
+                class="pagination-container"
               >
-                <div class="segment-card-header">
-                  <span class="ip-segment-title">{{ segment.segment }}.x</span>
-                  <el-tag
-                    size="small"
-                    type="info"
-                    effect="plain"
-                    class="count-tag"
-                  >
-                    {{ segment.count }} 台
-                  </el-tag>
-                </div>
-                <div class="segment-card-status">
-                  <el-tag
-                    v-if="segment.onlineCount > 0"
-                    type="success"
-                    size="small"
-                    effect="dark"
-                  >
-                    ✓ 在线 {{ segment.onlineCount }}<template v-if="segment.errorCount > 0">
-                      / <span class="error-count">✗ 错误 {{ segment.errorCount }}</span>
-                    </template>
-                  </el-tag>
-                  <el-tag
-                    v-if="segment.offlineCount > 0"
-                    type="danger"
-                    size="small"
-                    effect="dark"
-                  >
-                    ✗ 离线 {{ segment.offlineCount }}
-                  </el-tag>
-                </div>
-                <div class="segment-card-time">
-                  <span class="segment-updated-time">
-                    更新时间：{{ formatSegmentTime(segment.latestUpdated) }}
-                  </span>
-                </div>
-                <div class="segment-card-action">
-                  <el-button
-                    size="small"
-                    type="primary"
-                    plain
-                    @click.stop="viewSegment(segment)"
-                  >
-                    <el-icon><View /></el-icon>
-                    查看详情
-                  </el-button>
-                </div>
+                <el-pagination
+                  v-model:current-page="segmentsCurrentPage"
+                  :page-size="PAGE_SIZE"
+                  :total="groupedServers.length"
+                  layout="prev, pager, next"
+                  background
+                />
               </div>
             </div>
           </el-card>
@@ -370,7 +398,7 @@
           <span class="segment-count">共 {{ selectedSegment.count }} 台服务器</span>
         </div>
         <el-table
-          :data="selectedSegment.servers"
+          :data="paginatedSegmentServers"
           style="width: 100%"
           stripe
         >
@@ -519,10 +547,20 @@
             </template>
           </el-table-column>
         </el-table>
+        <div
+          v-if="selectedSegment.count > PAGE_SIZE"
+          class="pagination-container"
+        >
+          <el-pagination
+            v-model:current-page="segmentDialogCurrentPage"
+            :page-size="PAGE_SIZE"
+            :total="selectedSegment.count"
+            layout="prev, pager, next"
+            background
+          />
+        </div>
       </div>
     </el-dialog>
-    
-    <!-- Filtered Servers Dialog -->
     <el-dialog
       v-model="filteredDialogVisible"
       :title="filteredDialogTitle"
@@ -534,7 +572,7 @@
           <span class="segment-count">共 {{ filteredDialogServers.length }} 台服务器</span>
         </div>
         <el-table
-          :data="filteredDialogServers"
+          :data="paginatedFilteredServers"
           style="width: 100%"
           stripe
         >
@@ -683,6 +721,18 @@
             </template>
           </el-table-column>
         </el-table>
+        <div
+          v-if="filteredDialogServers.length > PAGE_SIZE"
+          class="pagination-container"
+        >
+          <el-pagination
+            v-model:current-page="filteredDialogCurrentPage"
+            :page-size="PAGE_SIZE"
+            :total="filteredDialogServers.length"
+            layout="prev, pager, next"
+            background
+          />
+        </div>
       </div>
       <el-empty
         v-else
@@ -842,7 +892,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Monitor, Odometer, User, ArrowDown, Plus, Refresh,
   Search, View, Edit, Delete, OfficeBuilding, Connection, CopyDocument, Loading,
-  CircleCheck, WarningFilled, Download
+  CircleCheck, CircleClose, QuestionFilled, WarningFilled, Download
 } from '@element-plus/icons-vue'
 import { serversAPI, authAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -901,6 +951,12 @@ const currentUser = ref(null)
 const loading = ref(false)
 const loadError = ref('')
 const importing = ref(false)
+
+// Pagination variables
+const PAGE_SIZE = 10
+const segmentsCurrentPage = ref(1)
+const segmentDialogCurrentPage = ref(1)
+const filteredDialogCurrentPage = ref(1)
 
 const activeMenu = computed(() => route.path)
 
@@ -1037,8 +1093,17 @@ const getUpdatedTimestamp = (server) => {
 }
 
 // Computed counts for filter buttons
-const onlineCount = computed(() => servers.value.filter(s => s.status === 'online').length)
+// 正常: root用户 + 在线 + 无错误
+const normalCount = computed(() => servers.value.filter(s => 
+  s.username === 'root' && s.status === 'online' && !s.error_type
+).length)
+// 离线
+const offlineCount = computed(() => servers.value.filter(s => s.status === 'offline').length)
+// 未知
+const unknownCount = computed(() => servers.value.filter(s => s.status === 'unknown').length)
+// 错误: 有error_type的
 const errorCount = computed(() => servers.value.filter(s => s.error_type).length)
+// 电脑 (Windows RDP)
 const computerCount = computed(() => servers.value.filter(s => s.port === 3389).length)
 
 // Show filtered servers in dialog
@@ -1046,9 +1111,18 @@ const showFilteredServersDialog = (filterType) => {
   let result = servers.value
   let title = ''
   
-  if (filterType === 'online') {
-    result = result.filter(server => server.status === 'online')
-    title = '在线服务器'
+  if (filterType === 'normal') {
+    // 正常: root用户 + 在线 + 无错误
+    result = result.filter(server => 
+      server.username === 'root' && server.status === 'online' && !server.error_type
+    )
+    title = '正常服务器 (root用户在线无错误)'
+  } else if (filterType === 'offline') {
+    result = result.filter(server => server.status === 'offline')
+    title = '离线服务器'
+  } else if (filterType === 'unknown') {
+    result = result.filter(server => server.status === 'unknown')
+    title = '未知状态服务器'
   } else if (filterType === 'error') {
     result = result.filter(server => server.error_type)
     title = '错误服务器'
@@ -1060,6 +1134,7 @@ const showFilteredServersDialog = (filterType) => {
   // Sort by update time - use original server objects to maintain shared state
   filteredDialogServers.value = [...result].sort((a, b) => getUpdatedTimestamp(b) - getUpdatedTimestamp(a))
   filteredDialogTitle.value = title
+  filteredDialogCurrentPage.value = 1
   filteredDialogVisible.value = true
 }
 
@@ -1142,6 +1217,28 @@ const groupedServers = computed(() => {
   })
 
   return result
+})
+
+// Paginated segments for the grid display
+const paginatedSegments = computed(() => {
+  const start = (segmentsCurrentPage.value - 1) * PAGE_SIZE
+  const end = start + PAGE_SIZE
+  return groupedServers.value.slice(start, end)
+})
+
+// Paginated servers for segment dialog
+const paginatedSegmentServers = computed(() => {
+  if (!selectedSegment.value) return []
+  const start = (segmentDialogCurrentPage.value - 1) * PAGE_SIZE
+  const end = start + PAGE_SIZE
+  return selectedSegment.value.servers.slice(start, end)
+})
+
+// Paginated servers for filtered dialog
+const paginatedFilteredServers = computed(() => {
+  const start = (filteredDialogCurrentPage.value - 1) * PAGE_SIZE
+  const end = start + PAGE_SIZE
+  return filteredDialogServers.value.slice(start, end)
 })
 
 onMounted(async () => {
@@ -1241,6 +1338,7 @@ const viewServer = (server) => {
 
 const viewSegment = (segment) => {
   selectedSegment.value = segment
+  segmentDialogCurrentPage.value = 1
   segmentDialogVisible.value = true
 }
 
@@ -1836,5 +1934,20 @@ const handleChangePassword = async () => {
 
 :deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
   background: #fafafa;
+}
+
+/* Pagination container */
+.pagination-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #ebeef5;
+}
+
+/* Segments container */
+.segments-container {
+  display: flex;
+  flex-direction: column;
 }
 </style>
