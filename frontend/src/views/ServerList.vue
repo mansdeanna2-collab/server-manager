@@ -892,7 +892,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Monitor, Odometer, User, ArrowDown, Plus, Refresh,
   Search, View, Edit, Delete, OfficeBuilding, Connection, CopyDocument, Loading,
-  CircleCheck, CircleClose, QuestionFilled, WarningFilled, Download
+  CircleCheck, CircleClose, Download, QuestionFilled, WarningFilled
 } from '@element-plus/icons-vue'
 import { serversAPI, authAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -1093,10 +1093,12 @@ const getUpdatedTimestamp = (server) => {
 }
 
 // Computed counts for filter buttons
+// Helper function to check if a server is "normal" (root user + online + no error)
+const isNormalServer = (server) => {
+  return server.username === 'root' && server.status === 'online' && !server.error_type
+}
 // 正常: root用户 + 在线 + 无错误
-const normalCount = computed(() => servers.value.filter(s => 
-  s.username === 'root' && s.status === 'online' && !s.error_type
-).length)
+const normalCount = computed(() => servers.value.filter(isNormalServer).length)
 // 离线
 const offlineCount = computed(() => servers.value.filter(s => s.status === 'offline').length)
 // 未知
@@ -1113,10 +1115,8 @@ const showFilteredServersDialog = (filterType) => {
   
   if (filterType === 'normal') {
     // 正常: root用户 + 在线 + 无错误
-    result = result.filter(server => 
-      server.username === 'root' && server.status === 'online' && !server.error_type
-    )
-    title = '正常服务器 (root用户在线无错误)'
+    result = result.filter(isNormalServer)
+    title = '正常服务器'
   } else if (filterType === 'offline') {
     result = result.filter(server => server.status === 'offline')
     title = '离线服务器'
