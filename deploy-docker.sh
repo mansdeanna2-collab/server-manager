@@ -14,7 +14,7 @@ error() {
 }
 
 require_cmd() {
-  command -v "$1" >/dev/null 2>&1 || error "缺少依赖：$1，请先安装。"
+  command -v "$1" >/dev/null 2>&1 || error "Missing dependency: $1 (请先安装 / please install it first)."
 }
 
 require_cmd docker
@@ -24,14 +24,14 @@ if docker compose version >/dev/null 2>&1; then
 elif command -v docker-compose >/dev/null 2>&1; then
   COMPOSE_CMD=(docker-compose)
 else
-  error "未检测到 Docker Compose，请先安装 docker compose 插件或 docker-compose。"
+  error "Docker Compose not found (未检测到 docker compose)。Please install the Docker Compose plugin or docker-compose."
 fi
 
-info "使用 Docker Compose 构建并启动服务..."
+info "Using Docker Compose to build and start services... / 使用 Docker Compose 构建并启动服务..."
 cd "$ROOT_DIR"
 "${COMPOSE_CMD[@]}" -f docker-compose.yml up -d --build
 
-info "部署完成！"
-info "前端: http://localhost:3000"
-info "后端: http://localhost:5000"
-info "默认账号: admin / admin123"
+info "Deployment finished! / 部署完成！"
+info "Frontend: http://localhost:3000"
+info "Backend: http://localhost:5000"
+info "Default account: admin / admin123"
