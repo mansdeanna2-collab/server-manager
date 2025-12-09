@@ -6,26 +6,34 @@ from config import Config
 
 logger = logging.getLogger(__name__)
 
+
 class CheckService:
+    """服务器状态检查服务类"""
+
     @staticmethod
     def _get_ping_command(host, timeout):
-        """Get platform-specific ping command"""
+        """获取特定平台的ping命令"""
         system = platform.system().lower()
-        
+
         if system == 'windows':
             # Windows: ping -n 1 -w <timeout_ms> <host>
             return ['ping', '-n', '1', '-w', str(timeout * 1000), host]
         else:
             # Linux/Unix: ping -c 1 -W <timeout_sec> <host>
             return ['ping', '-c', '1', '-W', str(timeout), host]
-    
+
     @staticmethod
     def ping_check(host, timeout=None):
-        """Check if host is reachable via ping"""
+        """通过ping检查主机是否可达"""
         timeout = timeout or Config.PING_TIMEOUT
         try:
             command = CheckService._get_ping_command(host, timeout)
-            result = subprocess.run(command, capture_output=True, text=True, timeout=timeout + 1)
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=timeout + 1
+            )
             return result.returncode == 0
         except subprocess.TimeoutExpired:
             logger.error(f"Ping timeout for {host}")
@@ -33,10 +41,10 @@ class CheckService:
         except Exception as e:
             logger.error(f"Ping check failed for {host}: {str(e)}")
             return False
-    
+
     @staticmethod
     def port_check(host, port, timeout=None):
-        """Check if a specific port is open"""
+        """检查特定端口是否开放"""
         timeout = timeout or Config.PORT_TIMEOUT
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -50,33 +58,33 @@ class CheckService:
         except Exception as e:
             logger.error(f"Port check failed for {host}:{port} - {str(e)}")
             return False
-    
+
     @staticmethod
     def check_server_status(host, port, username=None, password=None):
-        """Comprehensive server status check"""
+        """综合服务器状态检查"""
         status = {
             'ping': False,
             'port': False,
             'auth': None,
             'overall': 'offline'
         }
-        
+
         # Check ping
         status['ping'] = CheckService.ping_check(host)
-        
+
         # Check port
         status['port'] = CheckService.port_check(host, port)
-        
+
         # Check authentication if credentials provided
         if username and password and status['port']:
             from services.ssh_service import SSHService
             ssh = SSHService(host, port, username, password)
             status['auth'] = ssh.verify_credentials()
-        
+
         # Determine overall status
         if status['auth'] is True or status['port'] is True or status['ping'] is True:
             status['overall'] = 'online'
         else:
             status['overall'] = 'offline'
-        
+
         return status

@@ -3,8 +3,12 @@
     <el-container>
       <el-header style="background: #409EFF; color: white; display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 10px;">
-          <el-icon :size="30"><Monitor /></el-icon>
-          <h2 style="margin: 0;">服务器管理</h2>
+          <el-icon :size="30">
+            <Monitor />
+          </el-icon>
+          <h2 style="margin: 0;">
+            服务器管理
+          </h2>
         </div>
         <el-menu
           mode="horizontal"
@@ -32,7 +36,9 @@
           </span>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+              <el-dropdown-item command="logout">
+                退出登录
+              </el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -42,35 +48,63 @@
         <div class="content-wrapper">
           <div class="stats-grid">
             <div class="stat-card">
-              <div class="stat-card-icon" style="color: #409EFF;">
+              <div
+                class="stat-card-icon"
+                style="color: #409EFF;"
+              >
                 <el-icon><OfficeBuilding /></el-icon>
               </div>
-              <div class="stat-card-title">服务器总数</div>
-              <div class="stat-card-value">{{ stats.total }}</div>
+              <div class="stat-card-title">
+                服务器总数
+              </div>
+              <div class="stat-card-value">
+                {{ stats.total }}
+              </div>
             </div>
             
             <div class="stat-card">
-              <div class="stat-card-icon" style="color: #67C23A;">
+              <div
+                class="stat-card-icon"
+                style="color: #67C23A;"
+              >
                 <el-icon><CircleCheck /></el-icon>
               </div>
-              <div class="stat-card-title">在线</div>
-              <div class="stat-card-value">{{ stats.online }}</div>
+              <div class="stat-card-title">
+                在线
+              </div>
+              <div class="stat-card-value">
+                {{ stats.online }}
+              </div>
             </div>
             
             <div class="stat-card">
-              <div class="stat-card-icon" style="color: #F56C6C;">
+              <div
+                class="stat-card-icon"
+                style="color: #F56C6C;"
+              >
                 <el-icon><CircleClose /></el-icon>
               </div>
-              <div class="stat-card-title">离线</div>
-              <div class="stat-card-value">{{ stats.offline }}</div>
+              <div class="stat-card-title">
+                离线
+              </div>
+              <div class="stat-card-value">
+                {{ stats.offline }}
+              </div>
             </div>
             
             <div class="stat-card">
-              <div class="stat-card-icon" style="color: #909399;">
+              <div
+                class="stat-card-icon"
+                style="color: #909399;"
+              >
                 <el-icon><QuestionFilled /></el-icon>
               </div>
-              <div class="stat-card-title">未知</div>
-              <div class="stat-card-value">{{ stats.unknown }}</div>
+              <div class="stat-card-title">
+                未知
+              </div>
+              <div class="stat-card-value">
+                {{ stats.unknown }}
+              </div>
             </div>
           </div>
           
@@ -78,37 +112,72 @@
             <template #header>
               <div class="card-header">
                 <span>近期服务器</span>
-                <el-button type="primary" @click="checkAllServers" :loading="checkingAll">
+                <el-button
+                  type="primary"
+                  :loading="checkingAll"
+                  @click="checkAllServers"
+                >
                   <el-icon><Refresh /></el-icon>
                   一键检测
                 </el-button>
               </div>
             </template>
             
-            <el-empty v-if="servers.length === 0" description="未找到服务器" />
+            <el-empty
+              v-if="servers.length === 0"
+              description="未找到服务器"
+            />
             
-            <el-table v-else :data="servers" style="width: 100%">
-              <el-table-column prop="ip_address" label="IP地址" width="150" />
-              <el-table-column prop="port" label="端口" width="100" />
-              <el-table-column prop="username" label="用户名" width="120" />
-              <el-table-column label="状态" width="120">
+            <el-table
+              v-else
+              :data="servers"
+              style="width: 100%"
+            >
+              <el-table-column
+                prop="ip_address"
+                label="IP地址"
+                width="150"
+              />
+              <el-table-column
+                prop="port"
+                label="端口"
+                width="100"
+              />
+              <el-table-column
+                prop="username"
+                label="用户名"
+                width="120"
+              />
+              <el-table-column
+                label="状态"
+                width="120"
+              >
                 <template #default="scope">
                   <StatusBadge :status="scope.row.status" />
                 </template>
               </el-table-column>
-              <el-table-column prop="os_info" label="操作系统" />
-              <el-table-column label="最近检查" width="180">
+              <el-table-column
+                prop="os_info"
+                label="操作系统"
+              />
+              <el-table-column
+                label="最近检查"
+                width="180"
+              >
                 <template #default="scope">
                   {{ formatDate(scope.row.last_checked) }}
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="100">
+              <el-table-column
+                label="操作"
+                width="100"
+              >
                 <template #default="scope">
                   <el-button
                     size="small"
                     type="primary"
-                    @click="checkServer(scope.row)"
                     :loading="scope.row.checking"
+                    @click="checkServer(scope.row)"
                   >
                     检测
                   </el-button>
@@ -161,7 +230,7 @@ const loadServers = async () => {
     const response = await serversAPI.getAll()
     servers.value = response.data.map(s => ({ ...s, checking: false }))
     calculateStats()
-  } catch (error) {
+  } catch (_error) {
     ElMessage.error('加载服务器失败')
   }
 }
@@ -181,7 +250,7 @@ const checkServer = async (server) => {
     server.last_checked = new Date().toISOString()
     ElMessage.success(`已检测服务器 ${server.ip_address}`)
     calculateStats()
-  } catch (error) {
+  } catch (_error) {
     ElMessage.error('检测服务器失败')
   } finally {
     server.checking = false
@@ -194,7 +263,7 @@ const checkAllServers = async () => {
     await serversAPI.checkAll()
     await loadServers()
     ElMessage.success('全部服务器已检测')
-  } catch (error) {
+  } catch (_error) {
     ElMessage.error('检测所有服务器失败')
   } finally {
     checkingAll.value = false
@@ -215,8 +284,8 @@ const handleCommand = async (command) => {
   if (command === 'logout') {
     try {
       await authAPI.logout()
-    } catch (error) {
-      // Ignore error
+    } catch (_error) {
+      // 忽略登出错误，因为仍然需要清除本地存储
     }
     localStorage.removeItem('token')
     localStorage.removeItem('user')

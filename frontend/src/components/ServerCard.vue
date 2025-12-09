@@ -1,5 +1,8 @@
 <template>
-  <el-card class="server-card" shadow="hover">
+  <el-card
+    class="server-card"
+    shadow="hover"
+  >
     <template #header>
       <div class="card-header">
         <span class="server-name">{{ server.ip_address }}</span>
@@ -15,21 +18,34 @@
         <el-icon><User /></el-icon>
         <span>用户：{{ server.username }}</span>
       </div>
-      <div class="info-item" v-if="server.os_info">
+      <div
+        v-if="server.os_info"
+        class="info-item"
+      >
         <el-icon><Monitor /></el-icon>
         <span>{{ server.os_info }}</span>
       </div>
-      <div class="info-item" v-if="server.notes">
+      <div
+        v-if="server.notes"
+        class="info-item"
+      >
         <el-icon><Document /></el-icon>
         <span>{{ server.notes }}</span>
       </div>
     </div>
     <div class="card-actions">
-      <el-button size="small" @click="$emit('view', server)">
+      <el-button
+        size="small"
+        @click="$emit('view', server)"
+      >
         <el-icon><View /></el-icon>
         查看
       </el-button>
-      <el-button size="small" type="primary" @click="$emit('check', server)">
+      <el-button
+        size="small"
+        type="primary"
+        @click="$emit('check', server)"
+      >
         <el-icon><Refresh /></el-icon>
         检测
       </el-button>

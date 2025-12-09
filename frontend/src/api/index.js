@@ -2,6 +2,7 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
+const isDevelopment = import.meta.env.DEV
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -21,7 +22,11 @@ api.interceptors.request.use(
     return config
   },
   (error) => {
-    console.error('Request error:', error)
+    // 仅在开发环境中输出调试信息
+    if (isDevelopment) {
+      // eslint-disable-next-line no-console
+      console.error('Request error:', error)
+    }
     return Promise.reject(error)
   }
 )

@@ -3,12 +3,22 @@
     <el-card class="login-card">
       <template #header>
         <div class="login-header">
-          <el-icon :size="40" color="#409EFF"><Monitor /></el-icon>
+          <el-icon
+            :size="40"
+            color="#409EFF"
+          >
+            <Monitor />
+          </el-icon>
           <h2>服务器管理</h2>
         </div>
       </template>
       
-      <el-form :model="loginForm" :rules="rules" ref="formRef" @submit.prevent="handleLogin">
+      <el-form
+        ref="formRef"
+        :model="loginForm"
+        :rules="rules"
+        @submit.prevent="handleLogin"
+      >
         <el-form-item prop="username">
           <el-input
             v-model="loginForm.username"
@@ -44,7 +54,10 @@
       </el-form>
       
       <div class="login-hint">
-        <el-text size="small" type="info">
+        <el-text
+          size="small"
+          type="info"
+        >
           默认账号：admin / admin123
         </el-text>
       </div>
