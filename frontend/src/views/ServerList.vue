@@ -196,7 +196,7 @@
                   <div class="segment-card-header">
                     <span class="ip-segment-title">{{ segment.segment }}.x</span>
                     <el-tag
-                      size="small"
+                      size="default"
                       type="info"
                       effect="plain"
                       class="count-tag"
@@ -208,7 +208,7 @@
                     <el-tag
                       v-if="segment.onlineCount > 0"
                       type="success"
-                      size="small"
+                      size="default"
                       effect="dark"
                     >
                       ✓ {{ segment.onlineCount }}<template v-if="segment.errorCount > 0">
@@ -218,11 +218,22 @@
                     <el-tag
                       v-if="segment.offlineCount > 0"
                       type="danger"
-                      size="small"
+                      size="default"
                       effect="dark"
                     >
                       ✗ {{ segment.offlineCount }}
                     </el-tag>
+                  </div>
+                  <!-- 显示IP段备注信息 -->
+                  <div
+                    v-if="getSegmentNote(segment.segment)"
+                    class="segment-card-note"
+                    @click.stop="editSegmentNote(segment.segment)"
+                  >
+                    <el-icon class="note-display-icon">
+                      <EditPen />
+                    </el-icon>
+                    <span class="note-display-text">{{ getSegmentNote(segment.segment) }}</span>
                   </div>
                   <div class="segment-card-footer">
                     <div class="segment-card-actions-left">
@@ -239,7 +250,7 @@
                         </el-icon>
                       </el-tooltip>
                       <el-tooltip
-                        :content="getSegmentNote(segment.segment) || '点击添加备注'"
+                        :content="getSegmentNote(segment.segment) ? '编辑备注' : '添加备注'"
                         placement="top"
                       >
                         <el-icon
@@ -252,13 +263,13 @@
                       </el-tooltip>
                     </div>
                     <el-button
-                      size="small"
+                      size="default"
                       type="primary"
                       plain
                       @click.stop="viewSegment(segment)"
                     >
                       <el-icon><View /></el-icon>
-                      查看
+                      查看详情
                     </el-button>
                   </div>
                 </div>
@@ -285,7 +296,7 @@
     <el-dialog
       v-model="dialogVisible"
       :title="isEdit ? '编辑服务器' : '新增服务器'"
-      width="600px"
+      width="720px"
       class="form-dialog"
     >
       <ServerForm
@@ -300,7 +311,7 @@
     <el-dialog
       v-model="detailDialogVisible"
       title="服务器详情"
-      width="700px"
+      width="850px"
       class="detail-dialog"
     >
       <div
@@ -420,7 +431,7 @@
     <el-dialog
       v-model="segmentDialogVisible"
       :title="selectedSegment ? `IP段 ${selectedSegment.segment}.x 的服务器` : 'IP段服务器'"
-      width="1100px"
+      width="1300px"
       class="segment-dialog"
     >
       <div v-if="selectedSegment">
@@ -528,26 +539,47 @@
           <el-table-column
             prop="notes"
             label="备注"
-            min-width="120"
+            min-width="150"
           >
             <template #default="scope">
-              <span
-                v-if="scope.row.notes"
-                class="notes-text"
-              >{{ scope.row.notes }}</span>
-              <span
-                v-else
-                class="no-info"
-              >-</span>
+              <div
+                class="editable-note"
+                @click="editServerNote(scope.row)"
+              >
+                <span
+                  v-if="scope.row.notes"
+                  class="notes-text"
+                >{{ scope.row.notes }}</span>
+                <span
+                  v-else
+                  class="no-info clickable"
+                >点击添加备注</span>
+                <el-icon class="edit-note-icon">
+                  <EditPen />
+                </el-icon>
+              </div>
             </template>
           </el-table-column>
           <el-table-column
             label="操作"
-            width="340"
+            width="400"
             fixed="right"
           >
             <template #default="scope">
               <div class="action-buttons">
+                <el-tooltip
+                  :content="isServerFavorited(scope.row.id) ? '取消收藏' : '收藏'"
+                  placement="top"
+                >
+                  <el-button
+                    size="small"
+                    :type="isServerFavorited(scope.row.id) ? 'warning' : 'default'"
+                    circle
+                    @click="toggleServerFavorite(scope.row)"
+                  >
+                    <el-icon><Star /></el-icon>
+                  </el-button>
+                </el-tooltip>
                 <el-button
                   size="small"
                   type="success"
@@ -609,7 +641,7 @@
     <el-dialog
       v-model="filteredDialogVisible"
       :title="filteredDialogTitle"
-      width="1100px"
+      width="1300px"
       class="filtered-dialog"
     >
       <div v-if="filteredDialogServers.length > 0">
@@ -712,26 +744,47 @@
           <el-table-column
             prop="notes"
             label="备注"
-            min-width="120"
+            min-width="150"
           >
             <template #default="scope">
-              <span
-                v-if="scope.row.notes"
-                class="notes-text"
-              >{{ scope.row.notes }}</span>
-              <span
-                v-else
-                class="no-info"
-              >-</span>
+              <div
+                class="editable-note"
+                @click="editServerNote(scope.row)"
+              >
+                <span
+                  v-if="scope.row.notes"
+                  class="notes-text"
+                >{{ scope.row.notes }}</span>
+                <span
+                  v-else
+                  class="no-info clickable"
+                >点击添加备注</span>
+                <el-icon class="edit-note-icon">
+                  <EditPen />
+                </el-icon>
+              </div>
             </template>
           </el-table-column>
           <el-table-column
             label="操作"
-            width="340"
+            width="400"
             fixed="right"
           >
             <template #default="scope">
               <div class="action-buttons">
+                <el-tooltip
+                  :content="isServerFavorited(scope.row.id) ? '取消收藏' : '收藏'"
+                  placement="top"
+                >
+                  <el-button
+                    size="small"
+                    :type="isServerFavorited(scope.row.id) ? 'warning' : 'default'"
+                    circle
+                    @click="toggleServerFavorite(scope.row)"
+                  >
+                    <el-icon><Star /></el-icon>
+                  </el-button>
+                </el-tooltip>
                 <el-button
                   size="small"
                   type="success"
@@ -799,7 +852,7 @@
     <el-dialog
       v-model="terminalDialogVisible"
       :title="`终端 - ${terminalServer?.ip_address || ''}`"
-      width="1100px"
+      width="1300px"
       class="terminal-dialog"
       append-to-body
       :close-on-click-modal="false"
@@ -882,7 +935,7 @@
     <el-dialog
       v-model="passwordDialogVisible"
       title="修改密码"
-      width="400px"
+      width="500px"
       class="password-dialog"
     >
       <el-form
@@ -1023,8 +1076,10 @@ const segmentDialogSortBy = ref('time') // 'time' | 'ip'
 // IP段收藏和备注功能
 const FAVORITES_KEY = 'server_segment_favorites'
 const SEGMENT_NOTES_KEY = 'server_segment_notes'
+const SERVER_FAVORITES_KEY = 'server_favorites'
 const segmentFavorites = ref(new Set())
 const segmentNotes = ref({})
+const serverFavorites = ref(new Set())
 
 // 初始化收藏和备注数据
 const initSegmentData = () => {
@@ -1037,9 +1092,14 @@ const initSegmentData = () => {
     if (savedNotes) {
       segmentNotes.value = JSON.parse(savedNotes)
     }
+    const savedServerFavorites = localStorage.getItem(SERVER_FAVORITES_KEY)
+    if (savedServerFavorites) {
+      serverFavorites.value = new Set(JSON.parse(savedServerFavorites))
+    }
   } catch (_e) {
     segmentFavorites.value = new Set()
     segmentNotes.value = {}
+    serverFavorites.value = new Set()
   }
 }
 
@@ -1089,6 +1149,23 @@ const editSegmentNote = async (segment) => {
   } catch (_e) {
     // 用户取消操作
   }
+}
+
+// 检查服务器是否被收藏
+const isServerFavorited = (serverId) => {
+  return serverFavorites.value.has(serverId)
+}
+
+// 切换服务器收藏状态
+const toggleServerFavorite = (server) => {
+  if (serverFavorites.value.has(server.id)) {
+    serverFavorites.value.delete(server.id)
+    ElMessage.success(`已取消收藏 ${server.ip_address}`)
+  } else {
+    serverFavorites.value.add(server.id)
+    ElMessage.success(`已收藏 ${server.ip_address}`)
+  }
+  localStorage.setItem(SERVER_FAVORITES_KEY, JSON.stringify([...serverFavorites.value]))
 }
 
 const activeMenu = computed(() => route.path)
@@ -1834,63 +1911,123 @@ const handleChangePassword = async () => {
 /* Page container */
 .page-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4e7ed 100%);
+  background: linear-gradient(135deg, #f0f4f8 0%, #d7e3ec 50%, #e8eef3 100%);
 }
 
-/* Header styles */
+/* Header styles - 企业级导航美化 */
 .header-container {
-  background: linear-gradient(135deg, #409EFF 0%, #337ecc 100%);
+  background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 50%, #3182ce 100%);
   color: white;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 4px 20px 0 rgba(64, 158, 255, 0.3);
+  box-shadow: 0 4px 24px 0 rgba(30, 58, 95, 0.4);
+  height: 70px;
+  padding: 0 30px;
+  position: relative;
+}
+
+.header-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #63b3ed 0%, #4fd1c5 50%, #68d391 100%);
 }
 
 .header-logo {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
+}
+
+.header-logo :deep(.el-icon) {
+  color: #63b3ed;
+  filter: drop-shadow(0 2px 4px rgba(99, 179, 237, 0.4));
 }
 
 .header-logo h2 {
   margin: 0;
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: 1px;
+  background: linear-gradient(135deg, #fff 0%, #e2e8f0 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .header-menu {
   border: none;
   flex: 1;
   margin-left: 50px;
+  background: transparent !important;
+}
+
+.header-menu :deep(.el-menu-item) {
+  color: rgba(255, 255, 255, 0.85) !important;
+  font-weight: 500;
+  font-size: 15px;
+  border-radius: 8px;
+  margin: 0 4px;
+  transition: all 0.3s ease;
+}
+
+.header-menu :deep(.el-menu-item:hover) {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #fff !important;
+}
+
+.header-menu :deep(.el-menu-item.is-active) {
+  background: linear-gradient(135deg, rgba(99, 179, 237, 0.3) 0%, rgba(79, 209, 197, 0.3) 100%) !important;
+  color: #fff !important;
+  box-shadow: 0 2px 8px rgba(99, 179, 237, 0.3);
 }
 
 .user-dropdown {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
   cursor: pointer;
-  padding: 10px;
+  padding: 10px 16px;
   color: white;
-  transition: all 0.3s;
+  transition: all 0.3s ease;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
 }
 
 .user-dropdown:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 /* Content wrapper */
 .content-wrapper {
-  padding: 20px;
-  max-width: 1400px;
+  padding: 28px;
+  max-width: 1600px;
   margin: 0 auto;
 }
 
-/* Card styles */
+/* Card styles - 企业级卡片美化 */
 .server-card {
-  border-radius: 12px;
-  box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
   border: none;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+}
+
+.server-card :deep(.el-card__header) {
+  padding: 20px 28px;
+  border-bottom: 1px solid #e8ecf1;
+  background: linear-gradient(135deg, #fafbfc 0%, #f5f7fa 100%);
+}
+
+.server-card :deep(.el-card__body) {
+  padding: 28px;
 }
 
 .card-header {
@@ -1900,14 +2037,27 @@ const handleChangePassword = async () => {
 }
 
 .card-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #303133;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1e3a5f;
+  letter-spacing: 0.5px;
 }
 
 .header-actions {
   display: flex;
-  gap: 10px;
+  gap: 12px;
+}
+
+.header-actions :deep(.el-button) {
+  border-radius: 10px;
+  font-weight: 500;
+  padding: 10px 20px;
+  transition: all 0.3s ease;
+}
+
+.header-actions :deep(.el-button:hover) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .search-filter-row {
@@ -1998,7 +2148,7 @@ const handleChangePassword = async () => {
 .segments-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  gap: 20px;
 }
 
 @media (max-width: 1200px) {
@@ -2013,98 +2163,176 @@ const handleChangePassword = async () => {
   }
 }
 
+/* IP段卡片 - 增大尺寸，企业级美化 */
 .segment-card {
-  background: linear-gradient(135deg, #ffffff 0%, #f9fafc 100%);
-  border-radius: 8px;
-  padding: 12px;
+  background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+  border-radius: 16px;
+  padding: 20px 24px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  border: 1px solid #e4e7ed;
-  box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.04);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid #e2e8f0;
+  box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.06);
+  position: relative;
+  overflow: hidden;
+}
+
+.segment-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #3182ce 0%, #4fd1c5 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
 .segment-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px 0 rgba(64, 158, 255, 0.15);
-  border-color: #409EFF;
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px 0 rgba(49, 130, 206, 0.2);
+  border-color: #3182ce;
+}
+
+.segment-card:hover::before {
+  opacity: 1;
 }
 
 .segment-card.is-favorited {
-  border-color: #e6a23c;
-  background: linear-gradient(135deg, #fffdf5 0%, #fef8e8 100%);
+  border-color: #ed8936;
+  background: linear-gradient(145deg, #fffaf0 0%, #feebc8 100%);
+}
+
+.segment-card.is-favorited::before {
+  background: linear-gradient(90deg, #ed8936 0%, #f6ad55 100%);
+  opacity: 1;
 }
 
 .segment-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 14px;
 }
 
 .ip-segment-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #409EFF;
+  font-size: 20px;
+  font-weight: 800;
+  color: #2c5282;
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  letter-spacing: 0.5px;
 }
 
 .count-tag {
-  background: linear-gradient(135deg, #f0f9eb 0%, #e8f5e1 100%);
-  border-color: #c2e7b0;
-  color: #67c23a;
-  font-size: 11px;
+  background: linear-gradient(135deg, #c6f6d5 0%, #9ae6b4 100%);
+  border-color: #68d391;
+  color: #276749;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px;
 }
 
 .segment-card-status {
   display: flex;
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: 10px;
+  margin-bottom: 12px;
   flex-wrap: wrap;
 }
 
-.error-count {
-  color: #f56c6c;
+.segment-card-status :deep(.el-tag) {
+  font-size: 13px;
+  padding: 6px 12px;
   font-weight: 600;
+}
+
+.error-count {
+  color: #fc8181;
+  font-weight: 700;
+}
+
+/* IP段备注显示 */
+.segment-card-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #ebf8ff 0%, #e6fffa 100%);
+  border-radius: 10px;
+  margin-bottom: 14px;
+  border: 1px solid #bee3f8;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.segment-card-note:hover {
+  background: linear-gradient(135deg, #bee3f8 0%, #b2f5ea 100%);
+  border-color: #90cdf4;
+}
+
+.note-display-icon {
+  color: #3182ce;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.note-display-text {
+  font-size: 13px;
+  color: #2c5282;
+  line-height: 1.4;
+  word-break: break-word;
 }
 
 .segment-card-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
 }
 
 .segment-card-actions-left {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   align-items: center;
 }
 
 .action-icon {
   cursor: pointer;
-  font-size: 16px;
-  color: #909399;
-  transition: all 0.2s ease;
+  font-size: 20px;
+  color: #a0aec0;
+  transition: all 0.3s ease;
+  padding: 6px;
+  border-radius: 8px;
 }
 
 .action-icon:hover {
-  transform: scale(1.1);
+  transform: scale(1.15);
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .favorite-icon:hover {
-  color: #e6a23c;
+  color: #ed8936;
+  background: rgba(237, 137, 54, 0.1);
 }
 
 .favorite-icon.is-favorited {
-  color: #e6a23c;
+  color: #ed8936;
 }
 
 .note-icon:hover {
-  color: #409EFF;
+  color: #3182ce;
+  background: rgba(49, 130, 206, 0.1);
 }
 
 .note-icon.has-note {
-  color: #409EFF;
+  color: #3182ce;
+}
+
+.segment-card-footer :deep(.el-button) {
+  border-radius: 10px;
+  font-weight: 600;
+  padding: 10px 20px;
 }
 
 /* IP cell styles */
@@ -2157,46 +2385,101 @@ const handleChangePassword = async () => {
 
 /* Notes text in table */
 .notes-text {
-  color: #606266;
+  color: #4a5568;
   font-size: 13px;
   word-break: break-word;
   white-space: pre-wrap;
+}
+
+/* Editable note styles in table */
+.editable-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.editable-note:hover {
+  background: linear-gradient(135deg, #ebf8ff 0%, #e6fffa 100%);
+  border-color: #bee3f8;
+}
+
+.editable-note .notes-text {
+  flex: 1;
+  color: #2d3748;
+}
+
+.editable-note .no-info.clickable {
+  color: #a0aec0;
+  font-style: italic;
+}
+
+.editable-note:hover .no-info.clickable {
+  color: #3182ce;
+}
+
+.edit-note-icon {
+  font-size: 14px;
+  color: #a0aec0;
+  opacity: 0;
+  transition: all 0.3s ease;
+}
+
+.editable-note:hover .edit-note-icon {
+  opacity: 1;
+  color: #3182ce;
 }
 
 /* Action buttons in table */
 .action-buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
+  align-items: center;
+}
+
+.action-buttons :deep(.el-button) {
+  border-radius: 8px;
+}
+
+.action-buttons :deep(.el-button.is-circle) {
+  padding: 8px;
 }
 
 /* No info text */
 .no-info {
-  color: #c0c4cc;
+  color: #cbd5e0;
 }
 
-/* Form dialog styles (Add/Edit Server) */
+/* Form dialog styles (Add/Edit Server) - 企业级对话框美化 */
 .form-dialog :deep(.el-dialog) {
-  border-radius: 16px;
+  border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 25px 80px rgba(30, 58, 95, 0.25);
 }
 
 .form-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #409EFF 0%, #337ecc 100%);
+  background: linear-gradient(135deg, #2c5282 0%, #3182ce 50%, #4299e1 100%);
   color: white;
-  padding: 20px 24px;
+  padding: 24px 32px;
   margin: 0;
 }
 
 .form-dialog :deep(.el-dialog__title) {
   color: white;
-  font-weight: 600;
-  font-size: 18px;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.5px;
 }
 
 .form-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
   color: white;
+  font-size: 20px;
 }
 
 .form-dialog :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
@@ -2204,32 +2487,34 @@ const handleChangePassword = async () => {
 }
 
 .form-dialog :deep(.el-dialog__body) {
-  padding: 24px;
-  background: #f8fafc;
+  padding: 32px;
+  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
 }
 
-/* Password dialog styles */
+/* Password dialog styles - 企业级对话框美化 */
 .password-dialog :deep(.el-dialog) {
-  border-radius: 16px;
+  border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 25px 80px rgba(197, 48, 48, 0.25);
 }
 
 .password-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #f56c6c 0%, #dd6161 100%);
+  background: linear-gradient(135deg, #c53030 0%, #e53e3e 50%, #fc8181 100%);
   color: white;
-  padding: 20px 24px;
+  padding: 24px 32px;
   margin: 0;
 }
 
 .password-dialog :deep(.el-dialog__title) {
   color: white;
-  font-weight: 600;
-  font-size: 18px;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.5px;
 }
 
 .password-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
   color: white;
+  font-size: 20px;
 }
 
 .password-dialog :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
@@ -2237,32 +2522,34 @@ const handleChangePassword = async () => {
 }
 
 .password-dialog :deep(.el-dialog__body) {
-  padding: 24px;
-  background: #f8fafc;
+  padding: 32px;
+  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
 }
 
-/* Server detail dialog */
+/* Server detail dialog - 企业级对话框美化 */
 .detail-dialog :deep(.el-dialog) {
-  border-radius: 16px;
+  border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 25px 80px rgba(39, 103, 73, 0.25);
 }
 
 .detail-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #67c23a 0%, #529b2e 100%);
+  background: linear-gradient(135deg, #276749 0%, #38a169 50%, #48bb78 100%);
   color: white;
-  padding: 20px 24px;
+  padding: 24px 32px;
   margin: 0;
 }
 
 .detail-dialog :deep(.el-dialog__title) {
   color: white;
-  font-weight: 600;
-  font-size: 18px;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.5px;
 }
 
 .detail-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
   color: white;
+  font-size: 20px;
 }
 
 .detail-dialog :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
@@ -2270,8 +2557,8 @@ const handleChangePassword = async () => {
 }
 
 .detail-dialog :deep(.el-dialog__body) {
-  padding: 24px;
-  background: #f8fafc;
+  padding: 32px;
+  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
 }
 
 .server-detail {
@@ -2314,15 +2601,16 @@ const handleChangePassword = async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 15px;
-  margin-bottom: 20px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid #ebeef5;
+  gap: 20px;
+  margin-bottom: 24px;
+  padding-bottom: 18px;
+  border-bottom: 2px solid #e2e8f0;
 }
 
 .segment-count {
-  color: #909399;
-  font-size: 14px;
+  color: #4a5568;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .segment-sort-options {
@@ -2334,75 +2622,81 @@ const handleChangePassword = async () => {
 .segment-sort-options :deep(.el-radio-button__inner) {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 8px 16px;
+  gap: 6px;
+  padding: 10px 20px;
+  border-radius: 10px;
 }
 
 .segment-sort-options :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
-  background: linear-gradient(135deg, #409EFF 0%, #337ecc 100%);
-  border-color: #409EFF;
-  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.3);
+  background: linear-gradient(135deg, #2c5282 0%, #3182ce 100%);
+  border-color: #3182ce;
+  box-shadow: 0 4px 12px rgba(49, 130, 206, 0.3);
 }
 
-/* Clickable note styles */
+/* Clickable note styles in detail dialog */
 .clickable-note {
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  color: #606266;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  transition: all 0.3s ease;
+  color: #4a5568;
+  background: transparent;
+  border: 1px solid transparent;
 }
 
 .clickable-note:hover {
-  background-color: #f5f7fa;
-  color: #409EFF;
+  background: linear-gradient(135deg, #ebf8ff 0%, #e6fffa 100%);
+  border-color: #bee3f8;
+  color: #2c5282;
 }
 
 .clickable-note .edit-icon {
-  font-size: 14px;
-  opacity: 0.5;
-  transition: opacity 0.2s ease;
+  font-size: 16px;
+  opacity: 0.4;
+  transition: all 0.3s ease;
 }
 
 .clickable-note:hover .edit-icon {
   opacity: 1;
+  color: #3182ce;
 }
 
-/* Terminal dialog styles */
+/* Terminal dialog styles - 企业级对话框美化 */
 .terminal-dialog :deep(.el-dialog) {
-  border-radius: 16px;
+  border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.35);
 }
 
 .terminal-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #303133 0%, #1a1a1a 100%);
+  background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
   color: white;
-  padding: 16px 24px;
+  padding: 20px 28px;
   margin: 0;
 }
 
 .terminal-dialog :deep(.el-dialog__title) {
-  color: #67c23a;
-  font-weight: 600;
-  font-size: 16px;
+  color: #68d391;
+  font-weight: 700;
+  font-size: 18px;
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
 }
 
 .terminal-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
-  color: #909399;
+  color: #a0aec0;
+  font-size: 20px;
 }
 
 .terminal-dialog :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
-  color: #f56c6c;
+  color: #fc8181;
 }
 
 .terminal-dialog :deep(.el-dialog__body) {
-  padding: 20px;
-  background: #1e1e1e;
+  padding: 24px;
+  background: #1a202c;
 }
 
 .terminal-dialog-content {
@@ -2440,28 +2734,30 @@ const handleChangePassword = async () => {
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
 }
 
-/* Segment dialog styles */
+/* Segment dialog styles - 企业级对话框美化 */
 .segment-dialog :deep(.el-dialog) {
-  border-radius: 16px;
+  border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 25px 80px rgba(30, 58, 95, 0.25);
 }
 
 .segment-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #409EFF 0%, #337ecc 100%);
+  background: linear-gradient(135deg, #2c5282 0%, #3182ce 50%, #4299e1 100%);
   color: white;
-  padding: 20px 24px;
+  padding: 24px 32px;
   margin: 0;
 }
 
 .segment-dialog :deep(.el-dialog__title) {
   color: white;
-  font-weight: 600;
-  font-size: 18px;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.5px;
 }
 
 .segment-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
   color: white;
+  font-size: 20px;
 }
 
 .segment-dialog :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
@@ -2469,32 +2765,34 @@ const handleChangePassword = async () => {
 }
 
 .segment-dialog :deep(.el-dialog__body) {
-  padding: 24px;
-  background: #f8fafc;
+  padding: 32px;
+  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
 }
 
-/* Filtered dialog styles */
+/* Filtered dialog styles - 企业级对话框美化 */
 .filtered-dialog :deep(.el-dialog) {
-  border-radius: 16px;
+  border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 25px 80px rgba(214, 158, 46, 0.25);
 }
 
 .filtered-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #e6a23c 0%, #cf9236 100%);
+  background: linear-gradient(135deg, #c05621 0%, #dd6b20 50%, #ed8936 100%);
   color: white;
-  padding: 20px 24px;
+  padding: 24px 32px;
   margin: 0;
 }
 
 .filtered-dialog :deep(.el-dialog__title) {
   color: white;
-  font-weight: 600;
-  font-size: 18px;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.5px;
 }
 
 .filtered-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
   color: white;
+  font-size: 20px;
 }
 
 .filtered-dialog :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
@@ -2502,8 +2800,8 @@ const handleChangePassword = async () => {
 }
 
 .filtered-dialog :deep(.el-dialog__body) {
-  padding: 24px;
-  background: #f8fafc;
+  padding: 32px;
+  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
 }
 
 /* Animations */
@@ -2523,54 +2821,65 @@ const handleChangePassword = async () => {
   animation: pulse 1s infinite;
 }
 
-/* Table styling */
+/* Table styling - 企业级表格美化 */
 :deep(.el-table) {
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  border: 1px solid #ebeef5;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e2e8f0;
 }
 
 :deep(.el-table th) {
-  background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%) !important;
-  font-weight: 600;
-  color: #303133;
-  border-bottom: 2px solid #dcdfe6;
+  background: linear-gradient(135deg, #edf2f7 0%, #e2e8f0 100%) !important;
+  font-weight: 700;
+  color: #1e3a5f;
+  border-bottom: 2px solid #cbd5e0;
 }
 
 :deep(.el-table th .cell) {
-  font-size: 13px;
-  letter-spacing: 0.3px;
+  font-size: 14px;
+  letter-spacing: 0.5px;
 }
 
 :deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
-  background: #fafbfc;
+  background: #f7fafc;
 }
 
 :deep(.el-table__body tr:hover > td) {
-  background-color: #ecf5ff !important;
+  background: linear-gradient(135deg, #ebf8ff 0%, #e6fffa 100%) !important;
 }
 
 :deep(.el-table td) {
-  border-bottom: 1px solid #f0f2f5;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 14px 0;
 }
 
-/* Pagination container */
+/* Pagination container - 企业级分页美化 */
 .pagination-container {
   display: flex;
   justify-content: center;
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid #ebeef5;
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 2px solid #e2e8f0;
+}
+
+.pagination-container :deep(.el-pagination.is-background .el-pager li) {
+  border-radius: 10px;
+  font-weight: 500;
 }
 
 .pagination-container :deep(.el-pagination.is-background .el-pager li:not(.is-disabled).is-active) {
-  background: linear-gradient(135deg, #409EFF 0%, #337ecc 100%);
-  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.3);
+  background: linear-gradient(135deg, #2c5282 0%, #3182ce 100%);
+  box-shadow: 0 4px 12px rgba(49, 130, 206, 0.35);
 }
 
 .pagination-container :deep(.el-pagination.is-background .el-pager li:not(.is-disabled):hover) {
-  color: #409EFF;
+  color: #3182ce;
+}
+
+.pagination-container :deep(.el-pagination .btn-prev),
+.pagination-container :deep(.el-pagination .btn-next) {
+  border-radius: 10px;
 }
 
 /* Segments container */
