@@ -1,7 +1,5 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 from flask_migrate import Migrate
 from flask_socketio import SocketIO
 from sqlalchemy import inspect, text
@@ -9,6 +7,7 @@ from models import db
 from models.user import User
 from routes.auth import auth_bp
 from routes.servers import servers_bp
+from extensions import limiter
 from config import Config
 import logging
 import os
@@ -78,12 +77,9 @@ def create_app():
 
     # Configure rate limiting
     if Config.RATELIMIT_ENABLED:
-        Limiter(
-            app=app,
-            key_func=get_remote_address,
-            default_limits=["200 per day", "50 per hour"],
-            storage_uri=Config.RATELIMIT_STORAGE_URL
-        )
+        limiter.init_app(app)
+        # Set default limits
+        app.config['RATELIMIT_DEFAULT'] = "200 per day, 50 per hour"
         logger.info("Rate limiting enabled")
     else:
         logger.info("Rate limiting disabled")
