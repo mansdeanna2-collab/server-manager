@@ -420,7 +420,7 @@
           </el-table-column>
           <el-table-column
             label="操作"
-            width="280"
+            width="340"
             fixed="right"
           >
             <template #default="scope">
@@ -432,6 +432,15 @@
                 >
                   <el-icon><Connection /></el-icon>
                   连接
+                </el-button>
+                <el-button
+                  size="small"
+                  type="warning"
+                  :loading="scope.row.checking"
+                  @click="checkServer(scope.row)"
+                >
+                  <el-icon><Search /></el-icon>
+                  检测
                 </el-button>
                 <el-button
                   size="small"
@@ -467,7 +476,7 @@
     <el-dialog
       v-model="terminalDialogVisible"
       :title="`终端 - ${terminalServer?.ip_address || ''}`"
-      width="900px"
+      width="1100px"
       class="terminal-dialog"
       append-to-body
       :close-on-click-modal="false"
@@ -808,6 +817,40 @@ const viewServer = (server) => {
 const viewSegment = (segment) => {
   selectedSegment.value = segment
   segmentDialogVisible.value = true
+}
+
+// 检测服务器状态
+const checkServer = async (server) => {
+  if (server.checking) return
+  
+  server.checking = true
+  try {
+    const response = await serversAPI.check(server.id)
+    const status = response.data.status
+    
+    // Update server status in both servers list and segment
+    server.status = status.overall
+    server.checkDetail = status.detail
+    server.error_type = status.error_type
+    
+    // Show result message based on status
+    if (status.overall === 'online') {
+      if (status.auth === true) {
+        ElMessage.success(`服务器 ${server.ip_address} 检测成功: ${status.detail}`)
+      } else if (status.port === true) {
+        ElMessage.success(`服务器 ${server.ip_address} 端口开放，但认证未验证`)
+      } else {
+        ElMessage.success(`服务器 ${server.ip_address} 可达`)
+      }
+    } else {
+      ElMessage.warning(`服务器 ${server.ip_address}: ${status.detail}`)
+    }
+  } catch (error) {
+    const errorMsg = error.response?.data?.message || error.message || '网络连接失败'
+    ElMessage.error(`检测服务器 ${server.ip_address} 失败: ${errorMsg}`)
+  } finally {
+    server.checking = false
+  }
 }
 
 // 终端连接功能
