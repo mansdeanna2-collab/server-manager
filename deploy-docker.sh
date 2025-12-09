@@ -15,7 +15,7 @@ error() {
 }
 
 require_cmd() {
-  command -v "$1" >/dev/null 2>&1 || error "Missing dependency: $1. 请先安装 / please install it first."
+  command -v "$1" >/dev/null 2>&1 || error "Missing dependency: $1. Please install it first. / 请先安装。"
 }
 
 require_cmd docker
@@ -25,7 +25,7 @@ if docker compose version >/dev/null 2>&1; then
 elif command -v docker-compose >/dev/null 2>&1; then
   COMPOSE_CMD=(docker-compose)
 else
-  error "Docker Compose not found (未检测到 docker compose). Please install the Docker Compose plugin or docker-compose."
+  error "Docker Compose not found. Please install the Docker Compose plugin or docker-compose. / 未检测到 docker compose，请安装 Docker Compose 插件或 docker-compose。"
 fi
 
 info "Using Docker Compose to build and start services... / 使用 Docker Compose 构建并启动服务..."
