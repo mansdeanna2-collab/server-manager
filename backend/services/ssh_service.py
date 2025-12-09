@@ -148,3 +148,67 @@ class SSHService:
         if result:
             self.disconnect()
         return result
+
+    def verify_credentials_detailed(self):
+        """验证凭据并返回详细信息"""
+        try:
+            self.client = paramiko.SSHClient()
+            self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            logger.warning(
+                f"Connecting to {self.host}:{self.port} with AutoAddPolicy "
+                "(accepts any host key)"
+            )
+
+            self.client.connect(
+                hostname=self.host,
+                port=self.port,
+                username=self.username,
+                password=self.password,
+                timeout=self.timeout,
+                banner_timeout=30,
+                auth_timeout=30
+            )
+            logger.info(f"Successfully connected to {self.host}:{self.port}")
+            self.disconnect()
+            return {
+                'success': True,
+                'message': '认证成功',
+                'error_type': None
+            }
+        except paramiko.AuthenticationException:
+            logger.error(f"Authentication failed for {self.host}:{self.port}")
+            return {
+                'success': False,
+                'message': '密码错误或用户名不存在',
+                'error_type': 'auth_failed'
+            }
+        except paramiko.SSHException as e:
+            logger.error(f"SSH connection failed to {self.host}:{self.port} - {str(e)}")
+            error_msg = str(e).lower()
+            if 'no existing session' in error_msg:
+                return {
+                    'success': False,
+                    'message': 'SSH协议错误',
+                    'error_type': 'ssh_error'
+                }
+            return {
+                'success': False,
+                'message': f'SSH连接失败: {str(e)}',
+                'error_type': 'ssh_error'
+            }
+        except socket.timeout:
+            logger.error(f"Connection timeout to {self.host}:{self.port}")
+            return {
+                'success': False,
+                'message': '连接超时',
+                'error_type': 'timeout'
+            }
+        except Exception as e:
+            logger.error(
+                f"Unexpected error connecting to {self.host}:{self.port} - {str(e)}"
+            )
+            return {
+                'success': False,
+                'message': f'连接错误: {str(e)}',
+                'error_type': 'connection_error'
+            }

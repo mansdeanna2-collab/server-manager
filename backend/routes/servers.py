@@ -234,3 +234,19 @@ def get_system_info(_current_user, server_id):
         return jsonify(system_info), 200
     else:
         return jsonify({'message': 'Failed to get system information'}), 500
+
+
+@servers_bp.route('/ip-region/<ip_address>', methods=['GET'])
+@token_required
+def get_ip_region(_current_user, ip_address):
+    """获取IP地址的地区信息"""
+    region_info = CheckService.get_ip_region(ip_address)
+    return jsonify(region_info), 200
+
+
+@servers_bp.route('/port-type/<int:port>', methods=['GET'])
+@token_required
+def get_port_type(_current_user, port):
+    """获取端口类型信息"""
+    port_info = CheckService.get_port_type(port)
+    return jsonify(port_info), 200
