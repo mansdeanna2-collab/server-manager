@@ -38,7 +38,7 @@ def test_get_ip_region_singapore():
 
 
 def test_get_ip_region_united_states():
-    region = CheckService.get_ip_region('52.10.20.30')
+    region = CheckService.get_ip_region('52.20.30.40')
     assert region['code'] == 'US'
     assert region['name'] == '美国'
     assert region['flag'] == '🇺🇸'
