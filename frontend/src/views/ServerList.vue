@@ -64,13 +64,42 @@
               </div>
             </template>
             
-            <el-input
-              v-model="searchText"
-              placeholder="按IP、用户名或备注搜索"
-              class="search-input"
-              :prefix-icon="Search"
-              clearable
-            />
+            <div class="search-filter-row">
+              <el-input
+                v-model="searchText"
+                placeholder="按IP、用户名或备注搜索"
+                class="search-input"
+                :prefix-icon="Search"
+                clearable
+              />
+              
+              <div class="filter-buttons">
+                <el-button
+                  :type="activeFilter === 'online' ? 'success' : 'default'"
+                  :plain="activeFilter !== 'online'"
+                  @click="toggleFilter('online')"
+                >
+                  <el-icon><CircleCheck /></el-icon>
+                  在线
+                </el-button>
+                <el-button
+                  :type="activeFilter === 'error' ? 'danger' : 'default'"
+                  :plain="activeFilter !== 'error'"
+                  @click="toggleFilter('error')"
+                >
+                  <el-icon><WarningFilled /></el-icon>
+                  错误
+                </el-button>
+                <el-button
+                  :type="activeFilter === 'computer' ? 'primary' : 'default'"
+                  :plain="activeFilter !== 'computer'"
+                  @click="toggleFilter('computer')"
+                >
+                  <el-icon><Monitor /></el-icon>
+                  电脑
+                </el-button>
+              </div>
+            </div>
             
             <!-- Loading State -->
             <div
@@ -576,7 +605,8 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Monitor, Odometer, User, ArrowDown, Plus, Refresh,
-  Search, View, Edit, Delete, OfficeBuilding, Connection, CopyDocument, Loading
+  Search, View, Edit, Delete, OfficeBuilding, Connection, CopyDocument, Loading,
+  CircleCheck, WarningFilled
 } from '@element-plus/icons-vue'
 import { serversAPI, authAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -587,6 +617,7 @@ const router = useRouter()
 const route = useRoute()
 const servers = ref([])
 const searchText = ref('')
+const activeFilter = ref('')  // '', 'online', 'error', 'computer'
 const dialogVisible = ref(false)
 const detailDialogVisible = ref(false)
 const segmentDialogVisible = ref(false)
@@ -736,16 +767,43 @@ const getUpdatedTimestamp = (server) => {
   return isNaN(time) ? Number.NEGATIVE_INFINITY : time
 }
 
-// Filter servers by search text
+// Toggle filter
+const toggleFilter = (filter) => {
+  if (activeFilter.value === filter) {
+    activeFilter.value = ''  // Toggle off if already selected
+  } else {
+    activeFilter.value = filter
+  }
+}
+
+// Filter servers by search text and active filter
 const filteredServers = computed(() => {
-  if (!searchText.value) return servers.value
+  let result = servers.value
   
-  const search = searchText.value.toLowerCase()
-  return servers.value.filter(server =>
-    server.ip_address.toLowerCase().includes(search) ||
-    server.username.toLowerCase().includes(search) ||
-    (server.notes && server.notes.toLowerCase().includes(search))
-  )
+  // Apply search filter
+  if (searchText.value) {
+    const search = searchText.value.toLowerCase()
+    result = result.filter(server =>
+      server.ip_address.toLowerCase().includes(search) ||
+      server.username.toLowerCase().includes(search) ||
+      (server.notes && server.notes.toLowerCase().includes(search))
+    )
+  }
+  
+  // Apply category filter
+  if (activeFilter.value === 'online') {
+    // Show only online servers
+    result = result.filter(server => server.status === 'online')
+  } else if (activeFilter.value === 'error') {
+    // Show servers with errors (has error_type set)
+    result = result.filter(server => server.error_type)
+  } else if (activeFilter.value === 'computer') {
+    // Show only Windows/RDP servers (port 3389)
+    result = result.filter(server => server.port === 3389)
+  }
+  
+  // Note: Sorting by update time is handled in groupedServers computed property
+  return result
 })
 
 // Group servers by IP segment
@@ -1124,9 +1182,36 @@ const handleCommand = async (command) => {
   gap: 10px;
 }
 
-.search-input {
+.search-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
   margin-bottom: 24px;
+}
+
+.search-input {
   max-width: 320px;
+  flex-shrink: 0;
+}
+
+.filter-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+@media (max-width: 768px) {
+  .search-filter-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .search-input {
+    max-width: 100%;
+  }
+  
+  .filter-buttons {
+    justify-content: flex-start;
+  }
 }
 
 /* IP段卡片网格布局 */

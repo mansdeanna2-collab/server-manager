@@ -546,7 +546,10 @@ class CheckService:
             status['detail'] = f'端口 {port} ({status["port_type"]["type"]}) 开放'
 
         # Check authentication if credentials provided
-        if username and password and status['port']:
+        # Only attempt SSH authentication for SSH port (not RDP/3389, Telnet/23, etc.)
+        # Other protocols use different authentication mechanisms
+        ssh_port = 22
+        if username and password and status['port'] and port == ssh_port:
             from services.ssh_service import SSHService
             ssh = SSHService(host, port, username, password)
             auth_result = ssh.verify_credentials_detailed()
