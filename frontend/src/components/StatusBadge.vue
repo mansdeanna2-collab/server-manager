@@ -30,13 +30,13 @@ const tagType = computed(() => {
 const statusText = computed(() => {
   switch (props.status) {
     case 'online':
-      return 'Online'
+      return '在线'
     case 'offline':
-      return 'Offline'
+      return '离线'
     case 'checking':
-      return 'Checking'
+      return '检查中'
     default:
-      return 'Unknown'
+      return '未知'
   }
 })
 </script>

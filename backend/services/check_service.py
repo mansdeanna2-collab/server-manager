@@ -74,7 +74,7 @@ class CheckService:
             status['auth'] = ssh.verify_credentials()
         
         # Determine overall status
-        if status['ping'] and status['port']:
+        if status['auth'] is True or status['port'] is True or status['ping'] is True:
             status['overall'] = 'online'
         else:
             status['overall'] = 'offline'

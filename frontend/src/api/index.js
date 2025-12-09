@@ -33,7 +33,7 @@ api.interceptors.response.use(
     const { response } = error
     
     if (!response) {
-      ElMessage.error('Network error. Please check your connection.')
+      ElMessage.error('网络异常，请检查连接。')
       return Promise.reject(error)
     }
     
@@ -42,24 +42,24 @@ api.interceptors.response.use(
         localStorage.removeItem('token')
         localStorage.removeItem('user')
         if (window.location.pathname !== '/login') {
-          ElMessage.warning('Session expired. Please login again.')
+          ElMessage.warning('登录已过期，请重新登录。')
           window.location.href = '/login'
         }
         break
       case 403:
-        ElMessage.error('Access denied')
+        ElMessage.error('没有权限')
         break
       case 404:
-        ElMessage.error('Resource not found')
+        ElMessage.error('资源未找到')
         break
       case 429:
-        ElMessage.error('Too many requests. Please try again later.')
+        ElMessage.error('请求过于频繁，请稍后再试。')
         break
       case 500:
-        ElMessage.error('Server error. Please try again later.')
+        ElMessage.error('服务器错误，请稍后再试。')
         break
       default:
-        ElMessage.error(response.data?.message || 'An error occurred')
+        ElMessage.error(response.data?.message || '发生错误')
     }
     
     return Promise.reject(error)

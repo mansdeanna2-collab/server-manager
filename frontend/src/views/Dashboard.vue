@@ -4,7 +4,7 @@
       <el-header style="background: #409EFF; color: white; display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 10px;">
           <el-icon :size="30"><Monitor /></el-icon>
-          <h2 style="margin: 0;">Server Manager</h2>
+          <h2 style="margin: 0;">服务器管理</h2>
         </div>
         <el-menu
           mode="horizontal"
@@ -17,22 +17,22 @@
         >
           <el-menu-item index="/dashboard">
             <el-icon><Odometer /></el-icon>
-            Dashboard
+            仪表盘
           </el-menu-item>
           <el-menu-item index="/servers">
             <el-icon><OfficeBuilding /></el-icon>
-            Servers
+            服务器
           </el-menu-item>
         </el-menu>
         <el-dropdown @command="handleCommand">
           <span class="user-dropdown">
             <el-icon><User /></el-icon>
-            {{ currentUser?.username || 'Admin' }}
+            {{ currentUser?.username || '管理员' }}
             <el-icon><ArrowDown /></el-icon>
           </span>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="logout">Logout</el-dropdown-item>
+              <el-dropdown-item command="logout">退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -45,7 +45,7 @@
               <div class="stat-card-icon" style="color: #409EFF;">
                 <el-icon><OfficeBuilding /></el-icon>
               </div>
-              <div class="stat-card-title">Total Servers</div>
+              <div class="stat-card-title">服务器总数</div>
               <div class="stat-card-value">{{ stats.total }}</div>
             </div>
             
@@ -53,7 +53,7 @@
               <div class="stat-card-icon" style="color: #67C23A;">
                 <el-icon><CircleCheck /></el-icon>
               </div>
-              <div class="stat-card-title">Online</div>
+              <div class="stat-card-title">在线</div>
               <div class="stat-card-value">{{ stats.online }}</div>
             </div>
             
@@ -61,7 +61,7 @@
               <div class="stat-card-icon" style="color: #F56C6C;">
                 <el-icon><CircleClose /></el-icon>
               </div>
-              <div class="stat-card-title">Offline</div>
+              <div class="stat-card-title">离线</div>
               <div class="stat-card-value">{{ stats.offline }}</div>
             </div>
             
@@ -69,7 +69,7 @@
               <div class="stat-card-icon" style="color: #909399;">
                 <el-icon><QuestionFilled /></el-icon>
               </div>
-              <div class="stat-card-title">Unknown</div>
+              <div class="stat-card-title">未知</div>
               <div class="stat-card-value">{{ stats.unknown }}</div>
             </div>
           </div>
@@ -77,32 +77,32 @@
           <el-card>
             <template #header>
               <div class="card-header">
-                <span>Recent Servers</span>
+                <span>近期服务器</span>
                 <el-button type="primary" @click="checkAllServers" :loading="checkingAll">
                   <el-icon><Refresh /></el-icon>
-                  Check All
+                  一键检测
                 </el-button>
               </div>
             </template>
             
-            <el-empty v-if="servers.length === 0" description="No servers found" />
+            <el-empty v-if="servers.length === 0" description="未找到服务器" />
             
             <el-table v-else :data="servers" style="width: 100%">
-              <el-table-column prop="ip_address" label="IP Address" width="150" />
-              <el-table-column prop="port" label="Port" width="100" />
-              <el-table-column prop="username" label="Username" width="120" />
-              <el-table-column label="Status" width="120">
+              <el-table-column prop="ip_address" label="IP地址" width="150" />
+              <el-table-column prop="port" label="端口" width="100" />
+              <el-table-column prop="username" label="用户名" width="120" />
+              <el-table-column label="状态" width="120">
                 <template #default="scope">
                   <StatusBadge :status="scope.row.status" />
                 </template>
               </el-table-column>
-              <el-table-column prop="os_info" label="OS" />
-              <el-table-column label="Last Checked" width="180">
+              <el-table-column prop="os_info" label="操作系统" />
+              <el-table-column label="最近检查" width="180">
                 <template #default="scope">
                   {{ formatDate(scope.row.last_checked) }}
                 </template>
               </el-table-column>
-              <el-table-column label="Actions" width="100">
+              <el-table-column label="操作" width="100">
                 <template #default="scope">
                   <el-button
                     size="small"
@@ -110,7 +110,7 @@
                     @click="checkServer(scope.row)"
                     :loading="scope.row.checking"
                   >
-                    Check
+                    检测
                   </el-button>
                 </template>
               </el-table-column>
@@ -162,7 +162,7 @@ const loadServers = async () => {
     servers.value = response.data.map(s => ({ ...s, checking: false }))
     calculateStats()
   } catch (error) {
-    ElMessage.error('Failed to load servers')
+    ElMessage.error('加载服务器失败')
   }
 }
 
@@ -179,10 +179,10 @@ const checkServer = async (server) => {
     const response = await serversAPI.check(server.id)
     server.status = response.data.status.overall
     server.last_checked = new Date().toISOString()
-    ElMessage.success(`Server ${server.ip_address} checked`)
+    ElMessage.success(`已检测服务器 ${server.ip_address}`)
     calculateStats()
   } catch (error) {
-    ElMessage.error('Failed to check server')
+    ElMessage.error('检测服务器失败')
   } finally {
     server.checking = false
   }
@@ -193,16 +193,16 @@ const checkAllServers = async () => {
   try {
     await serversAPI.checkAll()
     await loadServers()
-    ElMessage.success('All servers checked')
+    ElMessage.success('全部服务器已检测')
   } catch (error) {
-    ElMessage.error('Failed to check all servers')
+    ElMessage.error('检测所有服务器失败')
   } finally {
     checkingAll.value = false
   }
 }
 
 const formatDate = (dateStr) => {
-  if (!dateStr) return 'Never'
+  if (!dateStr) return '从未'
   const date = new Date(dateStr)
   return date.toLocaleString()
 }
