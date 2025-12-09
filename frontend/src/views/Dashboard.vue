@@ -108,7 +108,7 @@
               </div>
               <div class="stat-card-trend trend-success">
                 <el-icon><TrendCharts /></el-icon>
-                {{ stats.total > 0 ? Math.round(stats.online / stats.total * 100) : 0 }}% 运行率
+                {{ onlinePercentage }}% 运行率
               </div>
             </div>
             
@@ -396,9 +396,9 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
-  Monitor, Odometer, User, ArrowDown, Refresh,
-  CircleCheck, CircleClose, QuestionFilled, OfficeBuilding, Loading,
-  DataAnalysis, TrendCharts, Warning, InfoFilled, List, Timer, Search
+  ArrowDown, CircleCheck, CircleClose, DataAnalysis, InfoFilled, List,
+  Loading, Monitor, Odometer, OfficeBuilding, QuestionFilled, Refresh,
+  Search, Timer, TrendCharts, User, Warning
 } from '@element-plus/icons-vue'
 import { serversAPI, authAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -451,7 +451,7 @@ const PORT_TYPE_MAP = {
   3389: 'primary',
   23: 'warning',
   21: 'info',
-  80: '',
+  80: 'info',
   443: 'success',
   3306: 'warning',
   5432: 'primary'
@@ -461,16 +461,25 @@ const getPortTagType = (port) => {
   return PORT_TYPE_MAP[port] || 'info'
 }
 
+// OS图标映射常量
+const OS_ICONS = {
+  default: '💻',
+  linux: '🐧',
+  redhat: '🎩',
+  windows: '🪟',
+  mac: '🍎'
+}
+
 // 根据OS信息获取图标
 const getOsIcon = (osInfo) => {
-  if (!osInfo) return '💻'
+  if (!osInfo) return OS_ICONS.default
   const osLower = osInfo.toLowerCase()
-  if (osLower.includes('ubuntu') || osLower.includes('debian')) return '🐧'
-  if (osLower.includes('centos') || osLower.includes('red hat') || osLower.includes('rhel')) return '🎩'
-  if (osLower.includes('windows')) return '🪟'
-  if (osLower.includes('mac') || osLower.includes('darwin')) return '🍎'
-  if (osLower.includes('linux')) return '🐧'
-  return '💻'
+  if (osLower.includes('ubuntu') || osLower.includes('debian')) return OS_ICONS.linux
+  if (osLower.includes('centos') || osLower.includes('red hat') || osLower.includes('rhel')) return OS_ICONS.redhat
+  if (osLower.includes('windows')) return OS_ICONS.windows
+  if (osLower.includes('mac') || osLower.includes('darwin')) return OS_ICONS.mac
+  if (osLower.includes('linux')) return OS_ICONS.linux
+  return OS_ICONS.default
 }
 
 const stats = reactive({
@@ -478,6 +487,11 @@ const stats = reactive({
   online: 0,
   offline: 0,
   unknown: 0
+})
+
+// 运行率百分比计算
+const onlinePercentage = computed(() => {
+  return stats.total > 0 ? Math.round(stats.online / stats.total * 100) : 0
 })
 
 // Computed property for paginated servers

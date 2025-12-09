@@ -99,7 +99,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { User, Lock, Monitor, Unlock } from '@element-plus/icons-vue'
+import { Lock, Monitor, Unlock, User } from '@element-plus/icons-vue'
 import { authAPI } from '@/api'
 
 const router = useRouter()
