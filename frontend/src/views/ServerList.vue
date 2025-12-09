@@ -83,7 +83,6 @@
               style="width: 100%"
               row-key="segmentKey"
               :tree-props="{ children: 'servers', hasChildren: 'hasChildren' }"
-              default-expand-all
               :row-class-name="getRowClassName"
             >
               <el-table-column
@@ -137,23 +136,38 @@
                 </template>
               </el-table-column>
               <el-table-column
-                label="端口 / 类型"
-                width="150"
+                label="端口 / 配置"
+                width="200"
               >
                 <template #default="scope">
                   <div
                     v-if="!scope.row.isSegment"
                     class="port-cell"
                   >
-                    <el-tag
-                      :type="getPortTagType(scope.row.port)"
-                      size="small"
-                      effect="dark"
-                      round
+                    <div class="port-row">
+                      <el-tag
+                        :type="getPortTagType(scope.row.port)"
+                        size="small"
+                        effect="dark"
+                        round
+                      >
+                        {{ getPortTypeIcon(scope.row.port) }} {{ scope.row.port }}
+                      </el-tag>
+                      <span class="port-type-text">{{ getPortTypeName(scope.row.port) }}</span>
+                    </div>
+                    <div
+                      v-if="getServerSpecs(scope.row)"
+                      class="specs-row"
                     >
-                      {{ getPortTypeIcon(scope.row.port) }} {{ scope.row.port }}
-                    </el-tag>
-                    <span class="port-type-text">{{ getPortTypeName(scope.row.port) }}</span>
+                      <el-tag
+                        size="small"
+                        effect="plain"
+                        type="info"
+                        class="specs-tag"
+                      >
+                        💻 {{ getServerSpecs(scope.row) }}
+                      </el-tag>
+                    </div>
                   </div>
                 </template>
               </el-table-column>
@@ -593,6 +607,7 @@ const activeMenu = computed(() => route.path)
 // IP段到地区的映射表（前端简化版）
 const IP_REGION_MAP = {
   // 香港 (Hong Kong)
+  '38.47.': { code: 'HK', name: '香港', flag: '🇭🇰' },
   '103.10.': { code: 'HK', name: '香港', flag: '🇭🇰' },
   '103.11.': { code: 'HK', name: '香港', flag: '🇭🇰' },
   '103.12.': { code: 'HK', name: '香港', flag: '🇭🇰' },
@@ -747,6 +762,66 @@ const getPortTypeIcon = (port) => {
 
 const getPortTagType = (port) => {
   return PORT_TYPE_MAP[port]?.color || 'info'
+}
+
+// 获取服务器配置信息（CPU核数和内存大小）
+const getServerSpecs = (server) => {
+  if (!server.cpu_info && !server.memory_info) return null
+  
+  // 解析CPU核数
+  let cpuCores = ''
+  if (server.cpu_info) {
+    // 尝试匹配常见的CPU信息格式
+    const cpuMatch = server.cpu_info.match(/(\d+)\s*(核|cores?|cpus?|processors?)/i)
+    if (cpuMatch) {
+      cpuCores = cpuMatch[1]
+    } else {
+      // 如果是纯数字
+      const numMatch = server.cpu_info.match(/^(\d+)$/)
+      if (numMatch) {
+        cpuCores = numMatch[1]
+      }
+    }
+  }
+  
+  // 解析内存大小
+  let memorySize = ''
+  if (server.memory_info) {
+    // 尝试匹配内存信息格式，如 "4GB", "4 GB", "4G", "4096MB"
+    const memMatch = server.memory_info.match(/(\d+(?:\.\d+)?)\s*(GB|G|MB|M|TB|T)/i)
+    if (memMatch) {
+      let size = parseFloat(memMatch[1])
+      const unit = memMatch[2].toUpperCase()
+      // 转换为GB显示 (使用二进制转换 1024，符合计算机内存标准)
+      if (unit === 'MB' || unit === 'M') {
+        size = Math.round(size / 1000)
+        memorySize = size > 0 ? `${size}G` : '<1G'
+      } else if (unit === 'TB' || unit === 'T') {
+        size = size * 1000
+        memorySize = `${Math.round(size)}G`
+      } else {
+        memorySize = `${Math.round(size)}G`
+      }
+    } else {
+      // 处理纯数字（假设为MB）
+      const numMatch = server.memory_info.match(/^(\d+)$/)
+      if (numMatch) {
+        const sizeMB = parseInt(numMatch[1])
+        const sizeGB = Math.round(sizeMB / 1000)
+        memorySize = sizeGB > 0 ? `${sizeGB}G` : '<1G'
+      }
+    }
+  }
+  
+  // 组合显示
+  if (cpuCores && memorySize) {
+    return `${cpuCores}核${memorySize}`
+  } else if (cpuCores) {
+    return `${cpuCores}核`
+  } else if (memorySize) {
+    return memorySize
+  }
+  return null
 }
 
 // 根据OS信息获取图标
@@ -1156,12 +1231,32 @@ const handleCommand = async (command) => {
 .port-cell {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+}
+
+.port-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .port-type-text {
   font-size: 11px;
   color: #909399;
+}
+
+.specs-row {
+  display: flex;
+  align-items: center;
+}
+
+.specs-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: linear-gradient(135deg, #f0f9eb 0%, #e8f5e1 100%);
+  border-color: #c2e7b0;
+  color: #67c23a;
+  font-weight: 500;
 }
 
 /* Username cell */
