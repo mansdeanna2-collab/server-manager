@@ -4,6 +4,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_migrate import Migrate
 from flask_socketio import SocketIO
+from sqlalchemy import inspect, text
 from models import db
 from models.user import User
 from routes.auth import auth_bp
@@ -21,6 +22,30 @@ logger = logging.getLogger(__name__)
 
 # Initialize SocketIO globally
 socketio = SocketIO()
+
+
+def _migrate_add_missing_columns(db_engine):
+    """Add missing columns to the servers table if they don't exist.
+    
+    This handles the case where the database was created with an older schema
+    and new columns (check_detail, error_type) were added to the model.
+    """
+    inspector = inspect(db_engine)
+    
+    # Skip if the servers table doesn't exist yet (fresh database)
+    if 'servers' not in inspector.get_table_names():
+        return
+    
+    columns = {col['name'] for col in inspector.get_columns('servers')}
+    
+    with db_engine.connect() as conn:
+        if 'check_detail' not in columns:
+            conn.execute(text('ALTER TABLE servers ADD COLUMN check_detail TEXT'))
+            logger.info("Added 'check_detail' column to servers table")
+        if 'error_type' not in columns:
+            conn.execute(text('ALTER TABLE servers ADD COLUMN error_type VARCHAR(50)'))
+            logger.info("Added 'error_type' column to servers table")
+        conn.commit()
 
 
 def create_app():
@@ -74,6 +99,9 @@ def create_app():
     # Create tables and default admin user
     with app.app_context():
         db.create_all()
+        
+        # Migrate schema: add any missing columns to existing tables
+        _migrate_add_missing_columns(db.engine)
 
         # Create default admin user if not exists
         admin = User.query.filter_by(username='admin').first()
