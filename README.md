@@ -172,23 +172,36 @@ docker compose up -d --build
 
 ### Importing Server Files from Host Directory
 
-To import servers from files on the host machine, you need to mount the directory into the Docker container:
+To import servers from files, you need to either:
 
-1. Set the `SERVER_FILES_HOST_DIR` environment variable to point to your host directory:
+**Option 1: Use the default `./server_files` directory**
+
+Place your server JSON files in the `server_files` directory at the project root. The files should be `.txt` files in JSON format.
+
+**Option 2: Mount a custom directory**
+
+Set the `SERVER_FILES_HOST_DIR` environment variable to point to your host directory:
 ```bash
-export SERVER_FILES_HOST_DIR=/home/Python/服务器
+export SERVER_FILES_HOST_DIR=/path/to/your/server/files
 docker compose up -d --build
 ```
 
-2. Or modify `docker-compose.yml` directly:
-```yaml
-services:
-  backend:
-    volumes:
-      - /home/Python/服务器:/app/server_files:ro
+Or create a `.env` file in the project root:
+```
+SERVER_FILES_HOST_DIR=/path/to/your/server/files
 ```
 
-The server files directory will be mounted read-only into the container at `/app/server_files`.
+**Server file format:**
+Each `.txt` file should contain JSON data like:
+```json
+{
+  "ips": ["192.168.1.100"],
+  "password": "your_password",
+  "os_name": "CentOS"
+}
+```
+
+For Windows servers, set `os_name` or `os_id` to include "windows" to automatically use RDP port 3389 and Administrator username.
 
 ## 🔐 Default Credentials
 

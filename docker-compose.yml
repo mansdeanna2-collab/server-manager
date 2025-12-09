@@ -14,7 +14,8 @@ services:
     volumes:
       - ./backend:/app
       - backend_data:/app/instance
-      - ${SERVER_FILES_HOST_DIR:-/home/Python/服务器}:/app/server_files:ro
+      # Mount host server files directory - set SERVER_FILES_HOST_DIR env var or use ./server_files
+      - ${SERVER_FILES_HOST_DIR:-./server_files}:/app/server_files:ro
     command: python app.py
 
   frontend:
