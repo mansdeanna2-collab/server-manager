@@ -278,16 +278,14 @@ const checkAllServers = async () => {
   checkingAll.value = true
   try {
     const response = await serversAPI.checkAll()
-    await loadServers()
-
-    const statusMap = new Map(
-      (response.data || []).map(item => [item.server_id, item.status])
-    )
+    const results = Array.isArray(response?.data) ? response.data : []
+    const statusMap = new Map(results.map(item => [item.server_id, item.status]))
 
     servers.value.forEach(server => {
       const status = statusMap.get(server.id)
       if (status) {
         applyStatusFields(server, status)
+        server.last_checked = new Date().toISOString()
       }
     })
 
