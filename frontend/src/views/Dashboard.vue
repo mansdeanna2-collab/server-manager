@@ -230,7 +230,7 @@ const loadServers = async () => {
     const response = await serversAPI.getAll()
     servers.value = response.data.map(s => ({ ...s, checking: false }))
     calculateStats()
-  } catch (error) {
+  } catch (_error) {
     ElMessage.error('加载服务器失败')
   }
 }
@@ -250,7 +250,7 @@ const checkServer = async (server) => {
     server.last_checked = new Date().toISOString()
     ElMessage.success(`已检测服务器 ${server.ip_address}`)
     calculateStats()
-  } catch (error) {
+  } catch (_error) {
     ElMessage.error('检测服务器失败')
   } finally {
     server.checking = false
@@ -263,7 +263,7 @@ const checkAllServers = async () => {
     await serversAPI.checkAll()
     await loadServers()
     ElMessage.success('全部服务器已检测')
-  } catch (error) {
+  } catch (_error) {
     ElMessage.error('检测所有服务器失败')
   } finally {
     checkingAll.value = false
@@ -284,8 +284,8 @@ const handleCommand = async (command) => {
   if (command === 'logout') {
     try {
       await authAPI.logout()
-    } catch (error) {
-      // Ignore error
+    } catch (_error) {
+      // 忽略登出错误，因为仍然需要清除本地存储
     }
     localStorage.removeItem('token')
     localStorage.removeItem('user')

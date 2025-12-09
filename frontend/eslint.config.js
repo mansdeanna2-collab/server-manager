@@ -15,17 +15,29 @@ export default [
         document: 'readonly',
         navigator: 'readonly',
         console: 'readonly',
+        localStorage: 'readonly',
         // Node globals
-        process: 'readonly',
-        // Build tool globals
-        import: 'readonly'
+        process: 'readonly'
       }
     },
     rules: {
       'vue/multi-word-component-names': 'off',
       'no-console': 'warn',
       'no-debugger': 'warn',
-      'no-unused-vars': 'warn'
+      'no-unused-vars': ['warn', { 
+        'argsIgnorePattern': '^_',
+        'varsIgnorePattern': '^_',
+        'caughtErrorsIgnorePattern': '^_'
+      }]
+    }
+  },
+  {
+    files: ['vite.config.js'],
+    languageOptions: {
+      globals: {
+        // Node.js globals for vite config
+        process: 'readonly'
+      }
     }
   },
   {

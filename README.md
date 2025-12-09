@@ -1,15 +1,26 @@
 # Server Manager
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/mansdeanna2-collab/server-manager)
+[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/mansdeanna2-collab/server-manager)
 [![Python](https://img.shields.io/badge/python-3.9+-green.svg)](https://www.python.org/)
 [![Vue](https://img.shields.io/badge/vue-3.5+-brightgreen.svg)](https://vuejs.org/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 
 A comprehensive server management system with a beautiful web interface for managing and monitoring multiple servers.
 
-## 📦 Version 2.0.0 Updates
+## 📦 Version 2.1.0 Updates
 
 ### What's New
+- 🔧 **Code Quality Improvements**: Fixed ESLint errors and warnings
+  - Fixed `__dirname` issue in vite.config.js using ES module compatible approach
+  - Improved error handling with proper unused variable patterns
+  - Added comprehensive ESLint configuration with proper ignore patterns
+- 📝 **Better Documentation**: Added Chinese comments throughout the codebase
+- 🧹 **Code Cleanup**: Removed unused imports and fixed code style issues
+  - Fixed Python code style (PEP 8 compliance)
+  - Added proper docstrings to all classes and functions
+- 📊 **Enhanced Logging**: Added logging to server CRUD operations
+
+### Version 2.0.0 Updates
 - ⬆️ **Upgraded Dependencies**: All packages updated to latest stable versions
   - Flask 3.0.0 → 3.1.0
   - Vue 3.4.0 → 3.5.13
@@ -25,7 +36,7 @@ A comprehensive server management system with a beautiful web interface for mana
 - 📝 **Code Quality**: Added ESLint configuration for frontend
 
 ### Breaking Changes
-None - fully backward compatible with version 1.0.0
+None - fully backward compatible with previous versions
 
 ## 🚀 Features
 
