@@ -378,34 +378,4 @@ const handleCommand = async (command) => {
   background-color: rgba(255, 255, 255, 0.1);
   border-radius: 4px;
 }
-
-/* Loading state styles */
-.loading-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  color: #909399;
-}
-
-.loading-icon {
-  color: #409EFF;
-  animation: rotate 1s linear infinite;
-}
-
-@keyframes rotate {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.loading-text {
-  margin-top: 16px;
-  font-size: 14px;
-  color: #606266;
-}
 </style>
