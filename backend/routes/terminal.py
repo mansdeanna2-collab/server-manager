@@ -105,17 +105,20 @@ def register_terminal_events(socketio):
 
         # 启动输出读取线程
         def output_callback(output_data):
-            socketio.emit(
-                'terminal_output',
-                {'data': output_data},
-                namespace='/terminal',
-                room=sid
-            )
+            # Check if session still exists before emitting
+            if sid in terminal_sessions:
+                socketio.emit(
+                    'terminal_output',
+                    {'data': output_data},
+                    namespace='/terminal',
+                    room=sid
+                )
 
         output_thread = threading.Thread(
             target=terminal.read_output,
             args=(output_callback,),
-            daemon=True
+            daemon=True,
+            name=f'terminal-output-{sid[:8]}'
         )
         output_thread.start()
 

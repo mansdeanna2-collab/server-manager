@@ -155,8 +155,12 @@ const initTerminal = () => {
             rows: terminal.rows
           })
         }
-      } catch (_e) {
-        // Ignore resize errors
+      } catch (e) {
+        // Resize errors are non-critical, log for debugging
+        if (import.meta.env.DEV) {
+          // eslint-disable-next-line no-console
+          console.warn('Terminal resize error:', e)
+        }
       }
     }
   })
@@ -165,8 +169,12 @@ const initTerminal = () => {
   nextTick(() => {
     try {
       fitAddon.fit()
-    } catch (_e) {
-      // Ignore initial fit errors
+    } catch (e) {
+      // Initial fit errors are non-critical
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.warn('Terminal initial fit error:', e)
+      }
     }
   })
 }
@@ -185,6 +193,9 @@ const connect = () => {
   }
 
   // 获取WebSocket URL
+  // VITE_WS_URL should be set to the backend URL in production
+  // In development, we fall back to window.location.origin which works
+  // when frontend and backend run on the same server
   const wsUrl = import.meta.env.VITE_WS_URL || window.location.origin
 
   socket = io(`${wsUrl}/terminal`, {

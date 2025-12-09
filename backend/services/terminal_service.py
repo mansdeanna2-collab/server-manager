@@ -1,5 +1,6 @@
 import paramiko
 import logging
+import socket
 import threading
 import time
 
@@ -22,6 +23,8 @@ class TerminalService:
         """建立SSH连接并获取PTY通道"""
         try:
             self.client = paramiko.SSHClient()
+            # SECURITY NOTE: AutoAddPolicy accepts all host keys automatically
+            # In production, consider using WarningPolicy or loading known_hosts
             self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
             self.client.connect(
@@ -73,9 +76,20 @@ class TerminalService:
                         callback(data.decode('utf-8', errors='replace'))
                 else:
                     time.sleep(check_interval)
+            except socket.timeout:
+                # Socket timeout is expected, continue reading
+                continue
+            except OSError as e:
+                if not self._stop_event.is_set():
+                    logger.error(f"OS error reading output: {str(e)}")
+                break
+            except paramiko.SSHException as e:
+                if not self._stop_event.is_set():
+                    logger.error(f"SSH error reading output: {str(e)}")
+                break
             except Exception as e:
                 if not self._stop_event.is_set():
-                    logger.error(f"Error reading output: {str(e)}")
+                    logger.error(f"Unexpected error reading output: {str(e)}")
                 break
 
     def disconnect(self):
