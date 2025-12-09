@@ -90,21 +90,21 @@
                   @click="showFilteredServersDialog('online')"
                 >
                   <el-icon><CircleCheck /></el-icon>
-                  在线
+                  在线 {{ onlineCount }}
                 </el-button>
                 <el-button
                   type="danger"
                   @click="showFilteredServersDialog('error')"
                 >
                   <el-icon><WarningFilled /></el-icon>
-                  错误
+                  错误 {{ errorCount }}
                 </el-button>
                 <el-button
                   type="primary"
                   @click="showFilteredServersDialog('computer')"
                 >
                   <el-icon><Monitor /></el-icon>
-                  电脑
+                  电脑 {{ computerCount }}
                 </el-button>
               </div>
             </div>
@@ -1035,6 +1035,11 @@ const getUpdatedTimestamp = (server) => {
   const time = new Date(timeStr).getTime()
   return isNaN(time) ? Number.NEGATIVE_INFINITY : time
 }
+
+// Computed counts for filter buttons
+const onlineCount = computed(() => servers.value.filter(s => s.status === 'online').length)
+const errorCount = computed(() => servers.value.filter(s => s.error_type).length)
+const computerCount = computed(() => servers.value.filter(s => s.port === 3389).length)
 
 // Show filtered servers in dialog
 const showFilteredServersDialog = (filterType) => {

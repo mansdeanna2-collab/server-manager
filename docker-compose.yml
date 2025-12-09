@@ -10,9 +10,11 @@ services:
     environment:
       - FLASK_ENV=production
       - DATABASE_URI=sqlite:///server_manager.db
+      - SERVER_FILES_DIR=/app/server_files
     volumes:
       - ./backend:/app
       - backend_data:/app/instance
+      - ${SERVER_FILES_HOST_DIR:-/home/Python/服务器}:/app/server_files:ro
     command: python app.py
 
   frontend:

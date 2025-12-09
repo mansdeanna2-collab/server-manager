@@ -170,6 +170,26 @@ docker compose up -d --build
 
 > If your Docker installation uses the legacy binary, replace `docker compose` with `docker-compose`.
 
+### Importing Server Files from Host Directory
+
+To import servers from files on the host machine, you need to mount the directory into the Docker container:
+
+1. Set the `SERVER_FILES_HOST_DIR` environment variable to point to your host directory:
+```bash
+export SERVER_FILES_HOST_DIR=/home/Python/服务器
+docker compose up -d --build
+```
+
+2. Or modify `docker-compose.yml` directly:
+```yaml
+services:
+  backend:
+    volumes:
+      - /home/Python/服务器:/app/server_files:ro
+```
+
+The server files directory will be mounted read-only into the container at `/app/server_files`.
+
 ## 🔐 Default Credentials
 
 - **Username**: `admin`
