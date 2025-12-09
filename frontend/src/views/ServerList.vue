@@ -193,7 +193,11 @@
               {{ getRegionInfo(selectedServer.ip_address)?.name }}
             </el-tag>
           </div>
-          <StatusBadge :status="selectedServer.status" />
+          <StatusBadge
+            :status="selectedServer.status"
+            :detail="selectedServer.checkDetail"
+            :error-type="selectedServer.error_type"
+          />
         </div>
         
         <el-descriptions
@@ -216,7 +220,11 @@
             {{ selectedServer.username }}
           </el-descriptions-item>
           <el-descriptions-item label="状态">
-            <StatusBadge :status="selectedServer.status" />
+            <StatusBadge
+              :status="selectedServer.status"
+              :detail="selectedServer.checkDetail"
+              :error-type="selectedServer.error_type"
+            />
           </el-descriptions-item>
           <el-descriptions-item
             label="系统信息"
@@ -356,6 +364,8 @@
             <template #default="scope">
               <StatusBadge
                 :status="scope.row.status"
+                :detail="scope.row.checkDetail"
+                :error-type="scope.row.error_type"
                 size="small"
               />
             </template>
@@ -799,7 +809,12 @@ onMounted(async () => {
 const loadServers = async () => {
   try {
     const response = await serversAPI.getAll()
-    servers.value = response.data.map(s => ({ ...s, checking: false }))
+    servers.value = response.data.map(s => ({
+      ...s,
+      checking: false,
+      checkDetail: s.checkDetail || '',
+      error_type: s.error_type || ''
+    }))
   } catch (_error) {
     ElMessage.error('加载服务器失败')
   }
@@ -871,7 +886,8 @@ const checkServer = async (server) => {
     const response = await serversAPI.check(server.id)
     const statusData = response.data.status
     server.status = statusData.overall
-    server.checkDetail = statusData.detail
+    server.checkDetail = statusData.detail || ''
+    server.error_type = statusData.error_type || ''
     server.last_checked = new Date().toISOString()
     
     // 构建详细的检测结果消息

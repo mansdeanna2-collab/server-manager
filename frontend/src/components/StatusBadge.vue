@@ -9,7 +9,12 @@
       v-if="showIcon"
       class="status-icon"
     >{{ statusIcon }}</span>
-    {{ statusText }}
+    <span class="status-text">
+      {{ statusText }}
+      <template v-if="errorSuffix">
+        / <span class="error-text">{{ errorSuffix }}</span>
+      </template>
+    </span>
   </el-tag>
 </template>
 
@@ -20,6 +25,14 @@ const props = defineProps({
   status: {
     type: String,
     default: 'unknown'
+  },
+  detail: {
+    type: String,
+    default: ''
+  },
+  errorType: {
+    type: String,
+    default: ''
   },
   size: {
     type: String,
@@ -95,10 +108,41 @@ const statusIcon = computed(() => {
       return '?'
   }
 })
+
+const errorSuffix = computed(() => {
+  if (props.status !== 'online') return ''
+  switch (props.errorType) {
+    case 'auth_failed':
+      return '密码错误'
+    case 'port_closed':
+      return '端口关闭'
+    case 'timeout':
+      return '连接超时'
+    case 'unreachable':
+      return '主机不可达'
+    case 'ssh_error':
+      return 'SSH错误'
+    case 'connection_error':
+      return '连接错误'
+    default:
+      return props.errorType ? props.detail || '异常' : ''
+  }
+})
 </script>
 
 <style scoped>
 .status-icon {
   margin-right: 4px;
+}
+
+.status-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.error-text {
+  color: #f56c6c;
+  font-weight: 600;
 }
 </style>

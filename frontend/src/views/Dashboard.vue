@@ -153,7 +153,11 @@
                 width="120"
               >
                 <template #default="scope">
-                  <StatusBadge :status="scope.row.status" />
+                  <StatusBadge
+                    :status="scope.row.status"
+                    :detail="scope.row.checkDetail"
+                    :error-type="scope.row.error_type"
+                  />
                 </template>
               </el-table-column>
               <el-table-column
@@ -228,7 +232,12 @@ onMounted(async () => {
 const loadServers = async () => {
   try {
     const response = await serversAPI.getAll()
-    servers.value = response.data.map(s => ({ ...s, checking: false }))
+    servers.value = response.data.map(s => ({
+      ...s,
+      checking: false,
+      checkDetail: s.checkDetail || '',
+      error_type: s.error_type || ''
+    }))
     calculateStats()
   } catch (_error) {
     ElMessage.error('加载服务器失败')
@@ -242,11 +251,19 @@ const calculateStats = () => {
   stats.unknown = servers.value.filter(s => s.status === 'unknown').length
 }
 
+const applyStatusFields = (server, statusData) => {
+  if (!server || !statusData) return
+  server.status = statusData.overall
+  server.checkDetail = statusData.detail || ''
+  server.error_type = statusData.error_type || ''
+}
+
 const checkServer = async (server) => {
   server.checking = true
   try {
     const response = await serversAPI.check(server.id)
-    server.status = response.data.status.overall
+    const statusData = response.data.status
+    applyStatusFields(server, statusData)
     server.last_checked = new Date().toISOString()
     ElMessage.success(`已检测服务器 ${server.ip_address}`)
     calculateStats()
@@ -260,8 +277,19 @@ const checkServer = async (server) => {
 const checkAllServers = async () => {
   checkingAll.value = true
   try {
-    await serversAPI.checkAll()
-    await loadServers()
+    const response = await serversAPI.checkAll()
+    const results = Array.isArray(response?.data) ? response.data : []
+    const statusMap = new Map(results.map(item => [item.server_id, item.status]))
+
+    servers.value.forEach(server => {
+      const status = statusMap.get(server.id)
+      if (status) {
+        applyStatusFields(server, status)
+        server.last_checked = new Date().toISOString()
+      }
+    })
+
+    calculateStats()
     ElMessage.success('全部服务器已检测')
   } catch (_error) {
     ElMessage.error('检测所有服务器失败')

@@ -6,7 +6,11 @@
     <template #header>
       <div class="card-header">
         <span class="server-name">{{ server.ip_address }}</span>
-        <StatusBadge :status="server.status" />
+        <StatusBadge
+          :status="server.status"
+          :detail="server.checkDetail"
+          :error-type="server.error_type"
+        />
       </div>
     </template>
     <div class="server-info">
