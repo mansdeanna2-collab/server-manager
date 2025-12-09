@@ -50,6 +50,14 @@
                 <span class="card-title">🖥️ 服务器列表</span>
                 <div class="header-actions">
                   <el-button
+                    type="success"
+                    :loading="importing"
+                    @click="importServersFromFiles"
+                  >
+                    <el-icon><Download /></el-icon>
+                    获取服务器
+                  </el-button>
+                  <el-button
                     type="primary"
                     @click="showAddDialog"
                   >
@@ -771,7 +779,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Monitor, Odometer, User, ArrowDown, Plus, Refresh,
   Search, View, Edit, Delete, OfficeBuilding, Connection, CopyDocument, Loading,
-  CircleCheck, WarningFilled
+  CircleCheck, WarningFilled, Download
 } from '@element-plus/icons-vue'
 import { serversAPI, authAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -799,6 +807,7 @@ const refreshing = ref(false)
 const currentUser = ref(null)
 const loading = ref(false)
 const loadError = ref('')
+const importing = ref(false)
 
 const activeMenu = computed(() => route.path)
 
@@ -1071,6 +1080,47 @@ const loadServers = async () => {
     ElMessage.error(`加载服务器失败: ${message}`)
   } finally {
     loading.value = false
+  }
+}
+
+const importServersFromFiles = async () => {
+  importing.value = true
+  try {
+    const response = await serversAPI.importFromFiles()
+    const { summary, imported: _imported, skipped: _skipped, errors } = response.data
+    
+    let message = `导入完成: 成功 ${summary.imported_count} 台`
+    if (summary.skipped_count > 0) {
+      message += `，跳过 ${summary.skipped_count} 台`
+    }
+    if (summary.error_count > 0) {
+      message += `，失败 ${summary.error_count} 个`
+    }
+    
+    if (summary.imported_count > 0) {
+      ElMessage.success(message)
+      await loadServers()
+    } else if (summary.skipped_count > 0 && summary.error_count === 0) {
+      ElMessage.warning(message + '（所有服务器已存在）')
+    } else if (summary.error_count > 0) {
+      ElMessage.warning(message)
+      // Consolidate error messages - show first 3 errors max
+      const maxErrors = 3
+      const errorFiles = errors.slice(0, maxErrors).map(e => e.file).join(', ')
+      const remaining = errors.length - maxErrors
+      let errorDetail = `失败文件: ${errorFiles}`
+      if (remaining > 0) {
+        errorDetail += ` 等${remaining}个文件`
+      }
+      ElMessage.error(errorDetail)
+    } else {
+      ElMessage.info('未找到可导入的服务器文件')
+    }
+  } catch (error) {
+    const message = error.response?.data?.message || error.message || '导入失败'
+    ElMessage.error(`导入服务器失败: ${message}`)
+  } finally {
+    importing.value = false
   }
 }
 

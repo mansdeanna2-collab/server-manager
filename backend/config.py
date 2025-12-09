@@ -39,6 +39,9 @@ class Config:
     PING_TIMEOUT = int(os.getenv('PING_TIMEOUT', 3))
     PORT_TIMEOUT = int(os.getenv('PORT_TIMEOUT', 5))
 
+    # Server Import Configuration
+    SERVER_FILES_DIR = os.getenv('SERVER_FILES_DIR', '/home/Python/服务器')
+
     # Warn if using default keys
     if ENCRYPTION_KEY == default_key and not TESTING:
         import warnings
