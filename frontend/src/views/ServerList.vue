@@ -82,7 +82,6 @@
               :data="groupedServers"
               style="width: 100%"
               row-key="segmentKey"
-              :tree-props="{ children: 'servers', hasChildren: 'hasChildren' }"
               :row-class-name="getRowClassName"
             >
               <el-table-column
@@ -90,10 +89,7 @@
                 min-width="280"
               >
                 <template #default="scope">
-                  <div
-                    v-if="scope.row.isSegment"
-                    class="segment-cell"
-                  >
+                  <div class="segment-cell">
                     <span class="segment-flag">{{ scope.row.regionInfo?.flag || '🌐' }}</span>
                     <span class="ip-segment">{{ scope.row.segment }}.x</span>
                     <el-tag
@@ -112,78 +108,6 @@
                       {{ scope.row.regionInfo.name }}
                     </el-tag>
                   </div>
-                  <div
-                    v-else
-                    class="ip-cell"
-                  >
-                    <span class="region-flag">{{ getRegionInfo(scope.row.ip_address)?.flag || '🌐' }}</span>
-                    <span class="ip-address">{{ scope.row.ip_address }}</span>
-                    <el-tooltip
-                      v-if="getRegionInfo(scope.row.ip_address)?.name"
-                      :content="getRegionInfo(scope.row.ip_address)?.name"
-                      placement="top"
-                    >
-                      <el-tag
-                        size="small"
-                        class="region-tag-small"
-                        effect="plain"
-                        round
-                      >
-                        {{ getRegionInfo(scope.row.ip_address)?.code }}
-                      </el-tag>
-                    </el-tooltip>
-                  </div>
-                </template>
-              </el-table-column>
-              <el-table-column
-                label="端口 / 配置"
-                width="200"
-              >
-                <template #default="scope">
-                  <div
-                    v-if="!scope.row.isSegment"
-                    class="port-cell"
-                  >
-                    <div class="port-row">
-                      <el-tag
-                        :type="getPortTagType(scope.row.port)"
-                        size="small"
-                        effect="dark"
-                        round
-                      >
-                        {{ getPortTypeIcon(scope.row.port) }} {{ scope.row.port }}
-                      </el-tag>
-                      <span class="port-type-text">{{ getPortTypeName(scope.row.port) }}</span>
-                    </div>
-                    <div
-                      v-if="getServerSpecs(scope.row)"
-                      class="specs-row"
-                    >
-                      <el-tag
-                        size="small"
-                        effect="plain"
-                        type="info"
-                        class="specs-tag"
-                      >
-                        💻 {{ getServerSpecs(scope.row) }}
-                      </el-tag>
-                    </div>
-                  </div>
-                </template>
-              </el-table-column>
-              <el-table-column
-                prop="username"
-                label="用户名"
-                width="120"
-              >
-                <template #default="scope">
-                  <span
-                    v-if="!scope.row.isSegment"
-                    class="username-cell"
-                  >
-                    <el-icon><User /></el-icon>
-                    {{ scope.row.username }}
-                  </span>
                 </template>
               </el-table-column>
               <el-table-column
@@ -191,151 +115,40 @@
                 width="140"
               >
                 <template #default="scope">
-                  <template v-if="scope.row.isSegment">
-                    <div class="segment-status">
-                      <el-tag
-                        v-if="scope.row.onlineCount > 0"
-                        type="success"
-                        size="small"
-                        effect="dark"
-                      >
-                        ✓ {{ scope.row.onlineCount }}
-                      </el-tag>
-                      <el-tag
-                        v-if="scope.row.offlineCount > 0"
-                        type="danger"
-                        size="small"
-                        effect="dark"
-                      >
-                        ✗ {{ scope.row.offlineCount }}
-                      </el-tag>
-                    </div>
-                  </template>
-                  <div
-                    v-else
-                    class="status-cell"
-                  >
-                    <StatusBadge
-                      :status="scope.row.status"
+                  <div class="segment-status">
+                    <el-tag
+                      v-if="scope.row.onlineCount > 0"
+                      type="success"
                       size="small"
                       effect="dark"
-                      round
-                    />
-                    <el-tooltip
-                      v-if="scope.row.checkDetail"
-                      :content="scope.row.checkDetail"
-                      placement="top"
                     >
-                      <el-icon class="info-icon">
-                        <InfoFilled />
-                      </el-icon>
-                    </el-tooltip>
-                  </div>
-                </template>
-              </el-table-column>
-              <el-table-column
-                prop="os_info"
-                label="系统信息"
-                min-width="150"
-              >
-                <template #default="scope">
-                  <div
-                    v-if="!scope.row.isSegment && scope.row.os_info"
-                    class="os-cell"
-                  >
+                      ✓ {{ scope.row.onlineCount }}
+                    </el-tag>
                     <el-tag
+                      v-if="scope.row.offlineCount > 0"
+                      type="danger"
                       size="small"
-                      :type="getOsTagType(scope.row.os_info)"
-                      effect="plain"
+                      effect="dark"
                     >
-                      {{ getOsIcon(scope.row.os_info) }} {{ scope.row.os_info }}
+                      ✗ {{ scope.row.offlineCount }}
                     </el-tag>
                   </div>
-                  <span
-                    v-else-if="!scope.row.isSegment"
-                    class="no-info"
-                  >-</span>
-                </template>
-              </el-table-column>
-              <el-table-column
-                prop="notes"
-                label="备注"
-                min-width="120"
-              >
-                <template #default="scope">
-                  <span
-                    v-if="!scope.row.isSegment"
-                    class="notes-cell"
-                  >{{ scope.row.notes || '-' }}</span>
                 </template>
               </el-table-column>
               <el-table-column
                 label="操作"
-                width="280"
+                width="120"
                 fixed="right"
               >
                 <template #default="scope">
-                  <template v-if="scope.row.isSegment">
-                    <el-button
-                      size="small"
-                      @click="viewSegment(scope.row)"
-                    >
-                      <el-icon><View /></el-icon>
-                      查看
-                    </el-button>
-                  </template>
-                  <template v-else>
-                    <el-button-group>
-                      <el-tooltip
-                        content="查看详情"
-                        placement="top"
-                      >
-                        <el-button
-                          size="small"
-                          @click="viewServer(scope.row)"
-                        >
-                          <el-icon><View /></el-icon>
-                        </el-button>
-                      </el-tooltip>
-                      <el-tooltip
-                        content="编辑"
-                        placement="top"
-                      >
-                        <el-button
-                          size="small"
-                          type="primary"
-                          @click="editServer(scope.row)"
-                        >
-                          <el-icon><Edit /></el-icon>
-                        </el-button>
-                      </el-tooltip>
-                      <el-tooltip
-                        content="检测状态"
-                        placement="top"
-                      >
-                        <el-button
-                          size="small"
-                          type="success"
-                          :loading="scope.row.checking"
-                          @click="checkServer(scope.row)"
-                        >
-                          <el-icon><Refresh /></el-icon>
-                        </el-button>
-                      </el-tooltip>
-                      <el-tooltip
-                        content="删除"
-                        placement="top"
-                      >
-                        <el-button
-                          size="small"
-                          type="danger"
-                          @click="deleteServer(scope.row)"
-                        >
-                          <el-icon><Delete /></el-icon>
-                        </el-button>
-                      </el-tooltip>
-                    </el-button-group>
-                  </template>
+                  <el-button
+                    size="small"
+                    type="primary"
+                    @click="viewSegment(scope.row)"
+                  >
+                    <el-icon><View /></el-icon>
+                    查看
+                  </el-button>
                 </template>
               </el-table-column>
             </el-table>
@@ -472,7 +285,7 @@
     <el-dialog
       v-model="segmentDialogVisible"
       :title="selectedSegment ? `${selectedSegment.regionInfo?.flag || '🌐'} IP段 ${selectedSegment.segment}.x 的服务器` : 'IP段服务器'"
-      width="900px"
+      width="1100px"
     >
       <div v-if="selectedSegment">
         <div class="segment-header">
@@ -500,18 +313,35 @@
             </template>
           </el-table-column>
           <el-table-column
-            label="端口"
-            width="120"
+            label="端口 / 配置"
+            width="180"
           >
             <template #default="scope">
-              <el-tag
-                :type="getPortTagType(scope.row.port)"
-                size="small"
-                effect="dark"
-                round
-              >
-                {{ getPortTypeIcon(scope.row.port) }} {{ scope.row.port }}
-              </el-tag>
+              <div class="port-cell">
+                <div class="port-row">
+                  <el-tag
+                    :type="getPortTagType(scope.row.port)"
+                    size="small"
+                    effect="dark"
+                    round
+                  >
+                    {{ getPortTypeIcon(scope.row.port) }} {{ scope.row.port }}
+                  </el-tag>
+                </div>
+                <div
+                  v-if="getServerSpecs(scope.row)"
+                  class="specs-row"
+                >
+                  <el-tag
+                    size="small"
+                    effect="plain"
+                    type="info"
+                    class="specs-tag"
+                  >
+                    💻 {{ getServerSpecs(scope.row) }}
+                  </el-tag>
+                </div>
+              </div>
             </template>
           </el-table-column>
           <el-table-column
@@ -550,12 +380,12 @@
           />
           <el-table-column
             label="操作"
-            width="180"
+            width="300"
           >
             <template #default="scope">
               <el-button
                 size="small"
-                @click="viewServerFromSegment(scope.row)"
+                @click="viewServer(scope.row)"
               >
                 <el-icon><View /></el-icon>
                 详情
@@ -563,10 +393,27 @@
               <el-button
                 size="small"
                 type="primary"
-                @click="editServerFromSegment(scope.row)"
+                @click="editServer(scope.row)"
               >
                 <el-icon><Edit /></el-icon>
                 编辑
+              </el-button>
+              <el-button
+                size="small"
+                type="success"
+                :loading="scope.row.checking"
+                @click="checkServer(scope.row)"
+              >
+                <el-icon><Refresh /></el-icon>
+                检测
+              </el-button>
+              <el-button
+                size="small"
+                type="danger"
+                @click="deleteServer(scope.row)"
+              >
+                <el-icon><Delete /></el-icon>
+                删除
               </el-button>
             </template>
           </el-table-column>
@@ -582,7 +429,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Monitor, Odometer, User, ArrowDown, Plus, Refresh,
-  Search, View, Edit, Delete, OfficeBuilding, InfoFilled
+  Search, View, Edit, Delete, OfficeBuilding
 } from '@element-plus/icons-vue'
 import { serversAPI, authAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -794,10 +641,10 @@ const getServerSpecs = (server) => {
       const unit = memMatch[2].toUpperCase()
       // 转换为GB显示 (使用二进制转换 1024，符合计算机内存标准)
       if (unit === 'MB' || unit === 'M') {
-        size = Math.round(size / 1000)
+        size = Math.round(size / 1024)
         memorySize = size > 0 ? `${size}G` : '<1G'
       } else if (unit === 'TB' || unit === 'T') {
-        size = size * 1000
+        size = size * 1024
         memorySize = `${Math.round(size)}G`
       } else {
         memorySize = `${Math.round(size)}G`
@@ -807,7 +654,7 @@ const getServerSpecs = (server) => {
       const numMatch = server.memory_info.match(/^(\d+)$/)
       if (numMatch) {
         const sizeMB = parseInt(numMatch[1])
-        const sizeGB = Math.round(sizeMB / 1000)
+        const sizeGB = Math.round(sizeMB / 1024)
         memorySize = sizeGB > 0 ? `${sizeGB}G` : '<1G'
       }
     }
@@ -837,7 +684,7 @@ const getOsIcon = (osInfo) => {
 }
 
 // 根据OS信息获取标签类型
-const getOsTagType = (osInfo) => {
+const _getOsTagType = (osInfo) => {
   if (!osInfo) return 'info'
   const osLower = osInfo.toLowerCase()
   if (osLower.includes('ubuntu')) return 'warning'
@@ -978,17 +825,6 @@ const viewServer = (server) => {
 const viewSegment = (segment) => {
   selectedSegment.value = segment
   segmentDialogVisible.value = true
-}
-
-const viewServerFromSegment = (server) => {
-  selectedServer.value = server
-  detailDialogVisible.value = true
-}
-
-const editServerFromSegment = (server) => {
-  isEdit.value = true
-  currentServer.value = server
-  dialogVisible.value = true
 }
 
 const handleSubmit = async (formData) => {
