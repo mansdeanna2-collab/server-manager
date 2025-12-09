@@ -11,16 +11,30 @@ import logging
 
 servers_bp = Blueprint('servers', __name__, url_prefix='/api/servers')
 logger = logging.getLogger(__name__)
+MAX_ERROR_TYPE_LENGTH = 50
+MAX_SERVER_FETCH = 1000
 
 # Initialize password encryption
 password_encryptor = PasswordEncryption(Config.ENCRYPTION_KEY)
+
+
+def _normalize_error_type(error_type):
+    """Ensure error_type fits database constraints."""
+    if not error_type:
+        return None
+    return str(error_type)[:MAX_ERROR_TYPE_LENGTH]
 
 
 @servers_bp.route('', methods=['GET'])
 @token_required
 def get_servers(_current_user):
     """获取所有服务器"""
-    servers = Server.query.all()
+    servers = (
+        Server.query
+        .order_by(Server.updated_at.desc())
+        .limit(MAX_SERVER_FETCH)
+        .all()
+    )
     return jsonify([server.to_dict() for server in servers]), 200
 
 
@@ -132,11 +146,17 @@ def check_server(_current_user, server_id):
     # Update server status
     server.status = status_info['overall']
     server.last_checked = datetime.utcnow()
+    server.check_detail = status_info.get('detail')
+    server.error_type = _normalize_error_type(status_info.get('error_type'))
     db.session.commit()
 
     return jsonify({
         'server_id': server_id,
-        'status': status_info
+        'status': status_info,
+        'last_checked': server.last_checked.isoformat() if server.last_checked else None,
+        'updated_at': server.updated_at.isoformat() if server.updated_at else None,
+        'check_detail': server.check_detail,
+        'error_type': server.error_type
     }), 200
 
 
@@ -158,11 +178,17 @@ def check_all_servers(_current_user):
 
         server.status = status_info['overall']
         server.last_checked = datetime.utcnow()
+        server.check_detail = status_info.get('detail')
+        server.error_type = _normalize_error_type(status_info.get('error_type'))
 
         results.append({
             'server_id': server.id,
             'ip_address': server.ip_address,
-            'status': status_info
+            'status': status_info,
+            'last_checked': server.last_checked.isoformat() if server.last_checked else None,
+            'updated_at': server.updated_at.isoformat() if server.updated_at else None,
+            'check_detail': server.check_detail,
+            'error_type': server.error_type
         })
 
     db.session.commit()
