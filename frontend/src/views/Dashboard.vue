@@ -251,14 +251,19 @@ const calculateStats = () => {
   stats.unknown = servers.value.filter(s => s.status === 'unknown').length
 }
 
+const applyStatusFields = (server, statusData) => {
+  if (!server || !statusData) return
+  server.status = statusData.overall
+  server.checkDetail = statusData.detail || ''
+  server.error_type = statusData.error_type || ''
+}
+
 const checkServer = async (server) => {
   server.checking = true
   try {
     const response = await serversAPI.check(server.id)
     const statusData = response.data.status
-    server.status = statusData.overall
-    server.checkDetail = statusData.detail || ''
-    server.error_type = statusData.error_type || ''
+    applyStatusFields(server, statusData)
     server.last_checked = new Date().toISOString()
     ElMessage.success(`已检测服务器 ${server.ip_address}`)
     calculateStats()
@@ -282,9 +287,7 @@ const checkAllServers = async () => {
     servers.value.forEach(server => {
       const status = statusMap.get(server.id)
       if (status) {
-        server.status = status.overall
-        server.checkDetail = status.detail || ''
-        server.error_type = status.error_type || ''
+        applyStatusFields(server, status)
       }
     })
 

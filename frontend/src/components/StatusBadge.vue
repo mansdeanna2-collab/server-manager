@@ -125,7 +125,7 @@ const errorSuffix = computed(() => {
     case 'connection_error':
       return '连接错误'
     default:
-      return props.errorType ? props.detail || props.errorType : ''
+      return props.errorType ? props.detail || '异常' : ''
   }
 })
 </script>
