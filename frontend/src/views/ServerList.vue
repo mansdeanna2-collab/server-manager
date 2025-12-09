@@ -180,7 +180,7 @@
               </el-button>
             </el-empty>
             
-            <!-- IP段卡片网格布局 - 每行2个 -->
+            <!-- IP段卡片网格布局 - 每行3个 -->
             <div
               v-if="!loading && !loadError && groupedServers.length > 0"
               class="segments-container"
@@ -190,6 +190,7 @@
                   v-for="segment in paginatedSegments"
                   :key="segment.segmentKey"
                   class="segment-card"
+                  :class="{ 'is-favorited': isSegmentFavorited(segment.segment) }"
                   @click="viewSegment(segment)"
                 >
                   <div class="segment-card-header">
@@ -210,8 +211,8 @@
                       size="small"
                       effect="dark"
                     >
-                      ✓ 在线 {{ segment.onlineCount }}<template v-if="segment.errorCount > 0">
-                        / <span class="error-count">✗ 错误 {{ segment.errorCount }}</span>
+                      ✓ {{ segment.onlineCount }}<template v-if="segment.errorCount > 0">
+                        / <span class="error-count">✗ {{ segment.errorCount }}</span>
                       </template>
                     </el-tag>
                     <el-tag
@@ -220,15 +221,36 @@
                       size="small"
                       effect="dark"
                     >
-                      ✗ 离线 {{ segment.offlineCount }}
+                      ✗ {{ segment.offlineCount }}
                     </el-tag>
                   </div>
-                  <div class="segment-card-time">
-                    <span class="segment-updated-time">
-                      更新时间：{{ formatSegmentTime(segment.latestUpdated) }}
-                    </span>
-                  </div>
-                  <div class="segment-card-action">
+                  <div class="segment-card-footer">
+                    <div class="segment-card-actions-left">
+                      <el-tooltip
+                        :content="isSegmentFavorited(segment.segment) ? '取消收藏' : '收藏'"
+                        placement="top"
+                      >
+                        <el-icon
+                          class="action-icon favorite-icon"
+                          :class="{ 'is-favorited': isSegmentFavorited(segment.segment) }"
+                          @click.stop="toggleSegmentFavorite(segment.segment)"
+                        >
+                          <Star />
+                        </el-icon>
+                      </el-tooltip>
+                      <el-tooltip
+                        :content="getSegmentNote(segment.segment) || '点击添加备注'"
+                        placement="top"
+                      >
+                        <el-icon
+                          class="action-icon note-icon"
+                          :class="{ 'has-note': getSegmentNote(segment.segment) }"
+                          @click.stop="editSegmentNote(segment.segment)"
+                        >
+                          <EditPen />
+                        </el-icon>
+                      </el-tooltip>
+                    </div>
                     <el-button
                       size="small"
                       type="primary"
@@ -236,7 +258,7 @@
                       @click.stop="viewSegment(segment)"
                     >
                       <el-icon><View /></el-icon>
-                      查看详情
+                      查看
                     </el-button>
                   </div>
                 </div>
@@ -363,7 +385,13 @@
             label="备注"
             :span="2"
           >
-            {{ selectedServer.notes || '暂无' }}
+            <span
+              class="clickable-note"
+              @click="editServerNote(selectedServer)"
+            >
+              {{ selectedServer.notes || '点击添加备注' }}
+              <el-icon class="edit-icon"><EditPen /></el-icon>
+            </span>
           </el-descriptions-item>
           <el-descriptions-item
             label="最近检查"
@@ -902,7 +930,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Monitor, Odometer, User, ArrowDown, Plus, Refresh,
   Search, View, Edit, Delete, OfficeBuilding, Connection, CopyDocument, Loading,
-  CircleCheck, CircleClose, Download, QuestionFilled, WarningFilled, Cpu
+  CircleCheck, CircleClose, Download, QuestionFilled, WarningFilled, Cpu, Star, EditPen
 } from '@element-plus/icons-vue'
 import { serversAPI, authAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -969,6 +997,77 @@ const PAGE_SIZE = 10
 const segmentsCurrentPage = ref(1)
 const segmentDialogCurrentPage = ref(1)
 const filteredDialogCurrentPage = ref(1)
+
+// IP段收藏和备注功能
+const FAVORITES_KEY = 'server_segment_favorites'
+const SEGMENT_NOTES_KEY = 'server_segment_notes'
+const segmentFavorites = ref(new Set())
+const segmentNotes = ref({})
+
+// 初始化收藏和备注数据
+const initSegmentData = () => {
+  try {
+    const savedFavorites = localStorage.getItem(FAVORITES_KEY)
+    if (savedFavorites) {
+      segmentFavorites.value = new Set(JSON.parse(savedFavorites))
+    }
+    const savedNotes = localStorage.getItem(SEGMENT_NOTES_KEY)
+    if (savedNotes) {
+      segmentNotes.value = JSON.parse(savedNotes)
+    }
+  } catch (_e) {
+    segmentFavorites.value = new Set()
+    segmentNotes.value = {}
+  }
+}
+
+// 检查IP段是否被收藏
+const isSegmentFavorited = (segment) => {
+  return segmentFavorites.value.has(segment)
+}
+
+// 切换IP段收藏状态
+const toggleSegmentFavorite = (segment) => {
+  if (segmentFavorites.value.has(segment)) {
+    segmentFavorites.value.delete(segment)
+    ElMessage.success(`已取消收藏 ${segment}.x`)
+  } else {
+    segmentFavorites.value.add(segment)
+    ElMessage.success(`已收藏 ${segment}.x`)
+  }
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify([...segmentFavorites.value]))
+}
+
+// 获取IP段备注
+const getSegmentNote = (segment) => {
+  return segmentNotes.value[segment] || ''
+}
+
+// 编辑IP段备注
+const editSegmentNote = async (segment) => {
+  const currentNote = getSegmentNote(segment)
+  try {
+    const { value } = await ElMessageBox.prompt(`请输入 ${segment}.x 的备注`, '编辑备注', {
+      inputValue: currentNote,
+      inputPlaceholder: '请输入备注内容',
+      confirmButtonText: '保存',
+      cancelButtonText: '取消',
+      inputPattern: /^.{0,100}$/,
+      inputErrorMessage: '备注长度不能超过100个字符'
+    })
+    if (value !== undefined) {
+      if (value.trim()) {
+        segmentNotes.value[segment] = value.trim()
+      } else {
+        delete segmentNotes.value[segment]
+      }
+      localStorage.setItem(SEGMENT_NOTES_KEY, JSON.stringify(segmentNotes.value))
+      ElMessage.success('备注已保存')
+    }
+  } catch (_e) {
+    // 用户取消操作
+  }
+}
 
 const activeMenu = computed(() => route.path)
 
@@ -1111,13 +1210,13 @@ const isNormalServer = (server) => {
 }
 // 正常: root用户 + 在线 + 无错误
 const normalCount = computed(() => servers.value.filter(isNormalServer).length)
-// 离线
-const offlineCount = computed(() => servers.value.filter(s => s.status === 'offline').length)
+// 离线 (排除Administrator用户)
+const offlineCount = computed(() => servers.value.filter(s => s.status === 'offline' && s.username !== 'Administrator').length)
 // 未知
 const unknownCount = computed(() => servers.value.filter(s => s.status === 'unknown').length)
-// 错误: 有error_type的
-const errorCount = computed(() => servers.value.filter(s => s.error_type).length)
-// 电脑 (Windows RDP)
+// 错误: 有error_type的 (排除Administrator用户)
+const errorCount = computed(() => servers.value.filter(s => s.error_type && s.username !== 'Administrator').length)
+// 电脑 (Windows RDP) - 包含Administrator用户的错误和离线状态
 const computerCount = computed(() => servers.value.filter(s => s.port === 3389).length)
 
 // Show filtered servers in dialog
@@ -1130,24 +1229,19 @@ const showFilteredServersDialog = (filterType) => {
     result = result.filter(isNormalServer)
     title = '正常服务器'
   } else if (filterType === 'offline') {
-    result = result.filter(server => server.status === 'offline')
+    // 离线服务器：排除Administrator用户
+    result = result.filter(server => server.status === 'offline' && server.username !== 'Administrator')
     title = '离线服务器'
   } else if (filterType === 'unknown') {
     result = result.filter(server => server.status === 'unknown')
     title = '未知状态服务器'
   } else if (filterType === 'error') {
-    result = result.filter(server => server.error_type)
+    // 错误服务器：排除Administrator用户
+    result = result.filter(server => server.error_type && server.username !== 'Administrator')
     title = '错误服务器'
   } else if (filterType === 'computer') {
-    // 电脑对话框：过滤掉离线和错误状态中用户名为Administrator的服务器
-    result = result.filter(server => {
-      if (server.port !== 3389) return false
-      // 如果是离线或错误状态，且用户名是Administrator，则不显示
-      if ((server.status === 'offline' || server.error_type) && server.username === 'Administrator') {
-        return false
-      }
-      return true
-    })
+    // 电脑对话框：显示所有Windows RDP服务器（包含Administrator的错误和离线状态）
+    result = result.filter(server => server.port === 3389)
     title = '电脑 (Windows RDP)'
   }
   
@@ -1155,13 +1249,13 @@ const showFilteredServersDialog = (filterType) => {
   filteredDialogType.value = filterType
   
   if (filterType === 'computer') {
-    // 电脑对话框排序：✓在线 > ✓在线/端口关闭 > ✗离线
+    // 电脑对话框排序：正常 > 错误 > 离线
     filteredDialogServers.value = [...result].sort((a, b) => {
-      // 定义状态优先级
+      // 定义状态优先级：正常(0) > 错误(1) > 离线(2)
       const getStatusPriority = (server) => {
-        if (server.status === 'online' && !server.error_type) return 0  // ✓在线
-        if (server.status === 'online' && server.error_type) return 1   // ✓在线/端口关闭(有错误)
-        if (server.status === 'offline') return 2                        // ✗离线
+        if (server.status === 'online' && !server.error_type) return 0  // 正常
+        if (server.error_type) return 1                                  // 错误（包括在线但有错误的）
+        if (server.status === 'offline') return 2                        // 离线
         return 3  // 其他状态
       }
       const priorityDiff = getStatusPriority(a) - getStatusPriority(b)
@@ -1250,8 +1344,11 @@ const groupedServers = computed(() => {
     })
   })
 
-  // Sort by latest update time, fallback to numeric segment order
+  // Sort: favorites first, then by latest update time, fallback to numeric segment order
   result.sort((a, b) => {
+    const aFavorited = segmentFavorites.value.has(a.segment) ? 0 : 1
+    const bFavorited = segmentFavorites.value.has(b.segment) ? 0 : 1
+    if (aFavorited !== bFavorited) return aFavorited - bFavorited
     const diff = (b.latestUpdated || 0) - (a.latestUpdated || 0)
     if (diff !== 0) return diff
     return compareIpSegments(a, b)
@@ -1283,6 +1380,7 @@ const paginatedFilteredServers = computed(() => {
 })
 
 onMounted(async () => {
+  initSegmentData()
   const userStr = localStorage.getItem('user')
   if (userStr) {
     currentUser.value = JSON.parse(userStr)
@@ -1527,6 +1625,37 @@ const refreshSystemInfo = async () => {
   }
 }
 
+// 编辑服务器备注
+const editServerNote = async (server) => {
+  const currentNote = server.notes || ''
+  try {
+    const { value } = await ElMessageBox.prompt(`请输入 ${server.ip_address} 的备注`, '编辑备注', {
+      inputValue: currentNote,
+      inputPlaceholder: '请输入备注内容',
+      confirmButtonText: '保存',
+      cancelButtonText: '取消',
+      inputPattern: /^.{0,255}$/,
+      inputErrorMessage: '备注长度不能超过255个字符'
+    })
+    if (value !== undefined) {
+      const newNote = value.trim()
+      // 调用API更新备注
+      await serversAPI.update(server.id, { notes: newNote })
+      server.notes = newNote
+      // 更新servers列表中的对应服务器
+      const serverInList = servers.value.find(s => s.id === server.id)
+      if (serverInList) {
+        serverInList.notes = newNote
+      }
+      ElMessage.success('备注已保存')
+    }
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.error('保存备注失败')
+    }
+  }
+}
+
 // 批量获取正常服务器的系统信息
 const batchGetSystemInfo = async () => {
   if (filteredDialogServers.value.length === 0) return
@@ -1580,7 +1709,7 @@ const formatDate = (dateStr) => {
   return date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
 }
 
-const formatSegmentTime = (timestamp) => {
+const _formatSegmentTime = (timestamp) => {
   if (!timestamp || timestamp === Number.NEGATIVE_INFINITY) return '从未'
   const date = new Date(timestamp)
   return date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
@@ -1745,11 +1874,17 @@ const handleChangePassword = async () => {
   }
 }
 
-/* IP段卡片网格布局 */
+/* IP段卡片网格布局 - 每行3个 */
 .segments-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 1200px) {
+  .segments-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 @media (max-width: 768px) {
@@ -1760,29 +1895,34 @@ const handleChangePassword = async () => {
 
 .segment-card {
   background: linear-gradient(135deg, #ffffff 0%, #f9fafc 100%);
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: 8px;
+  padding: 12px;
   cursor: pointer;
   transition: all 0.3s ease;
   border: 1px solid #e4e7ed;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.04);
 }
 
 .segment-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px 0 rgba(64, 158, 255, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px 0 rgba(64, 158, 255, 0.15);
   border-color: #409EFF;
+}
+
+.segment-card.is-favorited {
+  border-color: #e6a23c;
+  background: linear-gradient(135deg, #fffdf5 0%, #fef8e8 100%);
 }
 
 .segment-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
 
 .ip-segment-title {
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 700;
   color: #409EFF;
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
@@ -1792,12 +1932,14 @@ const handleChangePassword = async () => {
   background: linear-gradient(135deg, #f0f9eb 0%, #e8f5e1 100%);
   border-color: #c2e7b0;
   color: #67c23a;
+  font-size: 11px;
 }
 
 .segment-card-status {
   display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 6px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
 }
 
 .error-count {
@@ -1805,19 +1947,44 @@ const handleChangePassword = async () => {
   font-weight: 600;
 }
 
-.segment-card-time {
-  margin-bottom: 12px;
-}
-
-.segment-updated-time {
-  font-size: 12px;
-  color: #909399;
-  line-height: 1.2;
-}
-
-.segment-card-action {
+.segment-card-footer {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.segment-card-actions-left {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.action-icon {
+  cursor: pointer;
+  font-size: 16px;
+  color: #909399;
+  transition: all 0.2s ease;
+}
+
+.action-icon:hover {
+  transform: scale(1.1);
+}
+
+.favorite-icon:hover {
+  color: #e6a23c;
+}
+
+.favorite-icon.is-favorited {
+  color: #e6a23c;
+}
+
+.note-icon:hover {
+  color: #409EFF;
+}
+
+.note-icon.has-note {
+  color: #409EFF;
 }
 
 /* IP cell styles */
@@ -1938,6 +2105,33 @@ const handleChangePassword = async () => {
 .segment-count {
   color: #909399;
   font-size: 14px;
+}
+
+/* Clickable note styles */
+.clickable-note {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  color: #606266;
+}
+
+.clickable-note:hover {
+  background-color: #f5f7fa;
+  color: #409EFF;
+}
+
+.clickable-note .edit-icon {
+  font-size: 14px;
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+}
+
+.clickable-note:hover .edit-icon {
+  opacity: 1;
 }
 
 /* Terminal dialog styles */
