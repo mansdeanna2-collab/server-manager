@@ -44,10 +44,11 @@ def create_app():
     })
 
     # Initialize SocketIO with CORS settings
+    # Use threading mode for better compatibility
     socketio.init_app(
         app,
         cors_allowed_origins=cors_origins if cors_origins != ['*'] else "*",
-        async_mode='gevent'
+        async_mode='threading'
     )
 
     # Configure rate limiting
