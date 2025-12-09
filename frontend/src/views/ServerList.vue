@@ -3,8 +3,12 @@
     <el-container>
       <el-header style="background: #409EFF; color: white; display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 10px;">
-          <el-icon :size="30"><Monitor /></el-icon>
-          <h2 style="margin: 0;">服务器管理</h2>
+          <el-icon :size="30">
+            <Monitor />
+          </el-icon>
+          <h2 style="margin: 0;">
+            服务器管理
+          </h2>
         </div>
         <el-menu
           mode="horizontal"
@@ -32,7 +36,9 @@
           </span>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+              <el-dropdown-item command="logout">
+                退出登录
+              </el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -45,7 +51,10 @@
               <div class="card-header">
                 <span>服务器列表</span>
                 <div>
-                  <el-button type="primary" @click="showAddDialog">
+                  <el-button
+                    type="primary"
+                    @click="showAddDialog"
+                  >
                     <el-icon><Plus /></el-icon>
                     新增服务器
                   </el-button>
@@ -65,20 +74,51 @@
               clearable
             />
             
-            <el-empty v-if="filteredServers.length === 0" description="未找到服务器" />
+            <el-empty
+              v-if="filteredServers.length === 0"
+              description="未找到服务器"
+            />
             
-            <el-table v-else :data="filteredServers" style="width: 100%">
-              <el-table-column prop="ip_address" label="IP地址" width="150" />
-              <el-table-column prop="port" label="端口" width="100" />
-              <el-table-column prop="username" label="用户名" width="120" />
-              <el-table-column label="状态" width="120">
+            <el-table
+              v-else
+              :data="filteredServers"
+              style="width: 100%"
+            >
+              <el-table-column
+                prop="ip_address"
+                label="IP地址"
+                width="150"
+              />
+              <el-table-column
+                prop="port"
+                label="端口"
+                width="100"
+              />
+              <el-table-column
+                prop="username"
+                label="用户名"
+                width="120"
+              />
+              <el-table-column
+                label="状态"
+                width="120"
+              >
                 <template #default="scope">
                   <StatusBadge :status="scope.row.status" />
                 </template>
               </el-table-column>
-              <el-table-column prop="os_info" label="系统信息" />
-              <el-table-column prop="notes" label="备注" />
-              <el-table-column label="操作" width="300">
+              <el-table-column
+                prop="os_info"
+                label="系统信息"
+              />
+              <el-table-column
+                prop="notes"
+                label="备注"
+              />
+              <el-table-column
+                label="操作"
+                width="300"
+              >
                 <template #default="scope">
                   <el-button
                     size="small"
@@ -98,8 +138,8 @@
                   <el-button
                     size="small"
                     type="success"
-                    @click="checkServer(scope.row)"
                     :loading="scope.row.checking"
+                    @click="checkServer(scope.row)"
                   >
                     <el-icon><Refresh /></el-icon>
                     检测
@@ -141,7 +181,10 @@
       width="700px"
     >
       <div v-if="selectedServer">
-        <el-descriptions :column="2" border>
+        <el-descriptions
+          :column="2"
+          border
+        >
           <el-descriptions-item label="IP地址">
             {{ selectedServer.ip_address }}
           </el-descriptions-item>
@@ -154,25 +197,46 @@
           <el-descriptions-item label="状态">
             <StatusBadge :status="selectedServer.status" />
           </el-descriptions-item>
-          <el-descriptions-item label="系统信息" :span="2">
+          <el-descriptions-item
+            label="系统信息"
+            :span="2"
+          >
             {{ selectedServer.os_info || '暂无' }}
           </el-descriptions-item>
-          <el-descriptions-item label="CPU 信息" :span="2">
+          <el-descriptions-item
+            label="CPU 信息"
+            :span="2"
+          >
             {{ selectedServer.cpu_info || '暂无' }}
           </el-descriptions-item>
-          <el-descriptions-item label="内存信息" :span="2">
+          <el-descriptions-item
+            label="内存信息"
+            :span="2"
+          >
             {{ selectedServer.memory_info || '暂无' }}
           </el-descriptions-item>
-          <el-descriptions-item label="磁盘信息" :span="2">
+          <el-descriptions-item
+            label="磁盘信息"
+            :span="2"
+          >
             {{ selectedServer.disk_info || '暂无' }}
           </el-descriptions-item>
-          <el-descriptions-item label="运行时间" :span="2">
+          <el-descriptions-item
+            label="运行时间"
+            :span="2"
+          >
             {{ selectedServer.uptime || '暂无' }}
           </el-descriptions-item>
-          <el-descriptions-item label="备注" :span="2">
+          <el-descriptions-item
+            label="备注"
+            :span="2"
+          >
             {{ selectedServer.notes || '暂无' }}
           </el-descriptions-item>
-          <el-descriptions-item label="最近检查" :span="2">
+          <el-descriptions-item
+            label="最近检查"
+            :span="2"
+          >
             {{ formatDate(selectedServer.last_checked) }}
           </el-descriptions-item>
         </el-descriptions>
@@ -180,8 +244,8 @@
         <div style="margin-top: 20px; text-align: right;">
           <el-button
             type="primary"
-            @click="refreshSystemInfo"
             :loading="refreshing"
+            @click="refreshSystemInfo"
           >
             <el-icon><Refresh /></el-icon>
             刷新系统信息

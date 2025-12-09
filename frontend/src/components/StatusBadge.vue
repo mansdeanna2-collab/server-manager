@@ -1,5 +1,8 @@
 <template>
-  <el-tag :type="tagType" size="large">
+  <el-tag
+    :type="tagType"
+    size="large"
+  >
     {{ statusText }}
   </el-tag>
 </template>
