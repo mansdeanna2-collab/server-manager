@@ -75,25 +75,22 @@
               
               <div class="filter-buttons">
                 <el-button
-                  :type="activeFilter === 'online' ? 'success' : 'default'"
-                  :plain="activeFilter !== 'online'"
-                  @click="toggleFilter('online')"
+                  type="success"
+                  @click="showFilteredServersDialog('online')"
                 >
                   <el-icon><CircleCheck /></el-icon>
                   在线
                 </el-button>
                 <el-button
-                  :type="activeFilter === 'error' ? 'danger' : 'default'"
-                  :plain="activeFilter !== 'error'"
-                  @click="toggleFilter('error')"
+                  type="danger"
+                  @click="showFilteredServersDialog('error')"
                 >
                   <el-icon><WarningFilled /></el-icon>
                   错误
                 </el-button>
                 <el-button
-                  :type="activeFilter === 'computer' ? 'primary' : 'default'"
-                  :plain="activeFilter !== 'computer'"
-                  @click="toggleFilter('computer')"
+                  type="primary"
+                  @click="showFilteredServersDialog('computer')"
                 >
                   <el-icon><Monitor /></el-icon>
                   电脑
@@ -514,6 +511,174 @@
       </div>
     </el-dialog>
     
+    <!-- Filtered Servers Dialog -->
+    <el-dialog
+      v-model="filteredDialogVisible"
+      :title="filteredDialogTitle"
+      width="1100px"
+      class="filtered-dialog"
+    >
+      <div v-if="filteredDialogServers.length > 0">
+        <div class="segment-header">
+          <span class="segment-count">共 {{ filteredDialogServers.length }} 台服务器</span>
+        </div>
+        <el-table
+          :data="filteredDialogServers"
+          style="width: 100%"
+          stripe
+        >
+          <el-table-column
+            label="IP地址"
+            width="160"
+          >
+            <template #default="scope">
+              <div class="ip-cell">
+                <span class="ip-text">{{ scope.row.ip_address }}</span>
+                <span class="updated-time">
+                  更新时间：{{ formatDate(getLastUpdateTime(scope.row)) }}
+                </span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="端口 / 配置"
+            width="160"
+          >
+            <template #default="scope">
+              <div class="port-cell">
+                <div class="port-row">
+                  <el-tag
+                    :type="getPortTagType(scope.row.port)"
+                    size="small"
+                    effect="dark"
+                    round
+                  >
+                    {{ getPortTypeIcon(scope.row.port) }} {{ scope.row.port }}
+                  </el-tag>
+                </div>
+                <div
+                  v-if="getServerSpecs(scope.row)"
+                  class="specs-row"
+                >
+                  <el-tag
+                    size="small"
+                    effect="plain"
+                    type="info"
+                    class="specs-tag"
+                  >
+                    💻 {{ getServerSpecs(scope.row) }}
+                  </el-tag>
+                </div>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="username"
+            label="用户名"
+            width="100"
+          />
+          <el-table-column
+            label="状态"
+            width="100"
+          >
+            <template #default="scope">
+              <StatusBadge
+                :status="scope.row.status"
+                :detail="scope.row.checkDetail"
+                :error-type="scope.row.error_type"
+                size="small"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="os_info"
+            label="系统信息"
+            min-width="140"
+          >
+            <template #default="scope">
+              <span v-if="scope.row.os_info">
+                {{ getOsIcon(scope.row.os_info) }} {{ scope.row.os_info }}
+              </span>
+              <span
+                v-else
+                class="no-info"
+              >-</span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="notes"
+            label="备注"
+            min-width="120"
+          >
+            <template #default="scope">
+              <span
+                v-if="scope.row.notes"
+                class="notes-text"
+              >{{ scope.row.notes }}</span>
+              <span
+                v-else
+                class="no-info"
+              >-</span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="操作"
+            width="340"
+            fixed="right"
+          >
+            <template #default="scope">
+              <div class="action-buttons">
+                <el-button
+                  size="small"
+                  type="success"
+                  @click="openTerminal(scope.row)"
+                >
+                  <el-icon><Connection /></el-icon>
+                  连接
+                </el-button>
+                <el-button
+                  size="small"
+                  type="warning"
+                  :loading="scope.row.checking"
+                  @click="checkServer(scope.row)"
+                >
+                  <el-icon><Search /></el-icon>
+                  检测
+                </el-button>
+                <el-button
+                  size="small"
+                  @click="viewServer(scope.row)"
+                >
+                  <el-icon><View /></el-icon>
+                  详情
+                </el-button>
+                <el-button
+                  size="small"
+                  type="primary"
+                  @click="editServer(scope.row)"
+                >
+                  <el-icon><Edit /></el-icon>
+                  编辑
+                </el-button>
+                <el-button
+                  size="small"
+                  type="danger"
+                  @click="deleteServer(scope.row)"
+                >
+                  <el-icon><Delete /></el-icon>
+                  删除
+                </el-button>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <el-empty
+        v-else
+        description="没有符合条件的服务器"
+      />
+    </el-dialog>
+    
     <!-- Terminal Connection Dialog -->
     <el-dialog
       v-model="terminalDialogVisible"
@@ -617,11 +782,13 @@ const router = useRouter()
 const route = useRoute()
 const servers = ref([])
 const searchText = ref('')
-const activeFilter = ref('')  // '', 'online', 'error', 'computer'
 const dialogVisible = ref(false)
 const detailDialogVisible = ref(false)
 const segmentDialogVisible = ref(false)
 const terminalDialogVisible = ref(false)
+const filteredDialogVisible = ref(false)
+const filteredDialogTitle = ref('')
+const filteredDialogServers = ref([])
 const isEdit = ref(false)
 const currentServer = ref(null)
 const selectedServer = ref(null)
@@ -767,16 +934,29 @@ const getUpdatedTimestamp = (server) => {
   return isNaN(time) ? Number.NEGATIVE_INFINITY : time
 }
 
-// Toggle filter
-const toggleFilter = (filter) => {
-  if (activeFilter.value === filter) {
-    activeFilter.value = ''  // Toggle off if already selected
-  } else {
-    activeFilter.value = filter
+// Show filtered servers in dialog
+const showFilteredServersDialog = (filterType) => {
+  let result = servers.value
+  let title = ''
+  
+  if (filterType === 'online') {
+    result = result.filter(server => server.status === 'online')
+    title = '在线服务器'
+  } else if (filterType === 'error') {
+    result = result.filter(server => server.error_type)
+    title = '错误服务器'
+  } else if (filterType === 'computer') {
+    result = result.filter(server => server.port === 3389)
+    title = '电脑 (Windows RDP)'
   }
+  
+  // Sort by update time - use original server objects to maintain shared state
+  filteredDialogServers.value = [...result].sort((a, b) => getUpdatedTimestamp(b) - getUpdatedTimestamp(a))
+  filteredDialogTitle.value = title
+  filteredDialogVisible.value = true
 }
 
-// Filter servers by search text and active filter
+// Filter servers by search text
 const filteredServers = computed(() => {
   let result = servers.value
   
@@ -788,18 +968,6 @@ const filteredServers = computed(() => {
       server.username.toLowerCase().includes(search) ||
       (server.notes && server.notes.toLowerCase().includes(search))
     )
-  }
-  
-  // Apply category filter
-  if (activeFilter.value === 'online') {
-    // Show only online servers
-    result = result.filter(server => server.status === 'online')
-  } else if (activeFilter.value === 'error') {
-    // Show servers with errors (has error_type set)
-    result = result.filter(server => server.error_type)
-  } else if (activeFilter.value === 'computer') {
-    // Show only Windows/RDP servers (port 3389)
-    result = result.filter(server => server.port === 3389)
   }
   
   // Note: Sorting by update time is handled in groupedServers computed property
@@ -1453,6 +1621,11 @@ const handleCommand = async (command) => {
 
 /* Segment dialog styles */
 .segment-dialog :deep(.el-dialog__body) {
+  padding: 20px;
+}
+
+/* Filtered dialog styles */
+.filtered-dialog :deep(.el-dialog__body) {
   padding: 20px;
 }
 
