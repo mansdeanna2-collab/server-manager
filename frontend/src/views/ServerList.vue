@@ -641,10 +641,10 @@ const getServerSpecs = (server) => {
       const unit = memMatch[2].toUpperCase()
       // 转换为GB显示 (使用二进制转换 1024，符合计算机内存标准)
       if (unit === 'MB' || unit === 'M') {
-        size = Math.round(size / 1000)
+        size = Math.round(size / 1024)
         memorySize = size > 0 ? `${size}G` : '<1G'
       } else if (unit === 'TB' || unit === 'T') {
-        size = size * 1000
+        size = size * 1024
         memorySize = `${Math.round(size)}G`
       } else {
         memorySize = `${Math.round(size)}G`
@@ -654,7 +654,7 @@ const getServerSpecs = (server) => {
       const numMatch = server.memory_info.match(/^(\d+)$/)
       if (numMatch) {
         const sizeMB = parseInt(numMatch[1])
-        const sizeGB = Math.round(sizeMB / 1000)
+        const sizeGB = Math.round(sizeMB / 1024)
         memorySize = sizeGB > 0 ? `${sizeGB}G` : '<1G'
       }
     }
