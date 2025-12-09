@@ -1,5 +1,5 @@
-from datetime import datetime
 from models import db
+from utils import china_now
 
 
 class Server(db.Model):
@@ -19,11 +19,11 @@ class Server(db.Model):
     memory_info = db.Column(db.String(255))
     disk_info = db.Column(db.String(255))
     uptime = db.Column(db.String(255))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=china_now)
     updated_at = db.Column(
         db.DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=china_now,
+        onupdate=china_now,
         index=True
     )
     check_detail = db.Column(

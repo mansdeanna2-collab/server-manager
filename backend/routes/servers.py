@@ -1,9 +1,9 @@
 from flask import Blueprint, request, jsonify
-from datetime import datetime
 from models import db
 from models.server import Server
 from routes.auth import token_required
 from utils.crypto import PasswordEncryption
+from utils import china_now
 from services.ssh_service import SSHService
 from services.check_service import CheckService
 from config import Config
@@ -99,7 +99,7 @@ def update_server(_current_user, server_id):
     if 'notes' in data:
         server.notes = data['notes']
 
-    server.updated_at = datetime.utcnow()
+    server.updated_at = china_now()
     db.session.commit()
 
     logger.info(f"Server updated: {server.ip_address}")
@@ -145,7 +145,7 @@ def check_server(_current_user, server_id):
 
     # Update server status
     server.status = status_info['overall']
-    server.last_checked = datetime.utcnow()
+    server.last_checked = china_now()
     server.check_detail = status_info.get('detail')
     server.error_type = _normalize_error_type(status_info.get('error_type'))
     db.session.commit()
@@ -177,7 +177,7 @@ def check_all_servers(_current_user):
         )
 
         server.status = status_info['overall']
-        server.last_checked = datetime.utcnow()
+        server.last_checked = china_now()
         server.check_detail = status_info.get('detail')
         server.error_type = _normalize_error_type(status_info.get('error_type'))
 
