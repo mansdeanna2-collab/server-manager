@@ -113,3 +113,21 @@ def test_migration_is_idempotent():
             os.remove(db_path)
 
 
+def test_migration_skips_missing_table():
+    """Test that migration doesn't fail when servers table doesn't exist."""
+    fd, db_path = tempfile.mkstemp(suffix='.db')
+    os.close(fd)
+    
+    try:
+        # Create an empty database (no tables)
+        from sqlalchemy import create_engine
+        engine = create_engine(f'sqlite:///{db_path}')
+        
+        # Run migration - should not fail even though table doesn't exist
+        from app import _migrate_add_missing_columns
+        _migrate_add_missing_columns(engine)  # Should complete without error
+        
+        engine.dispose()
+    finally:
+        if os.path.exists(db_path):
+            os.remove(db_path)

@@ -31,6 +31,11 @@ def _migrate_add_missing_columns(db_engine):
     and new columns (check_detail, error_type) were added to the model.
     """
     inspector = inspect(db_engine)
+    
+    # Skip if the servers table doesn't exist yet (fresh database)
+    if 'servers' not in inspector.get_table_names():
+        return
+    
     columns = {col['name'] for col in inspector.get_columns('servers')}
     
     with db_engine.connect() as conn:
