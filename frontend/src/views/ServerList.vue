@@ -420,11 +420,26 @@ const activeMenu = computed(() => route.path)
 
 // Get IP segment (first 3 octets) from IP address
 const getIpSegment = (ipAddress) => {
+  if (!ipAddress || typeof ipAddress !== 'string') {
+    return ''
+  }
   const parts = ipAddress.split('.')
   if (parts.length >= 3) {
     return `${parts[0]}.${parts[1]}.${parts[2]}`
   }
   return ipAddress
+}
+
+// Compare IP segments numerically
+const compareIpSegments = (a, b) => {
+  const partsA = a.segment.split('.').map(Number)
+  const partsB = b.segment.split('.').map(Number)
+  for (let i = 0; i < Math.min(partsA.length, partsB.length); i++) {
+    if (partsA[i] !== partsB[i]) {
+      return partsA[i] - partsB[i]
+    }
+  }
+  return partsA.length - partsB.length
 }
 
 // Filter servers by search text
@@ -455,8 +470,13 @@ const groupedServers = computed(() => {
   // Convert to tree structure for el-table
   const result = []
   segmentMap.forEach((serverList, segment) => {
-    const onlineCount = serverList.filter(s => s.status === 'online').length
-    const offlineCount = serverList.filter(s => s.status === 'offline').length
+    // Count online and offline in single pass
+    let onlineCount = 0
+    let offlineCount = 0
+    for (const s of serverList) {
+      if (s.status === 'online') onlineCount++
+      else if (s.status === 'offline') offlineCount++
+    }
     
     result.push({
       segmentKey: `segment-${segment}`,
@@ -473,8 +493,8 @@ const groupedServers = computed(() => {
     })
   })
   
-  // Sort by segment
-  result.sort((a, b) => a.segment.localeCompare(b.segment))
+  // Sort by segment numerically
+  result.sort(compareIpSegments)
   
   return result
 })
