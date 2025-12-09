@@ -169,6 +169,11 @@
                     ✗ 离线 {{ segment.offlineCount }}
                   </el-tag>
                 </div>
+                <div class="segment-card-time">
+                  <span class="segment-updated-time">
+                    更新时间：{{ formatSegmentTime(segment.latestUpdated) }}
+                  </span>
+                </div>
                 <div class="segment-card-action">
                   <el-button
                     size="small"
@@ -1001,7 +1006,13 @@ const refreshSystemInfo = async () => {
 const formatDate = (dateStr) => {
   if (!dateStr) return '从未'
   const date = new Date(dateStr)
-  return date.toLocaleString()
+  return date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+}
+
+const formatSegmentTime = (timestamp) => {
+  if (!timestamp || timestamp === Number.NEGATIVE_INFINITY) return '从未'
+  const date = new Date(timestamp)
+  return date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
 }
 
 const handleMenuSelect = (index) => {
@@ -1159,7 +1170,17 @@ const handleCommand = async (command) => {
 .segment-card-status {
   display: flex;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
+}
+
+.segment-card-time {
+  margin-bottom: 12px;
+}
+
+.segment-updated-time {
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.2;
 }
 
 .segment-card-action {

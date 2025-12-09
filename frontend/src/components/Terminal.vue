@@ -193,14 +193,31 @@ const connect = () => {
   }
 
   // 获取WebSocket URL
-  // VITE_WS_URL should be set to the backend URL in production
-  // In development, we fall back to window.location.origin which works
-  // when frontend and backend run on the same server
-  const wsUrl = import.meta.env.VITE_WS_URL || window.location.origin
+  // 优先使用 VITE_WS_URL 环境变量
+  // 如果未设置，则从 VITE_API_BASE_URL 推断后端地址
+  // 最后回退到 window.location.origin
+  let wsUrl = import.meta.env.VITE_WS_URL
+  if (!wsUrl) {
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
+    if (apiBaseUrl && apiBaseUrl.startsWith('http')) {
+      // 从 API URL 中提取基础URL（去掉/api路径）
+      try {
+        const url = new URL(apiBaseUrl)
+        wsUrl = url.origin
+      } catch (_e) {
+        wsUrl = window.location.origin
+      }
+    } else {
+      wsUrl = window.location.origin
+    }
+  }
 
   socket = io(`${wsUrl}/terminal`, {
-    transports: ['websocket'],
-    reconnection: false
+    transports: ['websocket', 'polling'],
+    reconnection: true,
+    reconnectionAttempts: 3,
+    reconnectionDelay: 1000,
+    timeout: 20000
   })
 
   socket.on('connect', () => {
