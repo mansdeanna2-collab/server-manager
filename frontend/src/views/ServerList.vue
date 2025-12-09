@@ -2156,7 +2156,7 @@ const handleChangePassword = async () => {
 .segments-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
+  gap: 16px;
 }
 
 @media (max-width: 1200px) {
@@ -2175,7 +2175,7 @@ const handleChangePassword = async () => {
 .segment-card {
   background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
   border-radius: 16px;
-  padding: 20px 24px;
+  padding: 16px 18px;
   cursor: pointer;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   border: 2px solid #e2e8f0;
@@ -2224,7 +2224,7 @@ const handleChangePassword = async () => {
 }
 
 .ip-segment-title {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 800;
   color: #2c5282;
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
@@ -2235,9 +2235,9 @@ const handleChangePassword = async () => {
   background: linear-gradient(135deg, #c6f6d5 0%, #9ae6b4 100%);
   border-color: #68d391;
   color: #276749;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  padding: 6px 14px;
+  padding: 6px 12px;
 }
 
 .segment-card-status {
@@ -2248,8 +2248,8 @@ const handleChangePassword = async () => {
 }
 
 .segment-card-status :deep(.el-tag) {
-  font-size: 13px;
-  padding: 6px 12px;
+  font-size: 12px;
+  padding: 6px 10px;
   font-weight: 600;
 }
 
@@ -2279,12 +2279,12 @@ const handleChangePassword = async () => {
 
 .note-display-icon {
   color: #3182ce;
-  font-size: 14px;
+  font-size: 16px;
   flex-shrink: 0;
 }
 
 .note-display-text {
-  font-size: 13px;
+  font-size: 14px;
   color: #2c5282;
   line-height: 1.4;
   word-break: break-word;
@@ -2307,10 +2307,10 @@ const handleChangePassword = async () => {
 
 .action-icon {
   cursor: pointer;
-  font-size: 20px;
+  font-size: 22px;
   color: #a0aec0;
   transition: all 0.3s ease;
-  padding: 6px;
+  padding: 8px;
   border-radius: 8px;
 }
 
@@ -2394,7 +2394,7 @@ const handleChangePassword = async () => {
 /* Notes text in table */
 .notes-text {
   color: #4a5568;
-  font-size: 13px;
+  font-size: 14px;
   word-break: break-word;
   white-space: pre-wrap;
 }
@@ -2478,6 +2478,7 @@ const handleChangePassword = async () => {
 
 /* Form dialog styles (Add/Edit Server) - 企业级对话框美化 */
 .form-dialog :deep(.el-dialog) {
+  margin-top: 8vh;
   border-radius: 20px;
   overflow: hidden;
   box-shadow: 0 25px 80px rgba(30, 58, 95, 0.25);
@@ -2513,6 +2514,7 @@ const handleChangePassword = async () => {
 
 /* Password dialog styles - 企业级对话框美化 */
 .password-dialog :deep(.el-dialog) {
+  margin-top: 8vh;
   border-radius: 20px;
   overflow: hidden;
   box-shadow: 0 25px 80px rgba(197, 48, 48, 0.25);
@@ -2548,6 +2550,7 @@ const handleChangePassword = async () => {
 
 /* Server detail dialog - 企业级对话框美化 */
 .detail-dialog :deep(.el-dialog) {
+  margin-top: 8vh;
   border-radius: 20px;
   overflow: hidden;
   box-shadow: 0 25px 80px rgba(39, 103, 73, 0.25);
@@ -2686,6 +2689,7 @@ const handleChangePassword = async () => {
 
 /* Terminal dialog styles - 企业级对话框美化 */
 .terminal-dialog :deep(.el-dialog) {
+  margin-top: 8vh;
   border-radius: 20px;
   overflow: hidden;
   box-shadow: 0 25px 80px rgba(0, 0, 0, 0.35);
@@ -2756,6 +2760,7 @@ const handleChangePassword = async () => {
 
 /* Segment dialog styles - 企业级对话框美化 */
 .segment-dialog :deep(.el-dialog) {
+  margin-top: 8vh;
   border-radius: 20px;
   overflow: hidden;
   box-shadow: 0 25px 80px rgba(30, 58, 95, 0.25);
@@ -2791,6 +2796,7 @@ const handleChangePassword = async () => {
 
 /* Filtered dialog styles - 企业级对话框美化 */
 .filtered-dialog :deep(.el-dialog) {
+  margin-top: 8vh;
   border-radius: 20px;
   overflow: hidden;
   box-shadow: 0 25px 80px rgba(214, 158, 46, 0.25);
