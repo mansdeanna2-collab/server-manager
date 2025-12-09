@@ -578,7 +578,7 @@
             @click="batchGetSystemInfo"
           >
             <el-icon><Cpu /></el-icon>
-            一键获取系统
+            一键获取系统信息
           </el-button>
         </div>
         <el-table
@@ -1532,24 +1532,34 @@ const batchGetSystemInfo = async () => {
   if (filteredDialogServers.value.length === 0) return
   
   batchGettingSystemInfo.value = true
-  let successCount = 0
-  let failCount = 0
   
   try {
-    // 获取所有正常服务器的系统信息
-    for (const server of filteredDialogServers.value) {
-      try {
-        const response = await serversAPI.getSystemInfo(server.id)
-        server.os_info = response.data.os
-        server.cpu_info = response.data.cpu
-        server.memory_info = response.data.memory
-        server.disk_info = response.data.disk
-        server.uptime = response.data.uptime
+    // 创建所有请求的Promise数组
+    const promises = filteredDialogServers.value.map(server => 
+      serversAPI.getSystemInfo(server.id)
+        .then(response => ({ server, response, success: true }))
+        .catch(() => ({ server, success: false }))
+    )
+    
+    // 并发执行所有请求
+    const results = await Promise.all(promises)
+    
+    let successCount = 0
+    let failCount = 0
+    
+    // 处理结果
+    results.forEach(result => {
+      if (result.success) {
+        result.server.os_info = result.response.data.os
+        result.server.cpu_info = result.response.data.cpu
+        result.server.memory_info = result.response.data.memory
+        result.server.disk_info = result.response.data.disk
+        result.server.uptime = result.response.data.uptime
         successCount++
-      } catch (_error) {
+      } else {
         failCount++
       }
-    }
+    })
     
     if (successCount > 0) {
       ElMessage.success(`成功获取 ${successCount} 台服务器的系统信息${failCount > 0 ? `，${failCount} 台失败` : ''}`)
