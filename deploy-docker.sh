@@ -29,7 +29,9 @@ else
 fi
 
 info "Using Docker Compose to build and start services... / 使用 Docker Compose 构建并启动服务..."
-cd "$ROOT_DIR"
+cd "$ROOT_DIR" || error "Failed to change to project directory: $ROOT_DIR"
+
+[[ -f "$COMPOSE_FILE" ]] || error "Compose file not found: $COMPOSE_FILE"
 "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" up -d --build
 
 info "Deployment finished! / 部署完成！"
