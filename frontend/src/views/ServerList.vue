@@ -1215,11 +1215,24 @@ const compareIpSegments = (a, b) => {
 
 // Compare IP addresses numerically (e.g., 38.181.53.2 to 38.181.53.10)
 const compareIpAddresses = (a, b) => {
+  // Handle null/undefined ip_address
+  if (!a?.ip_address || !b?.ip_address) {
+    if (!a?.ip_address && !b?.ip_address) return 0
+    return !a?.ip_address ? 1 : -1
+  }
+  
   const partsA = a.ip_address.split('.').map(Number)
   const partsB = b.ip_address.split('.').map(Number)
+  
+  // Compare up to 4 octets, handling cases where IP may have fewer parts
   for (let i = 0; i < 4; i++) {
-    if (partsA[i] !== partsB[i]) {
-      return partsA[i] - partsB[i]
+    const numA = i < partsA.length ? partsA[i] : 0
+    const numB = i < partsB.length ? partsB[i] : 0
+    // Handle NaN values (invalid IP parts)
+    const valA = isNaN(numA) ? 0 : numA
+    const valB = isNaN(numB) ? 0 : numB
+    if (valA !== valB) {
+      return valA - valB
     }
   }
   return 0
