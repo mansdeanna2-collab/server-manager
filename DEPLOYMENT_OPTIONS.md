@@ -1,6 +1,6 @@
 # Server Manager - Docker 部署指南 / Docker Deployment Guide
 
-> 现已统一为 Docker 部署，其他方案已下线。本指南覆盖脚本式一键部署与手动命令两种方式。
+> 现已统一为 Docker 部署，其他方案已下线。 本指南覆盖脚本式一键部署与手动命令两种方式。
 
 ## 🎯 部署方式 / Deployment Methods
 
