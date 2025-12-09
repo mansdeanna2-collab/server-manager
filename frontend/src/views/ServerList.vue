@@ -77,81 +77,59 @@
               description="未找到服务器"
             />
             
-            <el-table
+            <!-- IP段卡片网格布局 - 每行2个 -->
+            <div
               v-else
-              :data="groupedServers"
-              style="width: 100%"
-              row-key="segmentKey"
-              :row-class-name="getRowClassName"
+              class="segments-grid"
             >
-              <el-table-column
-                label="IP地址 / 地区"
-                min-width="280"
+              <div
+                v-for="segment in groupedServers"
+                :key="segment.segmentKey"
+                class="segment-card"
+                @click="viewSegment(segment)"
               >
-                <template #default="scope">
-                  <div class="segment-cell">
-                    <span class="segment-flag">{{ scope.row.regionInfo?.flag || '🌐' }}</span>
-                    <span class="ip-segment">{{ scope.row.segment }}.x</span>
-                    <el-tag
-                      size="small"
-                      type="info"
-                      class="count-tag"
-                    >
-                      {{ scope.row.count }} 台
-                    </el-tag>
-                    <el-tag
-                      v-if="scope.row.regionInfo?.name"
-                      size="small"
-                      class="region-tag"
-                      effect="plain"
-                    >
-                      {{ scope.row.regionInfo.name }}
-                    </el-tag>
-                  </div>
-                </template>
-              </el-table-column>
-              <el-table-column
-                label="状态"
-                width="140"
-              >
-                <template #default="scope">
-                  <div class="segment-status">
-                    <el-tag
-                      v-if="scope.row.onlineCount > 0"
-                      type="success"
-                      size="small"
-                      effect="dark"
-                    >
-                      ✓ {{ scope.row.onlineCount }}
-                    </el-tag>
-                    <el-tag
-                      v-if="scope.row.offlineCount > 0"
-                      type="danger"
-                      size="small"
-                      effect="dark"
-                    >
-                      ✗ {{ scope.row.offlineCount }}
-                    </el-tag>
-                  </div>
-                </template>
-              </el-table-column>
-              <el-table-column
-                label="操作"
-                width="120"
-                fixed="right"
-              >
-                <template #default="scope">
+                <div class="segment-card-header">
+                  <span class="ip-segment-title">{{ segment.segment }}.x</span>
+                  <el-tag
+                    size="small"
+                    type="info"
+                    effect="plain"
+                    class="count-tag"
+                  >
+                    {{ segment.count }} 台
+                  </el-tag>
+                </div>
+                <div class="segment-card-status">
+                  <el-tag
+                    v-if="segment.onlineCount > 0"
+                    type="success"
+                    size="small"
+                    effect="dark"
+                  >
+                    ✓ 在线 {{ segment.onlineCount }}
+                  </el-tag>
+                  <el-tag
+                    v-if="segment.offlineCount > 0"
+                    type="danger"
+                    size="small"
+                    effect="dark"
+                  >
+                    ✗ 离线 {{ segment.offlineCount }}
+                  </el-tag>
+                </div>
+                <div class="segment-card-action">
                   <el-button
                     size="small"
                     type="primary"
-                    @click="viewSegment(scope.row)"
+                    plain
+                    @click.stop="viewSegment(segment)"
                   >
                     <el-icon><View /></el-icon>
-                    查看
+                    查看详情
                   </el-button>
-                </template>
-              </el-table-column>
-            </el-table>
+                </div>
+              </div>
+            </div>
           </el-card>
         </div>
       </el-main>
@@ -182,16 +160,8 @@
         class="server-detail"
       >
         <div class="detail-header">
-          <span class="region-flag-large">{{ getRegionInfo(selectedServer.ip_address)?.flag || '🌐' }}</span>
           <div class="detail-title">
             <h3>{{ selectedServer.ip_address }}</h3>
-            <el-tag
-              v-if="getRegionInfo(selectedServer.ip_address)?.name"
-              size="small"
-              effect="plain"
-            >
-              {{ getRegionInfo(selectedServer.ip_address)?.name }}
-            </el-tag>
           </div>
           <StatusBadge
             :status="selectedServer.status"
@@ -292,37 +262,32 @@
     <!-- View Segment Servers Dialog -->
     <el-dialog
       v-model="segmentDialogVisible"
-      :title="selectedSegment ? `${selectedSegment.regionInfo?.flag || '🌐'} IP段 ${selectedSegment.segment}.x 的服务器` : 'IP段服务器'"
+      :title="selectedSegment ? `IP段 ${selectedSegment.segment}.x 的服务器` : 'IP段服务器'"
       width="1100px"
+      class="segment-dialog"
     >
       <div v-if="selectedSegment">
         <div class="segment-header">
-          <el-tag
-            size="large"
-            effect="plain"
-          >
-            {{ selectedSegment.regionInfo?.flag || '🌐' }} {{ selectedSegment.regionInfo?.name || '未知地区' }}
-          </el-tag>
           <span class="segment-count">共 {{ selectedSegment.count }} 台服务器</span>
         </div>
         <el-table
           :data="selectedSegment.servers"
           style="width: 100%"
+          stripe
         >
           <el-table-column
             label="IP地址"
-            width="180"
+            width="160"
           >
             <template #default="scope">
               <div class="ip-cell">
-                <span class="region-flag">{{ getRegionInfo(scope.row.ip_address)?.flag || '🌐' }}</span>
-                <span>{{ scope.row.ip_address }}</span>
+                <span class="ip-text">{{ scope.row.ip_address }}</span>
               </div>
             </template>
           </el-table-column>
           <el-table-column
             label="端口 / 配置"
-            width="180"
+            width="160"
           >
             <template #default="scope">
               <div class="port-cell">
@@ -355,11 +320,11 @@
           <el-table-column
             prop="username"
             label="用户名"
-            width="120"
+            width="100"
           />
           <el-table-column
             label="状态"
-            width="120"
+            width="100"
           >
             <template #default="scope">
               <StatusBadge
@@ -373,6 +338,7 @@
           <el-table-column
             prop="os_info"
             label="系统信息"
+            min-width="140"
           >
             <template #default="scope">
               <span v-if="scope.row.os_info">
@@ -385,49 +351,125 @@
             </template>
           </el-table-column>
           <el-table-column
-            prop="notes"
-            label="备注"
-          />
-          <el-table-column
             label="操作"
-            width="300"
+            width="280"
+            fixed="right"
           >
             <template #default="scope">
-              <el-button
-                size="small"
-                @click="viewServer(scope.row)"
-              >
-                <el-icon><View /></el-icon>
-                详情
-              </el-button>
-              <el-button
-                size="small"
-                type="primary"
-                @click="editServer(scope.row)"
-              >
-                <el-icon><Edit /></el-icon>
-                编辑
-              </el-button>
-              <el-button
-                size="small"
-                type="success"
-                :loading="scope.row.checking"
-                @click="checkServer(scope.row)"
-              >
-                <el-icon><Refresh /></el-icon>
-                检测
-              </el-button>
-              <el-button
-                size="small"
-                type="danger"
-                @click="deleteServer(scope.row)"
-              >
-                <el-icon><Delete /></el-icon>
-                删除
-              </el-button>
+              <div class="action-buttons">
+                <el-button
+                  size="small"
+                  type="success"
+                  @click="openTerminal(scope.row)"
+                >
+                  <el-icon><Connection /></el-icon>
+                  连接
+                </el-button>
+                <el-button
+                  size="small"
+                  @click="viewServer(scope.row)"
+                >
+                  <el-icon><View /></el-icon>
+                  详情
+                </el-button>
+                <el-button
+                  size="small"
+                  type="primary"
+                  @click="editServer(scope.row)"
+                >
+                  <el-icon><Edit /></el-icon>
+                  编辑
+                </el-button>
+                <el-button
+                  size="small"
+                  type="danger"
+                  @click="deleteServer(scope.row)"
+                >
+                  <el-icon><Delete /></el-icon>
+                  删除
+                </el-button>
+              </div>
             </template>
           </el-table-column>
         </el-table>
+      </div>
+    </el-dialog>
+    
+    <!-- Terminal Connection Dialog -->
+    <el-dialog
+      v-model="terminalDialogVisible"
+      title="终端连接"
+      width="700px"
+      class="terminal-dialog"
+      append-to-body
+    >
+      <div
+        v-if="terminalServer"
+        class="terminal-container"
+      >
+        <div class="terminal-info">
+          <div class="terminal-server-info">
+            <el-descriptions
+              :column="2"
+              border
+              size="small"
+            >
+              <el-descriptions-item label="IP地址">
+                <span class="mono-text">{{ terminalServer.ip_address }}</span>
+              </el-descriptions-item>
+              <el-descriptions-item label="端口">
+                <el-tag
+                  :type="getPortTagType(terminalServer.port)"
+                  size="small"
+                  effect="dark"
+                >
+                  {{ terminalServer.port }}
+                </el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="用户名">
+                <span class="mono-text">{{ terminalServer.username }}</span>
+              </el-descriptions-item>
+              <el-descriptions-item label="状态">
+                <StatusBadge
+                  :status="terminalServer.status"
+                  size="small"
+                />
+              </el-descriptions-item>
+            </el-descriptions>
+          </div>
+          
+          <div class="terminal-command-section">
+            <h4>SSH 连接命令</h4>
+            <div class="ssh-command-box">
+              <code class="ssh-command">{{ getSshCommand(terminalServer) }}</code>
+              <el-button
+                type="primary"
+                size="small"
+                @click="copySshCommand(terminalServer)"
+              >
+                <el-icon><CopyDocument /></el-icon>
+                复制
+              </el-button>
+            </div>
+          </div>
+          
+          <div class="terminal-tips">
+            <el-alert
+              title="连接提示"
+              type="info"
+              :closable="false"
+              show-icon
+            >
+              <template #default>
+                <p>1. 复制上方SSH命令到终端执行</p>
+                <p>2. 输入服务器密码完成连接</p>
+                <p v-if="terminalServer.port === 3389">
+                  💡 端口3389为Windows RDP，请使用远程桌面连接
+                </p>
+              </template>
+            </el-alert>
+          </div>
+        </div>
       </div>
     </el-dialog>
   </div>
@@ -439,7 +481,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Monitor, Odometer, User, ArrowDown, Plus, Refresh,
-  Search, View, Edit, Delete, OfficeBuilding
+  Search, View, Edit, Delete, OfficeBuilding, Connection, CopyDocument
 } from '@element-plus/icons-vue'
 import { serversAPI, authAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -452,150 +494,16 @@ const searchText = ref('')
 const dialogVisible = ref(false)
 const detailDialogVisible = ref(false)
 const segmentDialogVisible = ref(false)
+const terminalDialogVisible = ref(false)
 const isEdit = ref(false)
 const currentServer = ref(null)
 const selectedServer = ref(null)
 const selectedSegment = ref(null)
+const terminalServer = ref(null)
 const refreshing = ref(false)
 const currentUser = ref(null)
 
 const activeMenu = computed(() => route.path)
-
-// IP段到地区的映射表（前端简化版）
-const IP_REGION_MAP = {
-  // 香港 (Hong Kong)
-  '38.47.': { code: 'HK', name: '香港', flag: '🇭🇰' },
-  '103.10.': { code: 'HK', name: '香港', flag: '🇭🇰' },
-  '103.11.': { code: 'HK', name: '香港', flag: '🇭🇰' },
-  '103.12.': { code: 'HK', name: '香港', flag: '🇭🇰' },
-  '119.28.': { code: 'HK', name: '香港', flag: '🇭🇰' },
-  '119.29.': { code: 'HK', name: '香港', flag: '🇭🇰' },
-  '150.109.': { code: 'HK', name: '香港', flag: '🇭🇰' },
-  '162.14.': { code: 'HK', name: '香港', flag: '🇭🇰' },
-  '175.24.': { code: 'HK', name: '香港', flag: '🇭🇰' },
-  // 新加坡 (Singapore)
-  '13.212.': { code: 'SG', name: '新加坡', flag: '🇸🇬' },
-  '13.213.': { code: 'SG', name: '新加坡', flag: '🇸🇬' },
-  '13.214.': { code: 'SG', name: '新加坡', flag: '🇸🇬' },
-  '13.215.': { code: 'SG', name: '新加坡', flag: '🇸🇬' },
-  '18.136.': { code: 'SG', name: '新加坡', flag: '🇸🇬' },
-  '18.137.': { code: 'SG', name: '新加坡', flag: '🇸🇬' },
-  '18.138.': { code: 'SG', name: '新加坡', flag: '🇸🇬' },
-  '18.139.': { code: 'SG', name: '新加坡', flag: '🇸🇬' },
-  '18.140.': { code: 'SG', name: '新加坡', flag: '🇸🇬' },
-  '18.141.': { code: 'SG', name: '新加坡', flag: '🇸🇬' },
-  '52.74.': { code: 'SG', name: '新加坡', flag: '🇸🇬' },
-  '52.76.': { code: 'SG', name: '新加坡', flag: '🇸🇬' },
-  '52.77.': { code: 'SG', name: '新加坡', flag: '🇸🇬' },
-  '54.179.': { code: 'SG', name: '新加坡', flag: '🇸🇬' },
-  '54.251.': { code: 'SG', name: '新加坡', flag: '🇸🇬' },
-  '54.254.': { code: 'SG', name: '新加坡', flag: '🇸🇬' },
-  '54.255.': { code: 'SG', name: '新加坡', flag: '🇸🇬' },
-  // 美国 (United States) - AWS US regions
-  '3.80.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '3.81.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '3.82.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '3.83.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '3.208.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '3.209.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '3.210.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '34.192.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '34.193.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '34.194.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '34.208.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '34.209.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '34.210.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '52.0.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '52.1.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '52.2.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '52.20.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '52.21.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '52.22.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '54.80.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '54.81.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '54.82.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '54.144.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '54.145.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '104.196.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  '104.197.': { code: 'US', name: '美国', flag: '🇺🇸' },
-  // 日本 (Japan)
-  '13.112.': { code: 'JP', name: '日本', flag: '🇯🇵' },
-  '13.113.': { code: 'JP', name: '日本', flag: '🇯🇵' },
-  '13.114.': { code: 'JP', name: '日本', flag: '🇯🇵' },
-  '13.115.': { code: 'JP', name: '日本', flag: '🇯🇵' },
-  '18.176.': { code: 'JP', name: '日本', flag: '🇯🇵' },
-  '18.177.': { code: 'JP', name: '日本', flag: '🇯🇵' },
-  '18.178.': { code: 'JP', name: '日本', flag: '🇯🇵' },
-  '52.68.': { code: 'JP', name: '日本', flag: '🇯🇵' },
-  '52.69.': { code: 'JP', name: '日本', flag: '🇯🇵' },
-  '52.192.': { code: 'JP', name: '日本', flag: '🇯🇵' },
-  '52.193.': { code: 'JP', name: '日本', flag: '🇯🇵' },
-  '54.64.': { code: 'JP', name: '日本', flag: '🇯🇵' },
-  '54.65.': { code: 'JP', name: '日本', flag: '🇯🇵' },
-  '54.178.': { code: 'JP', name: '日本', flag: '🇯🇵' },
-  '54.199.': { code: 'JP', name: '日本', flag: '🇯🇵' },
-  // 韩国 (South Korea)
-  '13.124.': { code: 'KR', name: '韩国', flag: '🇰🇷' },
-  '13.125.': { code: 'KR', name: '韩国', flag: '🇰🇷' },
-  '13.209.': { code: 'KR', name: '韩国', flag: '🇰🇷' },
-  '15.164.': { code: 'KR', name: '韩国', flag: '🇰🇷' },
-  '15.165.': { code: 'KR', name: '韩国', flag: '🇰🇷' },
-  '52.78.': { code: 'KR', name: '韩国', flag: '🇰🇷' },
-  '52.79.': { code: 'KR', name: '韩国', flag: '🇰🇷' },
-  // 德国 (Germany)
-  '3.120.': { code: 'DE', name: '德国', flag: '🇩🇪' },
-  '3.121.': { code: 'DE', name: '德国', flag: '🇩🇪' },
-  '3.122.': { code: 'DE', name: '德国', flag: '🇩🇪' },
-  '18.184.': { code: 'DE', name: '德国', flag: '🇩🇪' },
-  '52.28.': { code: 'DE', name: '德国', flag: '🇩🇪' },
-  '52.29.': { code: 'DE', name: '德国', flag: '🇩🇪' },
-  // 英国 (United Kingdom)
-  '3.8.': { code: 'UK', name: '英国', flag: '🇬🇧' },
-  '3.9.': { code: 'UK', name: '英国', flag: '🇬🇧' },
-  '3.10.': { code: 'UK', name: '英国', flag: '🇬🇧' },
-  '18.130.': { code: 'UK', name: '英国', flag: '🇬🇧' },
-  '35.176.': { code: 'UK', name: '英国', flag: '🇬🇧' },
-  '35.177.': { code: 'UK', name: '英国', flag: '🇬🇧' },
-  // 台湾 (Taiwan)
-  '61.216.': { code: 'TW', name: '台湾', flag: '🇹🇼' },
-  '61.217.': { code: 'TW', name: '台湾', flag: '🇹🇼' },
-  '114.32.': { code: 'TW', name: '台湾', flag: '🇹🇼' },
-  '114.33.': { code: 'TW', name: '台湾', flag: '🇹🇼' },
-  // 中国大陆 (China Mainland) - 阿里云
-  '47.92.': { code: 'CN', name: '中国', flag: '🇨🇳' },
-  '47.93.': { code: 'CN', name: '中国', flag: '🇨🇳' },
-  '47.94.': { code: 'CN', name: '中国', flag: '🇨🇳' },
-  '47.95.': { code: 'CN', name: '中国', flag: '🇨🇳' },
-  '47.96.': { code: 'CN', name: '中国', flag: '🇨🇳' },
-  '47.97.': { code: 'CN', name: '中国', flag: '🇨🇳' },
-  '47.98.': { code: 'CN', name: '中国', flag: '🇨🇳' },
-  '47.99.': { code: 'CN', name: '中国', flag: '🇨🇳' },
-  '47.100.': { code: 'CN', name: '中国', flag: '🇨🇳' },
-  '47.101.': { code: 'CN', name: '中国', flag: '🇨🇳' },
-  '120.76.': { code: 'CN', name: '中国', flag: '🇨🇳' },
-  '120.77.': { code: 'CN', name: '中国', flag: '🇨🇳' },
-  '120.78.': { code: 'CN', name: '中国', flag: '🇨🇳' },
-  '120.79.': { code: 'CN', name: '中国', flag: '🇨🇳' },
-  // 腾讯云
-  '129.204.': { code: 'CN', name: '中国', flag: '🇨🇳' },
-  '129.205.': { code: 'CN', name: '中国', flag: '🇨🇳' },
-}
-
-// 获取IP地区信息
-const getRegionInfo = (ipAddress) => {
-  if (!ipAddress) return { code: 'UNKNOWN', name: '未知', flag: '🌐' }
-  
-  // 按照前缀长度从长到短排序，优先匹配更精确的
-  const sortedPrefixes = Object.keys(IP_REGION_MAP).sort((a, b) => b.length - a.length)
-  
-  for (const prefix of sortedPrefixes) {
-    if (ipAddress.startsWith(prefix)) {
-      return IP_REGION_MAP[prefix]
-    }
-  }
-  
-  return { code: 'UNKNOWN', name: '未知', flag: '🌐' }
-}
 
 // 端口类型信息
 const PORT_TYPE_MAP = {
@@ -693,25 +601,6 @@ const getOsIcon = (osInfo) => {
   return '💻'
 }
 
-// 根据OS信息获取标签类型
-const _getOsTagType = (osInfo) => {
-  if (!osInfo) return 'info'
-  const osLower = osInfo.toLowerCase()
-  if (osLower.includes('ubuntu')) return 'warning'
-  if (osLower.includes('centos')) return 'danger'
-  if (osLower.includes('debian')) return 'primary'
-  if (osLower.includes('windows')) return 'primary'
-  return 'info'
-}
-
-// 获取行样式类名
-const getRowClassName = ({ row }) => {
-  if (row.isSegment) return 'segment-row'
-  if (row.status === 'online') return 'online-row'
-  if (row.status === 'offline') return 'offline-row'
-  return ''
-}
-
 // Get IP segment (first 3 octets) from IP address
 const getIpSegment = (ipAddress) => {
   if (!ipAddress || typeof ipAddress !== 'string') {
@@ -772,10 +661,6 @@ const groupedServers = computed(() => {
       else if (s.status === 'offline') offlineCount++
     }
     
-    // Get region info from first server in segment
-    const firstServer = serverList[0]
-    const regionInfo = firstServer ? getRegionInfo(firstServer.ip_address) : null
-    
     result.push({
       segmentKey: `segment-${segment}`,
       segment: segment,
@@ -783,7 +668,6 @@ const groupedServers = computed(() => {
       count: serverList.length,
       onlineCount: onlineCount,
       offlineCount: offlineCount,
-      regionInfo: regionInfo,
       hasChildren: true,
       servers: serverList.map(s => ({
         ...s,
@@ -842,6 +726,33 @@ const viewSegment = (segment) => {
   segmentDialogVisible.value = true
 }
 
+// 终端连接功能
+const openTerminal = (server) => {
+  terminalServer.value = server
+  terminalDialogVisible.value = true
+}
+
+const getSshCommand = (server) => {
+  if (!server) return ''
+  if (server.port === 22) {
+    return `ssh ${server.username}@${server.ip_address}`
+  } else if (server.port === 3389) {
+    return `mstsc /v:${server.ip_address}`
+  } else {
+    return `ssh -p ${server.port} ${server.username}@${server.ip_address}`
+  }
+}
+
+const copySshCommand = async (server) => {
+  const command = getSshCommand(server)
+  try {
+    await navigator.clipboard.writeText(command)
+    ElMessage.success('命令已复制到剪贴板')
+  } catch (_error) {
+    ElMessage.error('复制失败，请手动复制')
+  }
+}
+
 const handleSubmit = async (formData) => {
   try {
     if (isEdit.value) {
@@ -877,38 +788,6 @@ const deleteServer = async (server) => {
     if (error !== 'cancel') {
       ElMessage.error('删除服务器失败')
     }
-  }
-}
-
-const checkServer = async (server) => {
-  server.checking = true
-  try {
-    const response = await serversAPI.check(server.id)
-    const statusData = response.data.status
-    server.status = statusData.overall
-    server.checkDetail = statusData.detail || ''
-    server.error_type = statusData.error_type || ''
-    server.last_checked = new Date().toISOString()
-    
-    // 构建详细的检测结果消息
-    let message = `服务器 ${server.ip_address} 检测完成: `
-    if (statusData.port_type) {
-      message += `${statusData.port_type.icon} ${statusData.port_type.type} `
-    }
-    if (statusData.region) {
-      message += `${statusData.region.flag} ${statusData.region.name} `
-    }
-    message += `- ${statusData.detail || statusData.overall}`
-    
-    if (statusData.overall === 'online') {
-      ElMessage.success(message)
-    } else {
-      ElMessage.warning(message)
-    }
-  } catch (_error) {
-    ElMessage.error('检测服务器失败')
-  } finally {
-    server.checking = false
   }
 }
 
@@ -957,6 +836,12 @@ const handleCommand = async (command) => {
 </script>
 
 <style scoped>
+/* Page container */
+.page-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e7ed 100%);
+}
+
 /* Header styles */
 .header-container {
   background: linear-gradient(135deg, #409EFF 0%, #337ecc 100%);
@@ -964,7 +849,7 @@ const handleCommand = async (command) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 2px 12px 0 rgba(64, 158, 255, 0.3);
+  box-shadow: 0 4px 20px 0 rgba(64, 158, 255, 0.3);
 }
 
 .header-logo {
@@ -999,10 +884,18 @@ const handleCommand = async (command) => {
   border-radius: 4px;
 }
 
+/* Content wrapper */
+.content-wrapper {
+  padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
 /* Card styles */
 .server-card {
-  border-radius: 8px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.08);
+  border: none;
 }
 
 .card-header {
@@ -1012,7 +905,7 @@ const handleCommand = async (command) => {
 }
 
 .card-title {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
   color: #303133;
 }
@@ -1023,36 +916,68 @@ const handleCommand = async (command) => {
 }
 
 .search-input {
-  margin-bottom: 20px;
-  max-width: 300px;
+  margin-bottom: 24px;
+  max-width: 320px;
 }
 
-/* IP segment styles */
-.segment-cell {
+/* IP段卡片网格布局 */
+.segments-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .segments-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.segment-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f9fafc 100%);
+  border-radius: 12px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 1px solid #e4e7ed;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+}
+
+.segment-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px 0 rgba(64, 158, 255, 0.2);
+  border-color: #409EFF;
+}
+
+.segment-card-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  margin-bottom: 16px;
 }
 
-.segment-flag {
-  font-size: 20px;
-}
-
-.ip-segment {
-  font-weight: bold;
+.ip-segment-title {
+  font-size: 18px;
+  font-weight: 700;
   color: #409EFF;
-  font-size: 15px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
 }
 
 .count-tag {
-  margin-left: 4px;
+  background: linear-gradient(135deg, #f0f9eb 0%, #e8f5e1 100%);
+  border-color: #c2e7b0;
+  color: #67c23a;
 }
 
-.region-tag {
-  margin-left: 4px;
-  background-color: #f0f9eb;
-  color: #67c23a;
-  border-color: #e1f3d8;
+.segment-card-status {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.segment-card-action {
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* IP cell styles */
@@ -1062,21 +987,11 @@ const handleCommand = async (command) => {
   gap: 8px;
 }
 
-.region-flag {
-  font-size: 16px;
-}
-
-.ip-address {
+.ip-text {
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
   font-size: 13px;
-  color: #606266;
-}
-
-.region-tag-small {
-  font-size: 10px;
-  padding: 0 6px;
-  height: 18px;
-  line-height: 16px;
+  color: #303133;
+  font-weight: 500;
 }
 
 /* Port cell styles */
@@ -1090,11 +1005,6 @@ const handleCommand = async (command) => {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-
-.port-type-text {
-  font-size: 11px;
-  color: #909399;
 }
 
 .specs-row {
@@ -1111,68 +1021,16 @@ const handleCommand = async (command) => {
   font-weight: 500;
 }
 
-/* Username cell */
-.username-cell {
+/* Action buttons in table */
+.action-buttons {
   display: flex;
-  align-items: center;
-  gap: 4px;
-  color: #606266;
-}
-
-/* Status cell */
-.status-cell {
-  display: flex;
-  align-items: center;
+  flex-wrap: wrap;
   gap: 4px;
 }
 
-.info-icon {
-  color: #909399;
-  cursor: pointer;
-}
-
-.info-icon:hover {
-  color: #409EFF;
-}
-
-/* Segment status */
-.segment-status {
-  display: flex;
-  gap: 4px;
-}
-
-/* OS cell */
-.os-cell {
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Notes cell */
-.notes-cell {
-  color: #909399;
-  font-size: 13px;
-}
-
+/* No info text */
 .no-info {
   color: #c0c4cc;
-}
-
-/* Table row styles */
-:deep(.segment-row) {
-  background-color: #f5f7fa;
-}
-
-:deep(.segment-row:hover > td) {
-  background-color: #ebeef5 !important;
-}
-
-:deep(.online-row) {
-  background-color: #f0f9eb;
-}
-
-:deep(.offline-row) {
-  background-color: #fef0f0;
 }
 
 /* Server detail dialog */
@@ -1187,10 +1045,6 @@ const handleCommand = async (command) => {
   margin-bottom: 20px;
   padding-bottom: 15px;
   border-bottom: 1px solid #ebeef5;
-}
-
-.region-flag-large {
-  font-size: 40px;
 }
 
 .detail-title {
@@ -1209,7 +1063,7 @@ const handleCommand = async (command) => {
   text-align: right;
 }
 
-/* Segment dialog */
+/* Segment dialog header */
 .segment-header {
   display: flex;
   align-items: center;
@@ -1222,6 +1076,66 @@ const handleCommand = async (command) => {
 .segment-count {
   color: #909399;
   font-size: 14px;
+}
+
+/* Terminal dialog styles */
+.terminal-dialog :deep(.el-dialog__body) {
+  padding: 20px;
+}
+
+.terminal-container {
+  padding: 10px;
+}
+
+.terminal-info {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.terminal-server-info {
+  margin-bottom: 10px;
+}
+
+.terminal-command-section h4 {
+  margin: 0 0 12px 0;
+  color: #303133;
+  font-weight: 600;
+}
+
+.ssh-command-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #1e1e1e;
+  padding: 16px 20px;
+  border-radius: 8px;
+}
+
+.ssh-command {
+  flex: 1;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 14px;
+  color: #67c23a;
+  word-break: break-all;
+}
+
+.mono-text {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+}
+
+.terminal-tips {
+  margin-top: 10px;
+}
+
+.terminal-tips p {
+  margin: 4px 0;
+  font-size: 13px;
+}
+
+/* Segment dialog styles */
+.segment-dialog :deep(.el-dialog__body) {
+  padding: 20px;
 }
 
 /* Animations */
@@ -1239,5 +1153,20 @@ const handleCommand = async (command) => {
 
 :deep(.el-table__row.is-checking) {
   animation: pulse 1s infinite;
+}
+
+/* Table styling */
+:deep(.el-table) {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+:deep(.el-table th) {
+  background-color: #f5f7fa !important;
+  font-weight: 600;
+}
+
+:deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
+  background: #fafafa;
 }
 </style>
