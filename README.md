@@ -128,54 +128,36 @@ npm run dev
 
 The frontend will be available at `http://localhost:3000`
 
-## 🚀 Production Deployment
+## 🚀 Deployment (Docker)
 
-### Ubuntu 22.04 Deployment
+Docker is now the supported deployment path.
 
-For production deployment on Ubuntu 22.04, we provide a comprehensive deployment guide and automated script:
+### Automated Docker Deployment (Recommended)
 
-**📖 [Complete Ubuntu 22.04 Deployment Guide](DEPLOYMENT_UBUNTU.md)**
+Prerequisites:
+- Docker Engine
+- Docker Compose plugin (or `docker-compose`)
 
-This guide covers:
-- System requirements and prerequisites
-- Step-by-step installation instructions
-- Production configuration with Nginx and Gunicorn
-- SSL/TLS setup with Let's Encrypt
-- Security hardening
-- Monitoring and maintenance
-- Troubleshooting
-
-**Quick Deployment:**
+Steps:
 ```bash
-# 1. Clone the repository
 git clone https://github.com/mansdeanna2-collab/server-manager.git
 cd server-manager
-
-# 2. Run the automated deployment script
-sudo bash deploy-ubuntu.sh
+./deploy-docker.sh
 ```
 
-The script will automatically:
-- ✅ Install all required dependencies (Python 3.11, Node.js 20, Nginx)
-- ✅ Set up the backend with Gunicorn
-- ✅ Build and deploy the frontend
-- ✅ Configure Nginx as reverse proxy
-- ✅ Set up systemd services for auto-start
-- ✅ Configure firewall rules
-
-**Manual deployment instructions are also available in [DEPLOYMENT_UBUNTU.md](DEPLOYMENT_UBUNTU.md)**
-
-### Docker Deployment (Optional)
-
-Run both frontend and backend using Docker Compose:
-
-```bash
-docker-compose up -d
-```
-
-This will start:
+What you get:
 - Backend API on `http://localhost:5000`
 - Frontend UI on `http://localhost:3000`
+- Default credentials: `admin` / `admin123`
+
+### Manual Docker Compose (Alternative)
+
+If you prefer running the commands yourself:
+```bash
+docker compose up -d --build
+```
+
+> If your Docker installation uses the legacy binary, replace `docker compose` with `docker-compose`.
 
 ## 🔐 Default Credentials
 
