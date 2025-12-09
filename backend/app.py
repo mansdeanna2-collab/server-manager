@@ -125,4 +125,6 @@ if __name__ == '__main__':
     debug = os.getenv('DEBUG', 'True').lower() == 'true'
 
     logger.info(f"Starting Server Manager API on {host}:{port}")
-    socketio.run(app, host=host, port=port, debug=debug)
+    # allow_unsafe_werkzeug is needed when running with Werkzeug development server
+    # Only enable in debug mode for development; production should use a proper WSGI server
+    socketio.run(app, host=host, port=port, debug=debug, allow_unsafe_werkzeug=debug)
