@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 # 这是一个简化的映射，实际生产环境建议使用GeoIP数据库
 IP_REGION_MAP = {
     # 香港 (Hong Kong) - 腾讯云香港
+    '38.47.': 'HK',
     '103.10.': 'HK',
     '103.11.': 'HK',
     '103.12.': 'HK',
