@@ -1104,10 +1104,15 @@ const importServersFromFiles = async () => {
       ElMessage.warning(message + '（所有服务器已存在）')
     } else if (summary.error_count > 0) {
       ElMessage.warning(message)
-      // Log errors for debugging
-      errors.forEach(err => {
-        ElMessage.error(`${err.file}: ${err.error}`)
-      })
+      // Consolidate error messages - show first 3 errors max
+      const maxErrors = 3
+      const errorFiles = errors.slice(0, maxErrors).map(e => e.file).join(', ')
+      const remaining = errors.length - maxErrors
+      let errorDetail = `失败文件: ${errorFiles}`
+      if (remaining > 0) {
+        errorDetail += ` 等${remaining}个文件`
+      }
+      ElMessage.error(errorDetail)
     } else {
       ElMessage.info('未找到可导入的服务器文件')
     }

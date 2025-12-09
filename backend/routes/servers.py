@@ -15,7 +15,6 @@ servers_bp = Blueprint('servers', __name__, url_prefix='/api/servers')
 logger = logging.getLogger(__name__)
 MAX_ERROR_TYPE_LENGTH = 50
 MAX_SERVER_FETCH = 1000
-SERVER_FILES_DIR = '/home/Python/服务器'
 
 # Initialize password encryption
 password_encryptor = PasswordEncryption(Config.ENCRYPTION_KEY)
@@ -281,107 +280,134 @@ def get_port_type(_current_user, port):
     return jsonify(port_info), 200
 
 
+def _is_valid_ip(ip):
+    """Validate IP address format."""
+    if not ip or not isinstance(ip, str):
+        return False
+    parts = ip.split('.')
+    if len(parts) != 4:
+        return False
+    for part in parts:
+        if not part.isdigit():
+            return False
+        num = int(part)
+        if num < 0 or num > 255:
+            return False
+    return True
+
+
 @servers_bp.route('/import-from-files', methods=['POST'])
 @token_required
 def import_servers_from_files(_current_user):
-    """从/home/Python/服务器目录导入服务器"""
-    if not os.path.exists(SERVER_FILES_DIR):
-        return jsonify({'message': f'目录不存在: {SERVER_FILES_DIR}'}), 404
+    """从服务器文件目录导入服务器"""
+    server_files_dir = Config.SERVER_FILES_DIR
+    if not os.path.exists(server_files_dir):
+        return jsonify({'message': f'目录不存在: {server_files_dir}'}), 404
 
-    if not os.path.isdir(SERVER_FILES_DIR):
-        return jsonify({'message': f'路径不是目录: {SERVER_FILES_DIR}'}), 400
+    if not os.path.isdir(server_files_dir):
+        return jsonify({'message': f'路径不是目录: {server_files_dir}'}), 400
 
     imported = []
     skipped = []
     errors = []
 
     try:
-        files = os.listdir(SERVER_FILES_DIR)
+        files = os.listdir(server_files_dir)
     except PermissionError:
-        return jsonify({'message': f'无权限访问目录: {SERVER_FILES_DIR}'}), 403
+        return jsonify({'message': f'无权限访问目录: {server_files_dir}'}), 403
     except OSError as e:
         return jsonify({'message': f'读取目录失败: {str(e)}'}), 500
 
     txt_files = [f for f in files if f.endswith('.txt')]
 
-    for filename in txt_files:
-        filepath = os.path.join(SERVER_FILES_DIR, filename)
-        # Get notes from filename without .txt extension
-        notes = filename[:-4]  # Remove .txt
+    try:
+        for filename in txt_files:
+            filepath = os.path.join(server_files_dir, filename)
+            # Get notes from filename without .txt extension
+            notes = filename[:-4]  # Remove .txt
 
-        try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                content = f.read().strip()
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
 
-            if not content:
-                errors.append({'file': filename, 'error': '文件为空'})
-                continue
+                if not content:
+                    errors.append({'file': filename, 'error': '文件为空'})
+                    continue
 
-            data = json.loads(content)
+                data = json.loads(content)
 
-            # Extract IP from ips array
-            ips = data.get('ips', [])
-            if not ips or not isinstance(ips, list):
-                errors.append({'file': filename, 'error': '缺少有效的ips字段'})
-                continue
-            ip_address = ips[0]
+                # Extract IP from ips array
+                ips = data.get('ips', [])
+                if not ips or not isinstance(ips, list):
+                    errors.append({'file': filename, 'error': '缺少有效的ips字段'})
+                    continue
+                ip_address = ips[0]
 
-            # Extract password
-            password = data.get('password', '')
-            if not password:
-                errors.append({'file': filename, 'error': '缺少password字段'})
-                continue
+                # Validate IP address
+                if not _is_valid_ip(ip_address):
+                    errors.append({'file': filename, 'error': f'无效的IP地址: {ip_address}'})
+                    continue
 
-            # Determine OS type and set port/username accordingly
-            os_name = data.get('os_name', '').lower()
-            os_id = data.get('os_id', '').lower()
+                # Extract password
+                password = data.get('password', '')
+                if not password:
+                    errors.append({'file': filename, 'error': '缺少password字段'})
+                    continue
 
-            if 'windows' in os_name or 'windows' in os_id:
-                port = 3389
-                username = 'Administrator'
-            else:
-                # Default to Linux/CentOS - SSH
-                port = 22
-                username = 'root'
+                # Determine OS type and set port/username accordingly
+                os_name = data.get('os_name', '').lower()
+                os_id = data.get('os_id', '').lower()
 
-            # Check if server with same IP already exists
-            existing = Server.query.filter_by(ip_address=ip_address).first()
-            if existing:
-                skipped.append({
+                if 'windows' in os_name or 'windows' in os_id:
+                    port = 3389
+                    username = 'Administrator'
+                else:
+                    # Default to Linux/CentOS - SSH
+                    port = 22
+                    username = 'root'
+
+                # Check if server with same IP already exists
+                existing = Server.query.filter_by(ip_address=ip_address).first()
+                if existing:
+                    skipped.append({
+                        'file': filename,
+                        'ip': ip_address,
+                        'reason': '服务器已存在'
+                    })
+                    continue
+
+                # Encrypt password and create server
+                encrypted_password = password_encryptor.encrypt(password)
+                server = Server(
+                    ip_address=ip_address,
+                    port=port,
+                    username=username,
+                    encrypted_password=encrypted_password,
+                    notes=notes
+                )
+                db.session.add(server)
+                imported.append({
                     'file': filename,
                     'ip': ip_address,
-                    'reason': '服务器已存在'
+                    'port': port,
+                    'username': username,
+                    'notes': notes
                 })
-                continue
+                logger.info(f"Imported server from file: {filename} -> {ip_address}")
 
-            # Encrypt password and create server
-            encrypted_password = password_encryptor.encrypt(password)
-            server = Server(
-                ip_address=ip_address,
-                port=port,
-                username=username,
-                encrypted_password=encrypted_password,
-                notes=notes
-            )
-            db.session.add(server)
-            imported.append({
-                'file': filename,
-                'ip': ip_address,
-                'port': port,
-                'username': username,
-                'notes': notes
-            })
-            logger.info(f"Imported server from file: {filename} -> {ip_address}")
+            except json.JSONDecodeError as e:
+                errors.append({'file': filename, 'error': f'JSON解析失败: {str(e)}'})
+            except PermissionError:
+                errors.append({'file': filename, 'error': '无权限读取文件'})
+            except OSError as e:
+                errors.append({'file': filename, 'error': f'读取文件失败: {str(e)}'})
 
-        except json.JSONDecodeError as e:
-            errors.append({'file': filename, 'error': f'JSON解析失败: {str(e)}'})
-        except PermissionError:
-            errors.append({'file': filename, 'error': '无权限读取文件'})
-        except OSError as e:
-            errors.append({'file': filename, 'error': f'读取文件失败: {str(e)}'})
-
-    if imported:
-        db.session.commit()
+        if imported:
+            db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Import failed: {str(e)}")
+        return jsonify({'message': f'导入失败: {str(e)}'}), 500
 
     return jsonify({
         'imported': imported,
