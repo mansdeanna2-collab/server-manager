@@ -72,14 +72,66 @@
               clearable
             />
             
+            <!-- Loading State -->
+            <div
+              v-if="loading"
+              class="loading-container"
+            >
+              <el-icon
+                class="loading-icon"
+                :size="40"
+              >
+                <Loading />
+              </el-icon>
+              <p class="loading-text">
+                正在加载服务器...
+              </p>
+            </div>
+            
+            <!-- Error State -->
+            <el-result
+              v-else-if="loadError"
+              icon="error"
+              title="加载失败"
+              :sub-title="loadError"
+            >
+              <template #extra>
+                <el-button
+                  type="primary"
+                  @click="loadServers"
+                >
+                  <el-icon><Refresh /></el-icon>
+                  重新加载
+                </el-button>
+              </template>
+            </el-result>
+            
+            <!-- Empty State -->
             <el-empty
-              v-if="groupedServers.length === 0"
+              v-else-if="groupedServers.length === 0"
               description="未找到服务器"
-            />
+              :image-size="150"
+            >
+              <template #description>
+                <p class="empty-description">
+                  还没有添加任何服务器
+                </p>
+                <p class="empty-hint">
+                  点击「新增服务器」按钮开始管理您的服务器
+                </p>
+              </template>
+              <el-button
+                type="primary"
+                @click="showAddDialog"
+              >
+                <el-icon><Plus /></el-icon>
+                新增服务器
+              </el-button>
+            </el-empty>
             
             <!-- IP段卡片网格布局 - 每行2个 -->
             <div
-              v-else
+              v-if="!loading && !loadError && groupedServers.length > 0"
               class="segments-grid"
             >
               <div
@@ -502,7 +554,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Monitor, Odometer, User, ArrowDown, Plus, Refresh,
-  Search, View, Edit, Delete, OfficeBuilding, Connection, CopyDocument
+  Search, View, Edit, Delete, OfficeBuilding, Connection, CopyDocument, Loading
 } from '@element-plus/icons-vue'
 import { serversAPI, authAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -525,6 +577,8 @@ const terminalServer = ref(null)
 const terminalRef = ref(null)
 const refreshing = ref(false)
 const currentUser = ref(null)
+const loading = ref(false)
+const loadError = ref('')
 
 const activeMenu = computed(() => route.path)
 
@@ -715,6 +769,8 @@ onMounted(async () => {
 })
 
 const loadServers = async () => {
+  loading.value = true
+  loadError.value = ''
   try {
     const response = await serversAPI.getAll()
     servers.value = response.data.map(s => ({
@@ -723,8 +779,12 @@ const loadServers = async () => {
       checkDetail: s.checkDetail || '',
       error_type: s.error_type || ''
     }))
-  } catch (_error) {
-    ElMessage.error('加载服务器失败')
+  } catch (error) {
+    const message = error.response?.data?.message || error.message || '网络连接失败'
+    loadError.value = message
+    ElMessage.error(`加载服务器失败: ${message}`)
+  } finally {
+    loading.value = false
   }
 }
 
@@ -961,6 +1021,49 @@ const handleCommand = async (command) => {
 .search-input {
   margin-bottom: 24px;
   max-width: 320px;
+}
+
+/* Loading state styles */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #909399;
+}
+
+.loading-icon {
+  color: #409EFF;
+  animation: rotate 1s linear infinite;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  margin-top: 16px;
+  font-size: 14px;
+  color: #606266;
+}
+
+/* Empty state styles */
+.empty-description {
+  color: #606266;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.empty-hint {
+  color: #909399;
+  font-size: 12px;
+  margin-bottom: 16px;
 }
 
 /* IP段卡片网格布局 */
