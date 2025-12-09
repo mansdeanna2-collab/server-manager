@@ -845,8 +845,9 @@ const checkServer = async (server) => {
     } else {
       ElMessage.warning(`服务器 ${server.ip_address}: ${status.detail}`)
     }
-  } catch (_error) {
-    ElMessage.error(`检测服务器 ${server.ip_address} 失败`)
+  } catch (error) {
+    const errorMsg = error.response?.data?.message || error.message || '网络连接失败'
+    ElMessage.error(`检测服务器 ${server.ip_address} 失败: ${errorMsg}`)
   } finally {
     server.checking = false
   }
