@@ -544,7 +544,11 @@
             <template #default="scope">
               <div
                 class="editable-note"
+                role="button"
+                tabindex="0"
                 @click="editServerNote(scope.row)"
+                @keydown.enter="editServerNote(scope.row)"
+                @keydown.space.prevent="editServerNote(scope.row)"
               >
                 <span
                   v-if="scope.row.notes"
@@ -573,7 +577,7 @@
                 >
                   <el-button
                     size="small"
-                    :type="isServerFavorited(scope.row.id) ? 'warning' : 'default'"
+                    :class="{ 'is-favorited-btn': isServerFavorited(scope.row.id) }"
                     circle
                     @click="toggleServerFavorite(scope.row)"
                   >
@@ -749,7 +753,11 @@
             <template #default="scope">
               <div
                 class="editable-note"
+                role="button"
+                tabindex="0"
                 @click="editServerNote(scope.row)"
+                @keydown.enter="editServerNote(scope.row)"
+                @keydown.space.prevent="editServerNote(scope.row)"
               >
                 <span
                   v-if="scope.row.notes"
@@ -778,7 +786,7 @@
                 >
                   <el-button
                     size="small"
-                    :type="isServerFavorited(scope.row.id) ? 'warning' : 'default'"
+                    :class="{ 'is-favorited-btn': isServerFavorited(scope.row.id) }"
                     circle
                     @click="toggleServerFavorite(scope.row)"
                   >
@@ -1074,9 +1082,9 @@ const filteredDialogCurrentPage = ref(1)
 const segmentDialogSortBy = ref('time') // 'time' | 'ip'
 
 // IP段收藏和备注功能
-const FAVORITES_KEY = 'server_segment_favorites'
-const SEGMENT_NOTES_KEY = 'server_segment_notes'
-const SERVER_FAVORITES_KEY = 'server_favorites'
+const FAVORITES_KEY = 'server_manager_segment_favorites'
+const SEGMENT_NOTES_KEY = 'server_manager_segment_notes'
+const SERVER_FAVORITES_KEY = 'server_manager_server_favorites'
 const segmentFavorites = ref(new Set())
 const segmentNotes = ref({})
 const serverFavorites = ref(new Set())
@@ -2449,6 +2457,18 @@ const handleChangePassword = async () => {
 
 .action-buttons :deep(.el-button.is-circle) {
   padding: 8px;
+}
+
+/* 收藏按钮自定义样式 */
+.action-buttons :deep(.el-button.is-favorited-btn) {
+  background: linear-gradient(135deg, #ed8936 0%, #f6ad55 100%);
+  border-color: #ed8936;
+  color: white;
+}
+
+.action-buttons :deep(.el-button.is-favorited-btn:hover) {
+  background: linear-gradient(135deg, #dd6b20 0%, #ed8936 100%);
+  border-color: #dd6b20;
 }
 
 /* No info text */
