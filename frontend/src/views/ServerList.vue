@@ -1709,12 +1709,6 @@ const formatDate = (dateStr) => {
   return date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
 }
 
-const _formatSegmentTime = (timestamp) => {
-  if (!timestamp || timestamp === Number.NEGATIVE_INFINITY) return '从未'
-  const date = new Date(timestamp)
-  return date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
-}
-
 const handleMenuSelect = (index) => {
   router.push(index)
 }
