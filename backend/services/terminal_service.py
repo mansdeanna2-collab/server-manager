@@ -3,6 +3,7 @@ import logging
 import socket
 import threading
 import time
+import errno
 
 logger = logging.getLogger(__name__)
 
@@ -61,8 +62,13 @@ class TerminalService:
             return {'success': False, 'error_type': 'connection_refused', 'message': '连接被拒绝：端口可能未开放'}
         except OSError as e:
             logger.error(f"Terminal OS error for {self.host}:{self.port} - {str(e)}")
-            if 'Network is unreachable' in str(e):
+            # Use errno for reliable error detection
+            if e.errno == errno.ENETUNREACH:
                 return {'success': False, 'error_type': 'network_unreachable', 'message': '网络不可达：无法访问服务器'}
+            if e.errno == errno.EHOSTUNREACH:
+                return {'success': False, 'error_type': 'host_unreachable', 'message': '主机不可达：无法访问服务器'}
+            if e.errno == errno.ECONNREFUSED:
+                return {'success': False, 'error_type': 'connection_refused', 'message': '连接被拒绝：端口可能未开放'}
             return {'success': False, 'error_type': 'os_error', 'message': f'系统错误：{str(e)}'}
         except Exception as e:
             logger.error(f"Terminal connection failed to {self.host}:{self.port} - {str(e)}")
