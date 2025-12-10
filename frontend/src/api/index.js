@@ -94,7 +94,8 @@ export const serversAPI = {
   getSystemInfo: (id) => api.get(`/servers/${id}/system-info`),
   getIpRegion: (ipAddress) => api.get(`/servers/ip-region/${ipAddress}`),
   getPortType: (port) => api.get(`/servers/port-type/${port}`),
-  importFromFiles: () => api.post('/servers/import-from-files')
+  importFromFiles: () => api.post('/servers/import-from-files'),
+  readFile: (id) => api.get(`/servers/${id}/read-file`)
 }
 
 export default api
