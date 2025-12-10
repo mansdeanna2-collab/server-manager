@@ -21,7 +21,7 @@
             <el-icon><Odometer /></el-icon>
             仪表盘
           </el-menu-item>
-          <el-menu-item index="/servers">
+          <el-menu-item index="servers">
             <el-icon><OfficeBuilding /></el-icon>
             服务器
           </el-menu-item>
@@ -708,9 +708,9 @@ const handleMenuSelect = (index) => {
     if (!activeSubMenu.value) {
       activeSubMenu.value = 'information-query'
     }
-  } else {
-    // 外部路由（如服务器页面）
-    router.push(index)
+  } else if (index === 'servers') {
+    // 导航到服务器页面
+    router.push('/servers')
   }
 }
 
