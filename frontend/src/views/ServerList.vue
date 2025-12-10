@@ -25,6 +25,20 @@
             <el-icon><OfficeBuilding /></el-icon>
             服务器
           </el-menu-item>
+          <el-sub-menu index="main-program">
+            <template #title>
+              <el-icon><Setting /></el-icon>
+              主程序功能
+            </template>
+            <el-menu-item index="/information-query">
+              <el-icon><Search /></el-icon>
+              信息查询
+            </el-menu-item>
+            <el-menu-item index="/system-backup">
+              <el-icon><FolderOpened /></el-icon>
+              系统备份
+            </el-menu-item>
+          </el-sub-menu>
         </el-menu>
         <el-dropdown @command="handleCommand">
           <span class="user-dropdown">
@@ -1374,7 +1388,7 @@ import {
   Monitor, Odometer, User, ArrowDown, Plus, Refresh,
   Search, View, Edit, Delete, OfficeBuilding, Connection, CopyDocument, Loading,
   CircleCheck, CircleClose, Download, QuestionFilled, WarningFilled, Cpu, Star, EditPen,
-  Clock, Sort, Folder, FolderOpened, Document as DocumentIcon, Link
+  Clock, Sort, Folder, FolderOpened, Document as DocumentIcon, Link, Setting
 } from '@element-plus/icons-vue'
 import { serversAPI, authAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -2631,6 +2645,19 @@ const handleChangePassword = async () => {
   background: rgba(255, 255, 255, 0.25) !important;
   color: #fff !important;
   box-shadow: 0 2px 8px rgba(255, 255, 255, 0.2);
+}
+
+.header-menu :deep(.el-sub-menu__title) {
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-weight: 500;
+  font-size: 15px;
+  border-radius: 8px;
+  margin: 0 4px;
+  transition: all 0.3s ease;
+}
+
+.header-menu :deep(.el-sub-menu__title:hover) {
+  background: rgba(255, 255, 255, 0.2) !important;
 }
 
 .user-dropdown {
