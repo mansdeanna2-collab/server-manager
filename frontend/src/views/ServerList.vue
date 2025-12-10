@@ -348,8 +348,22 @@
               {{ getPortTypeIcon(selectedServer.port) }} {{ selectedServer.port }} ({{ getPortTypeName(selectedServer.port) }})
             </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="用户名">
-            {{ selectedServer.username }}
+          <el-descriptions-item label="用户名 / 密码">
+            <div class="credentials-display">
+              <span class="credential-value">{{ selectedServer.username }}</span>
+              <span class="credential-separator">/</span>
+              <span
+                v-if="loadingPassword"
+                class="credential-loading"
+              >
+                <el-icon class="is-loading"><Loading /></el-icon>
+                加载中...
+              </span>
+              <span
+                v-else
+                class="credential-value password-value"
+              >{{ selectedServerPassword }}</span>
+            </div>
           </el-descriptions-item>
           <el-descriptions-item label="状态">
             <StatusBadge
@@ -1452,6 +1466,8 @@ const passwordRules = {
 const isEdit = ref(false)
 const currentServer = ref(null)
 const selectedServer = ref(null)
+const selectedServerPassword = ref('')
+const loadingPassword = ref(false)
 const selectedSegment = ref(null)
 const terminalServer = ref(null)
 const terminalRef = ref(null)
@@ -2094,9 +2110,21 @@ const editServer = (server) => {
   dialogVisible.value = true
 }
 
-const viewServer = (server) => {
+const viewServer = async (server) => {
   selectedServer.value = server
+  selectedServerPassword.value = ''
+  loadingPassword.value = true
   detailDialogVisible.value = true
+  
+  // Fetch password separately
+  try {
+    const response = await serversAPI.getPassword(server.id)
+    selectedServerPassword.value = response.data.password
+  } catch (_error) {
+    selectedServerPassword.value = '获取失败'
+  } finally {
+    loadingPassword.value = false
+  }
 }
 
 const viewSegment = (segment) => {
@@ -3310,6 +3338,41 @@ const handleChangePassword = async () => {
   text-align: right;
 }
 
+/* Credentials display styles */
+.credentials-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.credential-value {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 14px;
+  color: #303133;
+  font-weight: 500;
+}
+
+.credential-separator {
+  color: #909399;
+  font-weight: 400;
+}
+
+.password-value {
+  color: #e6a23c;
+  background: #fdf6ec;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #faecd8;
+}
+
+.credential-loading {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #909399;
+  font-size: 13px;
+}
+
 /* Segment dialog header */
 .segment-header {
   display: flex;
@@ -3728,11 +3791,11 @@ const handleChangePassword = async () => {
 /* File Browser Section Styles - 升级版 */
 .file-browser-section {
   margin-top: 20px;
-  background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+  background: #ffffff;
   border-radius: 16px;
   padding: 20px;
-  border: 1px solid #30363d;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
 }
 
 .file-browser-header {
@@ -3742,7 +3805,7 @@ const handleChangePassword = async () => {
   gap: 16px;
   margin-bottom: 16px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #30363d;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .file-browser-title-area {
@@ -3758,7 +3821,7 @@ const handleChangePassword = async () => {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #f0f6fc;
+  color: #1e3a5f;
 }
 
 .file-browser-title-icon {
@@ -3771,7 +3834,7 @@ const handleChangePassword = async () => {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #21262d;
+  background: #f7fafc;
   padding: 8px 16px;
   border-radius: 8px;
   min-width: 200px;
@@ -3783,20 +3846,20 @@ const handleChangePassword = async () => {
 }
 
 .file-browser-path :deep(.el-breadcrumb__separator) {
-  color: #484f58;
+  color: #909399;
 }
 
 .breadcrumb-item-clickable {
   cursor: pointer;
-  color: #58a6ff;
+  color: #409EFF;
   transition: all 0.2s;
   padding: 2px 6px;
   border-radius: 4px;
 }
 
 .breadcrumb-item-clickable:hover {
-  color: #79c0ff;
-  background: rgba(88, 166, 255, 0.1);
+  color: #337ecc;
+  background: rgba(64, 158, 255, 0.1);
   text-decoration: none;
 }
 
@@ -3807,7 +3870,7 @@ const handleChangePassword = async () => {
   justify-content: center;
   gap: 16px;
   padding: 60px 20px;
-  color: #b1bac4;
+  color: #606266;
 }
 
 .loading-animation {
@@ -3816,9 +3879,9 @@ const handleChangePassword = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #21262d 0%, #161b22 100%);
+  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
   border-radius: 50%;
-  border: 2px solid #30363d;
+  border: 2px solid #e2e8f0;
 }
 
 .file-browser-error {
@@ -3826,29 +3889,29 @@ const handleChangePassword = async () => {
 }
 
 .file-browser-content {
-  background: #161b22;
+  background: #ffffff;
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid #30363d;
+  border: 1px solid #e2e8f0;
 }
 
 .file-browser-content :deep(.el-table) {
   background: transparent;
-  --el-table-bg-color: transparent;
-  --el-table-tr-bg-color: transparent;
-  --el-table-header-bg-color: #21262d;
-  --el-table-header-text-color: #e6edf3;
-  --el-table-text-color: #e6edf3;
-  --el-table-border-color: #30363d;
-  --el-table-row-hover-bg-color: rgba(88, 166, 255, 0.15);
+  --el-table-bg-color: #ffffff;
+  --el-table-tr-bg-color: #ffffff;
+  --el-table-header-bg-color: #f7fafc;
+  --el-table-header-text-color: #1e3a5f;
+  --el-table-text-color: #303133;
+  --el-table-border-color: #e2e8f0;
+  --el-table-row-hover-bg-color: rgba(64, 158, 255, 0.08);
 }
 
 .file-browser-content :deep(.el-table__body tr.directory-row) {
-  background: rgba(240, 136, 62, 0.05);
+  background: rgba(240, 136, 62, 0.08);
 }
 
 .file-browser-content :deep(.el-table__body tr.hidden-file-row) {
-  opacity: 0.6;
+  opacity: 0.7;
 }
 
 .file-browser-content :deep(.el-table__body tr:hover) {
@@ -3908,14 +3971,14 @@ const handleChangePassword = async () => {
 .file-name {
   font-family: 'Cascadia Code', 'Fira Code', Monaco, Menlo, Consolas, monospace;
   font-size: 14px;
-  color: #ffffff;
+  color: #1e3a5f;
   font-weight: 500;
 }
 
 .hidden-badge {
   font-size: 10px;
-  color: #b1bac4;
-  background: #30363d;
+  color: #909399;
+  background: #f0f2f5;
   padding: 2px 6px;
   border-radius: 4px;
   width: fit-content;
@@ -3924,12 +3987,12 @@ const handleChangePassword = async () => {
 .file-size {
   font-family: 'Cascadia Code', monospace;
   font-size: 13px;
-  color: #b1bac4;
+  color: #606266;
 }
 
 .file-icon {
   font-size: 20px;
-  color: #b1bac4;
+  color: #606266;
 }
 
 .folder-icon {
@@ -3943,10 +4006,10 @@ const handleChangePassword = async () => {
 .permission-code {
   font-family: 'Cascadia Code', Monaco, Menlo, Consolas, monospace;
   font-size: 12px;
-  background: #30363d;
+  background: #f0f2f5;
   padding: 4px 8px;
   border-radius: 6px;
-  color: #7ee787;
+  color: #67c23a;
   letter-spacing: 0.5px;
   font-weight: 500;
 }
