@@ -2,6 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Login from '@/views/Login.vue'
 import Dashboard from '@/views/Dashboard.vue'
 import ServerList from '@/views/ServerList.vue'
+import InformationQuery from '@/views/InformationQuery.vue'
+import SystemBackup from '@/views/SystemBackup.vue'
 
 const routes = [
   {
@@ -24,6 +26,18 @@ const routes = [
     path: '/servers',
     name: 'ServerList',
     component: ServerList,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/information-query',
+    name: 'InformationQuery',
+    component: InformationQuery,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/system-backup',
+    name: 'SystemBackup',
+    component: SystemBackup,
     meta: { requiresAuth: true }
   }
 ]
