@@ -2307,6 +2307,18 @@ const handleChangePassword = async () => {
   }
 }
 
+/* 减少动效偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .segment-card.is-favorited {
+    animation: none;
+    box-shadow: 0 4px 20px 0 rgba(237, 137, 54, 0.25);
+  }
+  
+  .segment-card::after {
+    display: none;
+  }
+}
+
 .segment-card-header {
   display: flex;
   align-items: center;
@@ -3050,6 +3062,13 @@ const handleChangePassword = async () => {
   }
   50% {
     transform: scale(1.2);
+  }
+}
+
+/* 减少动效偏好 - 星标动画 */
+@media (prefers-reduced-motion: reduce) {
+  .favorite-star-icon {
+    animation: none;
   }
 }
 
