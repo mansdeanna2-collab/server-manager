@@ -817,6 +817,14 @@
                 </el-button>
                 <el-button
                   size="small"
+                  type="info"
+                  @click="readServerFile(scope.row)"
+                >
+                  <el-icon><Document /></el-icon>
+                  读取文件
+                </el-button>
+                <el-button
+                  size="small"
                   type="warning"
                   :loading="scope.row.checking"
                   @click="checkServer(scope.row)"
@@ -1013,6 +1021,47 @@
         </el-button>
       </template>
     </el-dialog>
+    
+    <!-- Read File Dialog -->
+    <el-dialog
+      v-model="fileDialogVisible"
+      :title="fileDialogServer ? `文件内容 - ${fileDialogServer.ip_address}` : '文件内容'"
+      width="700px"
+      class="file-dialog"
+    >
+      <div
+        v-if="fileDialogLoading"
+        class="loading-container"
+      >
+        <el-icon
+          class="loading-icon"
+          :size="40"
+        >
+          <Loading />
+        </el-icon>
+        <p class="loading-text">
+          正在读取文件...
+        </p>
+      </div>
+      <div
+        v-else-if="fileDialogContent"
+        class="file-content-container"
+      >
+        <div class="file-info">
+          <el-tag
+            type="info"
+            effect="plain"
+          >
+            文件名: {{ fileDialogFilename }}
+          </el-tag>
+        </div>
+        <pre class="file-content">{{ JSON.stringify(fileDialogContent, null, 2) }}</pre>
+      </div>
+      <el-empty
+        v-else
+        description="未找到对应的配置文件"
+      />
+    </el-dialog>
   </div>
 </template>
 
@@ -1024,7 +1073,7 @@ import {
   Monitor, Odometer, User, ArrowDown, Plus, Refresh,
   Search, View, Edit, Delete, OfficeBuilding, Connection, CopyDocument, Loading,
   CircleCheck, CircleClose, Download, QuestionFilled, WarningFilled, Cpu, Star, EditPen,
-  Clock, Sort
+  Clock, Sort, Document
 } from '@element-plus/icons-vue'
 import { serversAPI, authAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -1085,6 +1134,13 @@ const currentUser = ref(null)
 const loading = ref(false)
 const loadError = ref('')
 const importing = ref(false)
+
+// 读取文件对话框状态
+const fileDialogVisible = ref(false)
+const fileDialogLoading = ref(false)
+const fileDialogContent = ref(null)
+const fileDialogFilename = ref('')
+const fileDialogServer = ref(null)
 
 // Pagination variables
 const PAGE_SIZE = 10
@@ -1961,6 +2017,26 @@ const handleChangePassword = async () => {
     }
   })
 }
+
+// 读取服务器配置文件
+const readServerFile = async (server) => {
+  fileDialogServer.value = server
+  fileDialogLoading.value = true
+  fileDialogContent.value = null
+  fileDialogFilename.value = ''
+  fileDialogVisible.value = true
+  
+  try {
+    const response = await serversAPI.readFile(server.id)
+    fileDialogContent.value = response.data.content
+    fileDialogFilename.value = response.data.filename
+  } catch (error) {
+    const message = error.response?.data?.message || '读取文件失败'
+    ElMessage.warning(message)
+  } finally {
+    fileDialogLoading.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -2429,21 +2505,21 @@ const handleChangePassword = async () => {
 
 .segment-card-actions-left {
   display: flex;
-  gap: 14px;
+  gap: 18px;
   align-items: center;
 }
 
 .action-icon {
   cursor: pointer;
-  font-size: 28px;
+  font-size: 36px;
   color: #a0aec0;
   transition: all 0.3s ease;
-  padding: 10px;
-  border-radius: 10px;
+  padding: 12px;
+  border-radius: 12px;
 }
 
 .action-icon:hover {
-  transform: scale(1.2);
+  transform: scale(1.15);
   background: rgba(0, 0, 0, 0.06);
 }
 
@@ -2922,16 +2998,16 @@ const handleChangePassword = async () => {
   background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
 }
 
-/* Filtered dialog styles - 企业级对话框美化 */
+/* Filtered dialog styles - 淡蓝色企业级对话框美化 */
 .filtered-dialog :deep(.el-dialog) {
   margin-top: 8vh;
   border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 25px 80px rgba(214, 158, 46, 0.25);
+  box-shadow: 0 25px 80px rgba(66, 153, 225, 0.25);
 }
 
 .filtered-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #c05621 0%, #dd6b20 50%, #ed8936 100%);
+  background: linear-gradient(135deg, #3182ce 0%, #63b3ed 50%, #90cdf4 100%);
   color: white;
   padding: 24px 32px;
   margin: 0;
@@ -2955,7 +3031,7 @@ const handleChangePassword = async () => {
 
 .filtered-dialog :deep(.el-dialog__body) {
   padding: 32px;
-  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+  background: linear-gradient(135deg, #ebf8ff 0%, #e6fffa 100%);
 }
 
 /* Animations */
@@ -3097,5 +3173,68 @@ const handleChangePassword = async () => {
 .segments-container {
   display: flex;
   flex-direction: column;
+}
+
+/* File dialog styles - 淡蓝色主题 */
+.file-dialog :deep(.el-dialog) {
+  margin-top: 8vh;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 25px 80px rgba(66, 153, 225, 0.25);
+}
+
+.file-dialog :deep(.el-dialog__header) {
+  background: linear-gradient(135deg, #3182ce 0%, #63b3ed 50%, #90cdf4 100%);
+  color: white;
+  padding: 24px 32px;
+  margin: 0;
+}
+
+.file-dialog :deep(.el-dialog__title) {
+  color: white;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.5px;
+}
+
+.file-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
+  color: white;
+  font-size: 20px;
+}
+
+.file-dialog :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.file-dialog :deep(.el-dialog__body) {
+  padding: 32px;
+  background: linear-gradient(135deg, #ebf8ff 0%, #e6fffa 100%);
+}
+
+.file-content-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.file-content {
+  background: #1a202c;
+  color: #68d391;
+  padding: 20px;
+  border-radius: 12px;
+  overflow-x: auto;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  max-height: 400px;
+  overflow-y: auto;
+  margin: 0;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 </style>

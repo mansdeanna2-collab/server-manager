@@ -499,3 +499,58 @@ def import_servers_from_files(_current_user):
             'error_count': len(errors)
         }
     }), 200
+
+
+@servers_bp.route('/<int:server_id>/read-file', methods=['GET'])
+@token_required
+def read_server_file(_current_user, server_id):
+    """读取服务器对应的配置文件内容"""
+    server = Server.query.get(server_id)
+
+    if not server:
+        return jsonify({'message': 'Server not found'}), 404
+
+    server_files_dir = Config.SERVER_FILES_DIR
+    if not os.path.exists(server_files_dir):
+        return jsonify({'message': f'目录不存在: {server_files_dir}'}), 404
+
+    # 获取服务器IP地址
+    ip_address = server.ip_address
+
+    # 搜索包含该IP地址的文件
+    try:
+        files = os.listdir(server_files_dir)
+    except PermissionError:
+        return jsonify({'message': f'无权限访问目录: {server_files_dir}'}), 403
+    except OSError as e:
+        return jsonify({'message': f'读取目录失败: {str(e)}'}), 500
+
+    txt_files = [f for f in files if f.endswith('.txt')]
+
+    for filename in txt_files:
+        filepath = os.path.join(server_files_dir, filename)
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+
+            if not content:
+                continue
+
+            try:
+                data = json.loads(content)
+                ips = data.get('ips', [])
+                if ip_address in ips:
+                    return jsonify({
+                        'filename': filename,
+                        'content': data,
+                        'raw_content': content
+                    }), 200
+            except json.JSONDecodeError:
+                continue
+
+        except (PermissionError, OSError):
+            continue
+
+    return jsonify({
+        'message': f'未找到IP地址 {ip_address} 对应的配置文件'
+    }), 404
