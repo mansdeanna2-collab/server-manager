@@ -437,35 +437,20 @@
       <div v-if="selectedSegment">
         <div class="segment-header">
           <span class="segment-count">共 {{ selectedSegment.count }} 台服务器</span>
-          <div class="segment-header-right">
-            <div
-              v-if="selectedSegment.count > PAGE_SIZE"
-              class="pagination-top"
+          <div class="segment-sort-options">
+            <el-radio-group
+              v-model="segmentDialogSortBy"
+              size="small"
             >
-              <el-pagination
-                v-model:current-page="segmentDialogCurrentPage"
-                :page-size="PAGE_SIZE"
-                :total="selectedSegment.count"
-                layout="prev, pager, next"
-                background
-                size="small"
-              />
-            </div>
-            <div class="segment-sort-options">
-              <el-radio-group
-                v-model="segmentDialogSortBy"
-                size="small"
-              >
-                <el-radio-button value="time">
-                  <el-icon><Clock /></el-icon>
-                  按时间
-                </el-radio-button>
-                <el-radio-button value="ip">
-                  <el-icon><Sort /></el-icon>
-                  按IP
-                </el-radio-button>
-              </el-radio-group>
-            </div>
+              <el-radio-button value="time">
+                <el-icon><Clock /></el-icon>
+                按时间
+              </el-radio-button>
+              <el-radio-button value="ip">
+                <el-icon><Sort /></el-icon>
+                按IP
+              </el-radio-button>
+            </el-radio-group>
           </div>
         </div>
         <el-table
@@ -650,6 +635,18 @@
             </template>
           </el-table-column>
         </el-table>
+        <div
+          v-if="selectedSegment.count > PAGE_SIZE"
+          class="pagination-container"
+        >
+          <el-pagination
+            v-model:current-page="segmentDialogCurrentPage"
+            :page-size="PAGE_SIZE"
+            :total="selectedSegment.count"
+            layout="prev, pager, next"
+            background
+          />
+        </div>
       </div>
     </el-dialog>
     <el-dialog
@@ -661,31 +658,16 @@
       <div v-if="filteredDialogServers.length > 0">
         <div class="segment-header">
           <span class="segment-count">共 {{ filteredDialogServers.length }} 台服务器</span>
-          <div class="segment-header-right">
-            <div
-              v-if="filteredDialogServers.length > PAGE_SIZE"
-              class="pagination-top"
-            >
-              <el-pagination
-                v-model:current-page="filteredDialogCurrentPage"
-                :page-size="PAGE_SIZE"
-                :total="filteredDialogServers.length"
-                layout="prev, pager, next"
-                background
-                size="small"
-              />
-            </div>
-            <el-button
-              v-if="filteredDialogType === 'normal'"
-              type="success"
-              size="small"
-              :loading="batchGettingSystemInfo"
-              @click="batchGetSystemInfo"
-            >
-              <el-icon><Cpu /></el-icon>
-              一键获取系统信息
-            </el-button>
-          </div>
+          <el-button
+            v-if="filteredDialogType === 'normal'"
+            type="success"
+            size="small"
+            :loading="batchGettingSystemInfo"
+            @click="batchGetSystemInfo"
+          >
+            <el-icon><Cpu /></el-icon>
+            一键获取系统信息
+          </el-button>
         </div>
         <el-table
           :data="paginatedFilteredServers"
@@ -869,6 +851,18 @@
             </template>
           </el-table-column>
         </el-table>
+        <div
+          v-if="filteredDialogServers.length > PAGE_SIZE"
+          class="pagination-container"
+        >
+          <el-pagination
+            v-model:current-page="filteredDialogCurrentPage"
+            :page-size="PAGE_SIZE"
+            :total="filteredDialogServers.length"
+            layout="prev, pager, next"
+            background
+          />
+        </div>
       </div>
       <el-empty
         v-else
@@ -2435,22 +2429,22 @@ const handleChangePassword = async () => {
 
 .segment-card-actions-left {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   align-items: center;
 }
 
 .action-icon {
   cursor: pointer;
-  font-size: 22px;
+  font-size: 28px;
   color: #a0aec0;
   transition: all 0.3s ease;
-  padding: 8px;
-  border-radius: 8px;
+  padding: 10px;
+  border-radius: 10px;
 }
 
 .action-icon:hover {
-  transform: scale(1.15);
-  background: rgba(0, 0, 0, 0.05);
+  transform: scale(1.2);
+  background: rgba(0, 0, 0, 0.06);
 }
 
 .favorite-icon:hover {
@@ -2764,29 +2758,6 @@ const handleChangePassword = async () => {
   border-bottom: 2px solid #e2e8f0;
 }
 
-.segment-header-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.pagination-top {
-  display: flex;
-  align-items: center;
-}
-
-.pagination-top :deep(.el-pagination.is-background .el-pager li) {
-  border-radius: 8px;
-  font-weight: 500;
-  min-width: 32px;
-  height: 32px;
-}
-
-.pagination-top :deep(.el-pagination.is-background .el-pager li:not(.is-disabled).is-active) {
-  background: linear-gradient(135deg, #2c5282 0%, #3182ce 100%);
-  box-shadow: 0 2px 8px rgba(49, 130, 206, 0.3);
-}
-
 .segment-count {
   color: #4a5568;
   font-size: 16px;
@@ -3037,20 +3008,42 @@ const handleChangePassword = async () => {
   padding: 14px 0;
 }
 
-/* 收藏行高亮样式 */
+/* 收藏行高亮样式 - 高级美化 */
 :deep(.el-table__body tr.favorited-row > td) {
-  background: linear-gradient(135deg, #fffaf0 0%, #fef3c7 100%) !important;
-  border-left: 3px solid #ed8936;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 50%, #fed7aa 100%) !important;
+  border-left: 4px solid #f97316;
+  position: relative;
+}
+
+:deep(.el-table__body tr.favorited-row > td:first-child) {
+  border-left: 4px solid #f97316;
+  border-radius: 4px 0 0 4px;
+}
+
+:deep(.el-table__body tr.favorited-row > td:last-child) {
+  border-radius: 0 4px 4px 0;
+}
+
+:deep(.el-table__body tr.favorited-row > td::before) {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, rgba(249, 115, 22, 0.08) 0%, transparent 30%);
+  pointer-events: none;
 }
 
 :deep(.el-table__body tr.favorited-row:hover > td) {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
+  background: linear-gradient(135deg, #ffedd5 0%, #fed7aa 50%, #fdba74 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.2);
 }
 
 /* IP列收藏星标 */
 .favorite-star-icon {
-  color: #ed8936;
-  font-size: 14px;
+  color: #f97316;
+  font-size: 16px;
   margin-right: 4px;
   vertical-align: middle;
   animation: starPulse 1.5s ease-in-out infinite;
