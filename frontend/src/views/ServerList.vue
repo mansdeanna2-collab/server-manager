@@ -915,7 +915,7 @@
         </div>
         
         <Terminal
-          v-if="terminalServer.port !== 3389"
+          v-if="terminalServer.port !== RDP_PORT"
           ref="terminalRef"
           :server="terminalServer"
           :visible="terminalDialogVisible"
@@ -935,7 +935,7 @@
             show-icon
           >
             <template #default>
-              <p>端口 3389 为 Windows RDP 服务，请使用系统远程桌面连接。</p>
+              <p>端口 {{ RDP_PORT }} 为 Windows RDP 服务，请使用系统远程桌面连接。</p>
               <div class="rdp-command-box">
                 <code class="rdp-command">{{ getSshCommand(terminalServer) }}</code>
                 <el-button
@@ -953,7 +953,7 @@
         
         <!-- File Browser Section - Only show after terminal connected and for SSH servers -->
         <div
-          v-if="terminalConnected && terminalServer.port !== 3389"
+          v-if="terminalConnected && terminalServer.port !== RDP_PORT"
           class="file-browser-section"
         >
           <div class="file-browser-header">
@@ -1494,10 +1494,14 @@ const getRowClassName = ({ row }) => {
 
 const activeMenu = computed(() => route.path)
 
+// 常用端口号常量
+const RDP_PORT = 3389
+const SSH_PORT = 22
+
 // 端口类型信息
 const PORT_TYPE_MAP = {
-  22: { type: 'SSH', osHint: 'Linux/Unix', icon: '🐧', color: 'success' },
-  3389: { type: 'RDP', osHint: 'Windows', icon: '🪟', color: 'primary' },
+  [SSH_PORT]: { type: 'SSH', osHint: 'Linux/Unix', icon: '🐧', color: 'success' },
+  [RDP_PORT]: { type: 'RDP', osHint: 'Windows', icon: '🪟', color: 'primary' },
   23: { type: 'Telnet', osHint: 'Network', icon: '📡', color: 'warning' },
   21: { type: 'FTP', osHint: 'File', icon: '📁', color: 'info' },
   80: { type: 'HTTP', osHint: 'Web', icon: '🌐', color: '' },
@@ -1665,7 +1669,7 @@ const unknownCount = computed(() => servers.value.filter(s => s.status === 'unkn
 // 错误: 在线且有error_type的 (排除Administrator用户和离线的服务器)
 const errorCount = computed(() => servers.value.filter(s => s.status === 'online' && s.error_type && s.username !== 'Administrator').length)
 // 电脑 (Windows RDP) - 包含Administrator用户的错误和离线状态
-const computerCount = computed(() => servers.value.filter(s => s.port === 3389).length)
+const computerCount = computed(() => servers.value.filter(s => s.port === RDP_PORT).length)
 
 // Show filtered servers in dialog
 const showFilteredServersDialog = (filterType) => {
@@ -1689,7 +1693,7 @@ const showFilteredServersDialog = (filterType) => {
     title = '错误服务器'
   } else if (filterType === 'computer') {
     // 电脑对话框：显示所有Windows RDP服务器（包含Administrator的错误和离线状态）
-    result = result.filter(server => server.port === 3389)
+    result = result.filter(server => server.port === RDP_PORT)
     title = '电脑 (Windows RDP)'
   }
   
@@ -2151,9 +2155,9 @@ const saveFileContent = async () => {
 
 const getSshCommand = (server) => {
   if (!server) return ''
-  if (server.port === 22) {
+  if (server.port === SSH_PORT) {
     return `ssh ${server.username}@${server.ip_address}`
-  } else if (server.port === 3389) {
+  } else if (server.port === RDP_PORT) {
     return `mstsc /v:${server.ip_address}`
   } else {
     return `ssh -p ${server.port} ${server.username}@${server.ip_address}`
@@ -2356,64 +2360,6 @@ const handleChangePassword = async () => {
       }
     }
   })
-}
-
-// 注意：readServerFile 功能已集成到终端文件浏览器中，以下函数保留但不再使用
-const _readServerFile = async (server) => {
-  // 检查是否为Windows服务器（RDP端口）
-  if (server.port === 3389) {
-    ElMessage.warning('Windows远程桌面服务不支持读取文件')
-    return
-  }
-
-  // 弹出对话框让用户输入文件路径
-  try {
-    const { value } = await ElMessageBox.prompt(
-      `请输入要读取的文件路径（服务器 ${server.ip_address}）`,
-      '读取文件',
-      {
-        inputValue: '/etc/passwd',
-        inputPlaceholder: '例如: /etc/passwd, /var/log/syslog',
-        confirmButtonText: '读取',
-        cancelButtonText: '取消',
-        inputPattern: /^\/(?!.*\.\.)(?!.*[;|&$`\n\r])[^\0]*$/,
-        inputErrorMessage: '请输入有效的文件路径（以 / 开头，不能包含 .. 或特殊字符）'
-      }
-    )
-
-    if (!value || !value.trim()) {
-      return
-    }
-
-    const filePath = value.trim()
-
-    // 额外的前端验证
-    const dangerousPatterns = ['..', ';', '|', '&', '$', '`']
-    for (const pattern of dangerousPatterns) {
-      if (filePath.includes(pattern)) {
-        ElMessage.warning(`文件路径不能包含 "${pattern}"`)
-        return
-      }
-    }
-
-    fileDialogServer.value = server
-    fileDialogLoading.value = true
-    fileDialogContent.value = null
-    fileDialogFilename.value = ''
-    fileDialogVisible.value = true
-
-    const response = await serversAPI.readFile(server.id, filePath)
-    fileDialogContent.value = response.data.content
-    fileDialogFilename.value = response.data.filename
-    fileDialogLoading.value = false
-  } catch (error) {
-    if (error !== 'cancel' && error !== 'close') {
-      const message = error.response?.data?.message || '读取文件失败'
-      ElMessage.warning(message)
-      fileDialogLoading.value = false
-      fileDialogVisible.value = false
-    }
-  }
 }
 </script>
 
