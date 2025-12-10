@@ -538,3 +538,77 @@ def read_server_file(_current_user, server_id):
             'message': result['message'],
             'error_type': result.get('error_type')
         }), 400
+
+
+@servers_bp.route('/<int:server_id>/list-directory', methods=['POST'])
+@token_required
+def list_server_directory(_current_user, server_id):
+    """通过SSH列出远程服务器上的目录内容"""
+    server = Server.query.get(server_id)
+
+    if not server:
+        return jsonify({'message': 'Server not found'}), 404
+
+    data = request.get_json()
+    dir_path = data.get('dir_path', '/') if data else '/'
+
+    # 检查端口是否为SSH端口
+    if server.port == 3389:
+        return jsonify({'message': 'Windows远程桌面服务不支持浏览文件'}), 400
+
+    # Decrypt password
+    password = password_encryptor.decrypt(server.encrypted_password)
+
+    # Create SSH connection and list directory
+    ssh = SSHService(server.ip_address, server.port, server.username, password)
+    result = ssh.list_directory(dir_path)
+
+    if result['success']:
+        return jsonify({
+            'path': result['path'],
+            'files': result['files']
+        }), 200
+    else:
+        return jsonify({
+            'message': result['message'],
+            'error_type': result.get('error_type')
+        }), 400
+
+
+@servers_bp.route('/<int:server_id>/save-file', methods=['POST'])
+@token_required
+def save_server_file(_current_user, server_id):
+    """通过SSH保存内容到远程服务器上的文件"""
+    server = Server.query.get(server_id)
+
+    if not server:
+        return jsonify({'message': 'Server not found'}), 404
+
+    data = request.get_json()
+    file_path = data.get('file_path', '') if data else ''
+    content = data.get('content', '') if data else ''
+
+    if not file_path:
+        return jsonify({'message': '请提供文件路径'}), 400
+
+    # 检查端口是否为SSH端口
+    if server.port == 3389:
+        return jsonify({'message': 'Windows远程桌面服务不支持保存文件'}), 400
+
+    # Decrypt password
+    password = password_encryptor.decrypt(server.encrypted_password)
+
+    # Create SSH connection and write file
+    ssh = SSHService(server.ip_address, server.port, server.username, password)
+    result = ssh.write_remote_file(file_path, content)
+
+    if result['success']:
+        return jsonify({
+            'message': result['message'],
+            'file_path': result['file_path']
+        }), 200
+    else:
+        return jsonify({
+            'message': result['message'],
+            'error_type': result.get('error_type')
+        }), 400

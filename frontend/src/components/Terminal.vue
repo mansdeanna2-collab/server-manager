@@ -330,7 +330,7 @@ defineExpose({
 .terminal-wrapper {
   position: relative;
   width: 100%;
-  height: 500px;
+  height: 600px;
   background: #1e1e1e;
   border-radius: 8px;
   overflow: hidden;
