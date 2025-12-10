@@ -3807,7 +3807,7 @@ const handleChangePassword = async () => {
   justify-content: center;
   gap: 16px;
   padding: 60px 20px;
-  color: #8b949e;
+  color: #b1bac4;
 }
 
 .loading-animation {
@@ -3837,10 +3837,10 @@ const handleChangePassword = async () => {
   --el-table-bg-color: transparent;
   --el-table-tr-bg-color: transparent;
   --el-table-header-bg-color: #21262d;
-  --el-table-header-text-color: #c9d1d9;
-  --el-table-text-color: #c9d1d9;
+  --el-table-header-text-color: #e6edf3;
+  --el-table-text-color: #e6edf3;
   --el-table-border-color: #30363d;
-  --el-table-row-hover-bg-color: rgba(88, 166, 255, 0.1);
+  --el-table-row-hover-bg-color: rgba(88, 166, 255, 0.15);
 }
 
 .file-browser-content :deep(.el-table__body tr.directory-row) {
@@ -3907,28 +3907,29 @@ const handleChangePassword = async () => {
 
 .file-name {
   font-family: 'Cascadia Code', 'Fira Code', Monaco, Menlo, Consolas, monospace;
-  font-size: 13px;
-  color: #f0f6fc;
+  font-size: 14px;
+  color: #ffffff;
+  font-weight: 500;
 }
 
 .hidden-badge {
   font-size: 10px;
-  color: #8b949e;
-  background: #21262d;
-  padding: 1px 6px;
+  color: #b1bac4;
+  background: #30363d;
+  padding: 2px 6px;
   border-radius: 4px;
   width: fit-content;
 }
 
 .file-size {
   font-family: 'Cascadia Code', monospace;
-  font-size: 12px;
-  color: #8b949e;
+  font-size: 13px;
+  color: #b1bac4;
 }
 
 .file-icon {
   font-size: 20px;
-  color: #8b949e;
+  color: #b1bac4;
 }
 
 .folder-icon {
@@ -3941,12 +3942,13 @@ const handleChangePassword = async () => {
 
 .permission-code {
   font-family: 'Cascadia Code', Monaco, Menlo, Consolas, monospace;
-  font-size: 11px;
-  background: #21262d;
+  font-size: 12px;
+  background: #30363d;
   padding: 4px 8px;
   border-radius: 6px;
   color: #7ee787;
   letter-spacing: 0.5px;
+  font-weight: 500;
 }
 
 .file-actions {
@@ -4067,7 +4069,7 @@ const handleChangePassword = async () => {
   font-family: 'Cascadia Code', Monaco, Menlo, Consolas, monospace;
   font-size: 13px;
   line-height: 1.6;
-  color: #484f58;
+  color: #6e7681;
   text-align: right;
 }
 
@@ -4077,10 +4079,10 @@ const handleChangePassword = async () => {
 
 .file-editor-textarea :deep(.el-textarea__inner) {
   font-family: 'Cascadia Code', 'Fira Code', Monaco, Menlo, Consolas, monospace;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
   background: #0d1117;
-  color: #c9d1d9;
+  color: #e6edf3;
   border-radius: 0;
   padding: 16px;
   min-height: 450px;
@@ -4090,7 +4092,7 @@ const handleChangePassword = async () => {
 
 .file-editor-textarea :deep(.el-textarea__inner:read-only) {
   background: #0d1117;
-  color: #8b949e;
+  color: #b1bac4;
 }
 
 .file-editor-textarea :deep(.el-textarea__inner:focus) {
