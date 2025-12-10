@@ -1367,6 +1367,45 @@ import StatusBadge from '@/components/StatusBadge.vue'
 import ServerForm from '@/components/ServerForm.vue'
 import Terminal from '@/components/Terminal.vue'
 
+// 文件扩展名图标映射配置
+const FILE_EXTENSION_ICONS = {
+  // 代码文件
+  js: '📜', ts: '📜', jsx: '📜', tsx: '📜',
+  py: '🐍', java: '☕', rb: '💎', go: '🔷',
+  rs: '🦀', c: '⚙️', cpp: '⚙️', h: '⚙️',
+  php: '🐘', swift: '🍎', kt: '🔶',
+  // 前端
+  html: '🌐', htm: '🌐', css: '🎨', scss: '🎨', less: '🎨',
+  vue: '💚', svelte: '🧡',
+  // 配置
+  json: '📋', yaml: '📋', yml: '📋', xml: '📋',
+  toml: '📋', ini: '📋', conf: '📋', cfg: '📋',
+  env: '🔐',
+  // 文档
+  md: '📝', txt: '📄', doc: '📄', docx: '📄',
+  pdf: '📕', rtf: '📄',
+  // 数据
+  sql: '🗄️', db: '🗄️', sqlite: '🗄️',
+  csv: '📊', xls: '📊', xlsx: '📊',
+  // 图片
+  jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️',
+  svg: '🖼️', ico: '🖼️', webp: '🖼️',
+  // 压缩
+  zip: '📦', tar: '📦', gz: '📦', rar: '📦', '7z': '📦',
+  // Shell
+  sh: '🖥️', bash: '🖥️', zsh: '🖥️', fish: '🖥️',
+  // 日志
+  log: '📋',
+  // 其他
+  lock: '🔒', key: '🔑', pem: '🔑', crt: '🔐'
+}
+
+// 代码文件扩展名列表
+const CODE_FILE_EXTENSIONS = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'rb', 'go', 'rs', 'c', 'cpp', 'h', 'php', 'swift', 'kt', 'vue', 'svelte']
+
+// 配置文件扩展名列表
+const CONFIG_FILE_EXTENSIONS = ['json', 'yaml', 'yml', 'xml', 'toml', 'ini', 'conf', 'cfg', 'env']
+
 const router = useRouter()
 const route = useRoute()
 const servers = ref([])
@@ -2190,48 +2229,15 @@ const handleFileClick = (row) => {
 // 文件浏览器辅助函数
 const getFileExtIcon = (filename) => {
   const ext = filename.split('.').pop()?.toLowerCase() || ''
-  const iconMap = {
-    // 代码文件
-    'js': '📜', 'ts': '📜', 'jsx': '📜', 'tsx': '📜',
-    'py': '🐍', 'java': '☕', 'rb': '💎', 'go': '🔷',
-    'rs': '🦀', 'c': '⚙️', 'cpp': '⚙️', 'h': '⚙️',
-    'php': '🐘', 'swift': '🍎', 'kt': '🔶',
-    // 前端
-    'html': '🌐', 'htm': '🌐', 'css': '🎨', 'scss': '🎨', 'less': '🎨',
-    'vue': '💚', 'svelte': '🧡',
-    // 配置
-    'json': '📋', 'yaml': '📋', 'yml': '📋', 'xml': '📋',
-    'toml': '📋', 'ini': '📋', 'conf': '📋', 'cfg': '📋',
-    'env': '🔐',
-    // 文档
-    'md': '📝', 'txt': '📄', 'doc': '📄', 'docx': '📄',
-    'pdf': '📕', 'rtf': '📄',
-    // 数据
-    'sql': '🗄️', 'db': '🗄️', 'sqlite': '🗄️',
-    'csv': '📊', 'xls': '📊', 'xlsx': '📊',
-    // 图片
-    'jpg': '🖼️', 'jpeg': '🖼️', 'png': '🖼️', 'gif': '🖼️',
-    'svg': '🖼️', 'ico': '🖼️', 'webp': '🖼️',
-    // 压缩
-    'zip': '📦', 'tar': '📦', 'gz': '📦', 'rar': '📦', '7z': '📦',
-    // Shell
-    'sh': '🖥️', 'bash': '🖥️', 'zsh': '🖥️', 'fish': '🖥️',
-    // 日志
-    'log': '📋',
-    // 其他
-    'lock': '🔒', 'key': '🔑', 'pem': '🔑', 'crt': '🔐',
-  }
-  return iconMap[ext] || '📄'
+  return FILE_EXTENSION_ICONS[ext] || '📄'
 }
 
 const getFileIconClass = (file) => {
   if (file.type === 'directory') return 'folder'
   if (file.type === 'link') return 'link'
   const ext = file.name.split('.').pop()?.toLowerCase() || ''
-  const codeExts = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'rb', 'go', 'rs', 'c', 'cpp', 'h', 'php', 'swift', 'kt', 'vue', 'svelte']
-  const configExts = ['json', 'yaml', 'yml', 'xml', 'toml', 'ini', 'conf', 'cfg', 'env']
-  if (codeExts.includes(ext)) return 'code'
-  if (configExts.includes(ext)) return 'config'
+  if (CODE_FILE_EXTENSIONS.includes(ext)) return 'code'
+  if (CONFIG_FILE_EXTENSIONS.includes(ext)) return 'config'
   return 'default'
 }
 

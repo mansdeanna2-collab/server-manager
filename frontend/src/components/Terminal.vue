@@ -227,6 +227,9 @@ const statusText = computed(() => {
   return '未连接'
 })
 
+// 终端配置常量
+const TERMINAL_FONT_FAMILY = '"Cascadia Code", "Fira Code", Monaco, Menlo, Consolas, "Liberation Mono", monospace'
+
 let terminal = null
 let fitAddon = null
 let socket = null
@@ -239,7 +242,7 @@ const initTerminal = () => {
     cursorBlink: true,
     cursorStyle: 'block',
     fontSize: fontSize.value,
-    fontFamily: '"Cascadia Code", "Fira Code", Monaco, Menlo, Consolas, "Liberation Mono", monospace',
+    fontFamily: TERMINAL_FONT_FAMILY,
     fontWeight: '400',
     fontWeightBold: '700',
     letterSpacing: 0,
@@ -476,7 +479,7 @@ const updateFontSize = () => {
         } catch (e) {
           if (import.meta.env.DEV) {
             // eslint-disable-next-line no-console
-            console.warn('Font resize error:', e)
+            console.warn(`Terminal font resize failed (fontSize: ${fontSize.value}px):`, e.message || e)
           }
         }
       })
