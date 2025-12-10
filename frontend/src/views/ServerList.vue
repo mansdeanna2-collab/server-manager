@@ -457,6 +457,7 @@
           :data="paginatedSegmentServers"
           style="width: 100%"
           stripe
+          :row-class-name="getRowClassName"
         >
           <el-table-column
             label="IP地址"
@@ -464,6 +465,12 @@
           >
             <template #default="scope">
               <div class="ip-cell">
+                <el-icon
+                  v-if="isServerFavorited(scope.row.id)"
+                  class="favorite-star-icon"
+                >
+                  <Star />
+                </el-icon>
                 <span class="ip-text">{{ scope.row.ip_address }}</span>
                 <span class="updated-time">
                   更新时间：{{ formatDate(getLastUpdateTime(scope.row)) }}
@@ -666,6 +673,7 @@
           :data="paginatedFilteredServers"
           style="width: 100%"
           stripe
+          :row-class-name="getRowClassName"
         >
           <el-table-column
             label="IP地址"
@@ -673,6 +681,12 @@
           >
             <template #default="scope">
               <div class="ip-cell">
+                <el-icon
+                  v-if="isServerFavorited(scope.row.id)"
+                  class="favorite-star-icon"
+                >
+                  <Star />
+                </el-icon>
                 <span class="ip-text">{{ scope.row.ip_address }}</span>
                 <span class="updated-time">
                   更新时间：{{ formatDate(getLastUpdateTime(scope.row)) }}
@@ -1176,6 +1190,14 @@ const toggleServerFavorite = (server) => {
   localStorage.setItem(SERVER_FAVORITES_KEY, JSON.stringify([...serverFavorites.value]))
 }
 
+// 获取表格行样式类名 - 为收藏的服务器添加高亮
+const getRowClassName = ({ row }) => {
+  if (serverFavorites.value.has(row.id)) {
+    return 'favorited-row'
+  }
+  return ''
+}
+
 const activeMenu = computed(() => route.path)
 
 // 端口类型信息
@@ -1380,38 +1402,54 @@ const showFilteredServersDialog = (filterType) => {
   // 根据filterType设置排序逻辑
   filteredDialogType.value = filterType
   
+  // 辅助函数：收藏优先排序
+  const sortWithFavorites = (a, b, secondarySort) => {
+    const aFavorited = serverFavorites.value.has(a.id) ? 0 : 1
+    const bFavorited = serverFavorites.value.has(b.id) ? 0 : 1
+    if (aFavorited !== bFavorited) return aFavorited - bFavorited
+    return secondarySort(a, b)
+  }
+  
   if (filterType === 'computer') {
-    // 电脑对话框排序：正常 > 错误 > 离线
+    // 电脑对话框排序：收藏优先 > 正常 > 错误 > 离线
     filteredDialogServers.value = [...result].sort((a, b) => {
-      // 定义状态优先级：正常(0) > 错误(1) > 离线(2)
-      const getStatusPriority = (server) => {
-        if (server.status === 'online' && !server.error_type) return 0  // 正常
-        if (server.error_type) return 1                                  // 错误（包括在线但有错误的）
-        if (server.status === 'offline') return 2                        // 离线
-        return 3  // 其他状态
-      }
-      const priorityDiff = getStatusPriority(a) - getStatusPriority(b)
-      if (priorityDiff !== 0) return priorityDiff
-      // 同优先级按更新时间排序
-      return getUpdatedTimestamp(b) - getUpdatedTimestamp(a)
+      return sortWithFavorites(a, b, (serverA, serverB) => {
+        // 定义状态优先级：正常(0) > 错误(1) > 离线(2)
+        const getStatusPriority = (server) => {
+          if (server.status === 'online' && !server.error_type) return 0  // 正常
+          if (server.error_type) return 1                                  // 错误（包括在线但有错误的）
+          if (server.status === 'offline') return 2                        // 离线
+          return 3  // 其他状态
+        }
+        const priorityDiff = getStatusPriority(serverA) - getStatusPriority(serverB)
+        if (priorityDiff !== 0) return priorityDiff
+        // 同优先级按更新时间排序
+        return getUpdatedTimestamp(serverB) - getUpdatedTimestamp(serverA)
+      })
     })
   } else if (filterType === 'error') {
-    // 错误对话框排序：端口关闭 -> 密码错误 -> 其他类型错误
+    // 错误对话框排序：收藏优先 > 端口关闭 -> 密码错误 -> 其他类型错误
     filteredDialogServers.value = [...result].sort((a, b) => {
-      // 定义错误类型优先级：端口关闭(0) -> 密码错误(1) -> 其他错误(2)
-      const getErrorPriority = (server) => {
-        if (server.error_type === 'port_closed') return 0      // 端口关闭
-        if (server.error_type === 'auth_failed') return 1      // 密码错误
-        return 2                                                // 其他类型错误
-      }
-      const priorityDiff = getErrorPriority(a) - getErrorPriority(b)
-      if (priorityDiff !== 0) return priorityDiff
-      // 同优先级按更新时间排序
-      return getUpdatedTimestamp(b) - getUpdatedTimestamp(a)
+      return sortWithFavorites(a, b, (serverA, serverB) => {
+        // 定义错误类型优先级：端口关闭(0) -> 密码错误(1) -> 其他错误(2)
+        const getErrorPriority = (server) => {
+          if (server.error_type === 'port_closed') return 0      // 端口关闭
+          if (server.error_type === 'auth_failed') return 1      // 密码错误
+          return 2                                                // 其他类型错误
+        }
+        const priorityDiff = getErrorPriority(serverA) - getErrorPriority(serverB)
+        if (priorityDiff !== 0) return priorityDiff
+        // 同优先级按更新时间排序
+        return getUpdatedTimestamp(serverB) - getUpdatedTimestamp(serverA)
+      })
     })
   } else {
-    // 其他对话框按更新时间排序
-    filteredDialogServers.value = [...result].sort((a, b) => getUpdatedTimestamp(b) - getUpdatedTimestamp(a))
+    // 其他对话框：收藏优先 > 按更新时间排序
+    filteredDialogServers.value = [...result].sort((a, b) => {
+      return sortWithFavorites(a, b, (serverA, serverB) => {
+        return getUpdatedTimestamp(serverB) - getUpdatedTimestamp(serverA)
+      })
+    })
   }
   
   filteredDialogTitle.value = title
@@ -1511,16 +1549,26 @@ const paginatedSegments = computed(() => {
 })
 
 // Sorted servers for segment dialog based on sortBy option
+// 收藏的服务器始终优先显示
 const sortedSegmentServers = computed(() => {
   if (!selectedSegment.value) return []
   const servers = [...selectedSegment.value.servers]
-  if (segmentDialogSortBy.value === 'ip') {
-    // 按IP地址从小到大排序
-    return servers.sort(compareIpAddresses)
-  } else {
-    // 按时间排序（默认，最新的在前）
-    return servers.sort((a, b) => getUpdatedTimestamp(b) - getUpdatedTimestamp(a))
-  }
+  
+  // 首先按收藏状态排序，收藏的在前
+  servers.sort((a, b) => {
+    const aFavorited = serverFavorites.value.has(a.id) ? 0 : 1
+    const bFavorited = serverFavorites.value.has(b.id) ? 0 : 1
+    if (aFavorited !== bFavorited) return aFavorited - bFavorited
+    
+    // 同收藏状态下，根据用户选择的排序方式
+    if (segmentDialogSortBy.value === 'ip') {
+      return compareIpAddresses(a, b)
+    } else {
+      return getUpdatedTimestamp(b) - getUpdatedTimestamp(a)
+    }
+  })
+  
+  return servers
 })
 
 // Paginated servers for segment dialog
@@ -2216,6 +2264,55 @@ const handleChangePassword = async () => {
   opacity: 1;
 }
 
+/* 高级美化 - 动态光效 */
+.segment-card::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.15) 50%,
+    transparent 70%
+  );
+  transform: rotate(45deg) translateX(-100%);
+  transition: transform 0.6s ease;
+  pointer-events: none;
+}
+
+.segment-card:hover::after {
+  transform: rotate(45deg) translateX(100%);
+}
+
+/* 高级美化 - 收藏卡片闪烁动画 */
+.segment-card.is-favorited {
+  animation: favoritePulse 2s ease-in-out infinite;
+}
+
+@keyframes favoritePulse {
+  0%, 100% {
+    box-shadow: 0 4px 20px 0 rgba(237, 137, 54, 0.2);
+  }
+  50% {
+    box-shadow: 0 8px 30px 0 rgba(237, 137, 54, 0.35);
+  }
+}
+
+/* 减少动效偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .segment-card.is-favorited {
+    animation: none;
+    box-shadow: 0 4px 20px 0 rgba(237, 137, 54, 0.25);
+  }
+  
+  .segment-card::after {
+    display: none;
+  }
+}
+
 .segment-card-header {
   display: flex;
   align-items: center;
@@ -2224,20 +2321,41 @@ const handleChangePassword = async () => {
 }
 
 .ip-segment-title {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 800;
-  color: #2c5282;
+  color: #1e3a5f;
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
   letter-spacing: 0.5px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  position: relative;
+  padding-left: 12px;
+}
+
+.ip-segment-title::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 20px;
+  background: linear-gradient(180deg, #3182ce 0%, #4fd1c5 100%);
+  border-radius: 2px;
+}
+
+.segment-card.is-favorited .ip-segment-title::before {
+  background: linear-gradient(180deg, #ed8936 0%, #f6ad55 100%);
 }
 
 .count-tag {
   background: linear-gradient(135deg, #c6f6d5 0%, #9ae6b4 100%);
   border-color: #68d391;
   color: #276749;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 14px;
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(104, 211, 145, 0.3);
 }
 
 .segment-card-status {
@@ -2248,13 +2366,23 @@ const handleChangePassword = async () => {
 }
 
 .segment-card-status :deep(.el-tag) {
-  font-size: 12px;
-  padding: 6px 10px;
+  font-size: 13px;
+  padding: 8px 12px;
   font-weight: 600;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.segment-card-status :deep(.el-tag--success) {
+  background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+}
+
+.segment-card-status :deep(.el-tag--danger) {
+  background: linear-gradient(135deg, #fc8181 0%, #f56565 100%);
 }
 
 .error-count {
-  color: #fc8181;
+  color: #fed7d7;
   font-weight: 700;
 }
 
@@ -2301,22 +2429,22 @@ const handleChangePassword = async () => {
 
 .segment-card-actions-left {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   align-items: center;
 }
 
 .action-icon {
   cursor: pointer;
-  font-size: 22px;
+  font-size: 28px;
   color: #a0aec0;
   transition: all 0.3s ease;
-  padding: 8px;
-  border-radius: 8px;
+  padding: 10px;
+  border-radius: 10px;
 }
 
 .action-icon:hover {
-  transform: scale(1.15);
-  background: rgba(0, 0, 0, 0.05);
+  transform: scale(1.2);
+  background: rgba(0, 0, 0, 0.06);
 }
 
 .favorite-icon:hover {
@@ -2878,6 +3006,63 @@ const handleChangePassword = async () => {
 :deep(.el-table td) {
   border-bottom: 1px solid #e2e8f0;
   padding: 14px 0;
+}
+
+/* 收藏行高亮样式 - 高级美化 */
+:deep(.el-table__body tr.favorited-row > td) {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 50%, #fed7aa 100%) !important;
+  border-left: 4px solid #f97316;
+  position: relative;
+}
+
+:deep(.el-table__body tr.favorited-row > td:first-child) {
+  border-left: 4px solid #f97316;
+  border-radius: 4px 0 0 4px;
+}
+
+:deep(.el-table__body tr.favorited-row > td:last-child) {
+  border-radius: 0 4px 4px 0;
+}
+
+:deep(.el-table__body tr.favorited-row > td::before) {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, rgba(249, 115, 22, 0.08) 0%, transparent 30%);
+  pointer-events: none;
+}
+
+:deep(.el-table__body tr.favorited-row:hover > td) {
+  background: linear-gradient(135deg, #ffedd5 0%, #fed7aa 50%, #fdba74 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.2);
+}
+
+/* IP列收藏星标 */
+.favorite-star-icon {
+  color: #f97316;
+  font-size: 16px;
+  margin-right: 4px;
+  vertical-align: middle;
+  animation: starPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes starPulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+}
+
+/* 减少动效偏好 - 星标动画 */
+@media (prefers-reduced-motion: reduce) {
+  .favorite-star-icon {
+    animation: none;
+  }
 }
 
 /* Pagination container - 企业级分页美化 */
