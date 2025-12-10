@@ -84,6 +84,7 @@ export const authAPI = {
 export const serversAPI = {
   getAll: () => api.get('/servers'),
   getById: (id) => api.get(`/servers/${id}`),
+  getPassword: (id) => api.get(`/servers/${id}/password`),
   create: (server) => api.post('/servers', server),
   update: (id, server) => api.put(`/servers/${id}`, server),
   delete: (id) => api.delete(`/servers/${id}`),

@@ -86,6 +86,21 @@ def get_server(_current_user, server_id):
     return jsonify(server.to_dict()), 200
 
 
+@servers_bp.route('/<int:server_id>/password', methods=['GET'])
+@token_required
+def get_server_password(_current_user, server_id):
+    """获取服务器密码（解密后）"""
+    server = Server.query.get(server_id)
+
+    if not server:
+        return jsonify({'message': 'Server not found'}), 404
+
+    # Decrypt password
+    password = password_encryptor.decrypt(server.encrypted_password)
+
+    return jsonify({'password': password}), 200
+
+
 @servers_bp.route('/<int:server_id>', methods=['PUT'])
 @token_required
 def update_server(_current_user, server_id):
