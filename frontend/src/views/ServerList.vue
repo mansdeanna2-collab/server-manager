@@ -817,14 +817,6 @@
                 </el-button>
                 <el-button
                   size="small"
-                  type="info"
-                  @click="readServerFile(scope.row)"
-                >
-                  <el-icon><Document /></el-icon>
-                  读取文件
-                </el-button>
-                <el-button
-                  size="small"
                   type="warning"
                   :loading="scope.row.checking"
                   @click="checkServer(scope.row)"
@@ -923,7 +915,7 @@
         </div>
         
         <Terminal
-          v-if="terminalServer.port !== 3389"
+          v-if="terminalServer.port !== RDP_PORT"
           ref="terminalRef"
           :server="terminalServer"
           :visible="terminalDialogVisible"
@@ -943,7 +935,7 @@
             show-icon
           >
             <template #default>
-              <p>端口 3389 为 Windows RDP 服务，请使用系统远程桌面连接。</p>
+              <p>端口 {{ RDP_PORT }} 为 Windows RDP 服务，请使用系统远程桌面连接。</p>
               <div class="rdp-command-box">
                 <code class="rdp-command">{{ getSshCommand(terminalServer) }}</code>
                 <el-button
@@ -958,7 +950,228 @@
             </template>
           </el-alert>
         </div>
+        
+        <!-- File Browser Section - Only show after terminal connected and for SSH servers -->
+        <div
+          v-if="terminalConnected && terminalServer.port !== RDP_PORT"
+          class="file-browser-section"
+        >
+          <div class="file-browser-header">
+            <h4 class="file-browser-title">
+              <el-icon><Folder /></el-icon>
+              服务器文件浏览
+            </h4>
+            <div class="file-browser-path">
+              <el-breadcrumb separator="/">
+                <el-breadcrumb-item
+                  v-for="(pathPart, index) in currentPathParts"
+                  :key="index"
+                  @click="navigateToPath(index)"
+                >
+                  <span class="breadcrumb-item-clickable">{{ pathPart || '根目录' }}</span>
+                </el-breadcrumb-item>
+              </el-breadcrumb>
+            </div>
+            <el-button
+              size="small"
+              :loading="fileBrowserLoading"
+              @click="refreshFileList"
+            >
+              <el-icon><Refresh /></el-icon>
+              刷新
+            </el-button>
+          </div>
+          
+          <div
+            v-if="fileBrowserLoading"
+            class="file-browser-loading"
+          >
+            <el-icon
+              class="loading-icon"
+              :size="24"
+            >
+              <Loading />
+            </el-icon>
+            <span>正在加载文件列表...</span>
+          </div>
+          
+          <div
+            v-else-if="fileBrowserError"
+            class="file-browser-error"
+          >
+            <el-alert
+              :title="fileBrowserError"
+              type="error"
+              :closable="false"
+              show-icon
+            />
+          </div>
+          
+          <div
+            v-else
+            class="file-browser-content"
+          >
+            <el-table
+              :data="fileList"
+              style="width: 100%"
+              max-height="300"
+              stripe
+              size="small"
+              @row-click="handleFileClick"
+            >
+              <el-table-column
+                label="名称"
+                min-width="200"
+              >
+                <template #default="scope">
+                  <div class="file-name-cell">
+                    <el-icon
+                      v-if="scope.row.type === 'directory'"
+                      class="file-icon folder-icon"
+                    >
+                      <FolderOpened />
+                    </el-icon>
+                    <el-icon
+                      v-else
+                      class="file-icon"
+                    >
+                      <DocumentIcon />
+                    </el-icon>
+                    <span class="file-name">{{ scope.row.name }}</span>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column
+                prop="type"
+                label="类型"
+                width="100"
+              >
+                <template #default="scope">
+                  <el-tag
+                    :type="scope.row.type === 'directory' ? 'warning' : 'info'"
+                    size="small"
+                  >
+                    {{ scope.row.type === 'directory' ? '目录' : scope.row.type === 'link' ? '链接' : '文件' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column
+                prop="size"
+                label="大小"
+                width="100"
+              />
+              <el-table-column
+                prop="permissions"
+                label="权限"
+                width="120"
+              >
+                <template #default="scope">
+                  <code class="permission-code">{{ scope.row.permissions }}</code>
+                </template>
+              </el-table-column>
+              <el-table-column
+                label="操作"
+                width="150"
+                fixed="right"
+              >
+                <template #default="scope">
+                  <div class="file-actions">
+                    <el-button
+                      v-if="scope.row.type === 'directory'"
+                      size="small"
+                      type="primary"
+                      text
+                      @click.stop="openDirectory(scope.row)"
+                    >
+                      <el-icon><FolderOpened /></el-icon>
+                      打开
+                    </el-button>
+                    <el-button
+                      v-else
+                      size="small"
+                      type="primary"
+                      text
+                      @click.stop="viewFileContent(scope.row)"
+                    >
+                      <el-icon><View /></el-icon>
+                      查看
+                    </el-button>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </div>
       </div>
+    </el-dialog>
+    
+    <!-- File Content Viewer/Editor Dialog -->
+    <el-dialog
+      v-model="fileEditorVisible"
+      :title="`${fileEditorReadonly ? '查看' : '编辑'}文件 - ${fileEditorPath}`"
+      width="900px"
+      class="file-editor-dialog"
+      append-to-body
+      :close-on-click-modal="false"
+    >
+      <div
+        v-if="fileEditorLoading"
+        class="loading-container"
+      >
+        <el-icon
+          class="loading-icon"
+          :size="40"
+        >
+          <Loading />
+        </el-icon>
+        <p class="loading-text">
+          正在加载文件内容...
+        </p>
+      </div>
+      <div
+        v-else
+        class="file-editor-content"
+      >
+        <div class="file-editor-info">
+          <el-tag
+            type="info"
+            effect="plain"
+          >
+            文件路径: {{ fileEditorPath }}
+          </el-tag>
+          <el-button
+            v-if="fileEditorReadonly"
+            size="small"
+            type="primary"
+            @click="enableEditing"
+          >
+            <el-icon><Edit /></el-icon>
+            编辑
+          </el-button>
+        </div>
+        <el-input
+          v-model="fileEditorContent"
+          type="textarea"
+          :rows="20"
+          :readonly="fileEditorReadonly"
+          class="file-editor-textarea"
+          placeholder="文件内容为空"
+        />
+      </div>
+      <template #footer>
+        <el-button @click="fileEditorVisible = false">
+          关闭
+        </el-button>
+        <el-button
+          v-if="!fileEditorReadonly"
+          type="primary"
+          :loading="fileEditorSaving"
+          @click="saveFileContent"
+        >
+          <el-icon><DocumentIcon /></el-icon>
+          保存
+        </el-button>
+      </template>
     </el-dialog>
     
     <!-- Change Password Dialog -->
@@ -1073,7 +1286,7 @@ import {
   Monitor, Odometer, User, ArrowDown, Plus, Refresh,
   Search, View, Edit, Delete, OfficeBuilding, Connection, CopyDocument, Loading,
   CircleCheck, CircleClose, Download, QuestionFilled, WarningFilled, Cpu, Star, EditPen,
-  Clock, Sort, Document
+  Clock, Sort, Folder, FolderOpened, Document as DocumentIcon
 } from '@element-plus/icons-vue'
 import { serversAPI, authAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -1141,6 +1354,31 @@ const fileDialogLoading = ref(false)
 const fileDialogContent = ref(null)
 const fileDialogFilename = ref('')
 const fileDialogServer = ref(null)
+
+// 终端连接状态
+const terminalConnected = ref(false)
+
+// 文件浏览器状态
+const currentPath = ref('/')
+const fileList = ref([])
+const fileBrowserLoading = ref(false)
+const fileBrowserError = ref('')
+
+// 文件编辑器状态
+const fileEditorVisible = ref(false)
+const fileEditorPath = ref('')
+const fileEditorContent = ref('')
+const fileEditorReadonly = ref(true)
+const fileEditorLoading = ref(false)
+const fileEditorSaving = ref(false)
+
+// 计算当前路径的各个部分
+const currentPathParts = computed(() => {
+  if (currentPath.value === '/') {
+    return ['']
+  }
+  return currentPath.value.split('/').filter(p => p !== '')
+})
 
 // Pagination variables
 const PAGE_SIZE = 10
@@ -1256,10 +1494,14 @@ const getRowClassName = ({ row }) => {
 
 const activeMenu = computed(() => route.path)
 
+// 常用端口号常量
+const RDP_PORT = 3389
+const SSH_PORT = 22
+
 // 端口类型信息
 const PORT_TYPE_MAP = {
-  22: { type: 'SSH', osHint: 'Linux/Unix', icon: '🐧', color: 'success' },
-  3389: { type: 'RDP', osHint: 'Windows', icon: '🪟', color: 'primary' },
+  [SSH_PORT]: { type: 'SSH', osHint: 'Linux/Unix', icon: '🐧', color: 'success' },
+  [RDP_PORT]: { type: 'RDP', osHint: 'Windows', icon: '🪟', color: 'primary' },
   23: { type: 'Telnet', osHint: 'Network', icon: '📡', color: 'warning' },
   21: { type: 'FTP', osHint: 'File', icon: '📁', color: 'info' },
   80: { type: 'HTTP', osHint: 'Web', icon: '🌐', color: '' },
@@ -1427,7 +1669,7 @@ const unknownCount = computed(() => servers.value.filter(s => s.status === 'unkn
 // 错误: 在线且有error_type的 (排除Administrator用户和离线的服务器)
 const errorCount = computed(() => servers.value.filter(s => s.status === 'online' && s.error_type && s.username !== 'Administrator').length)
 // 电脑 (Windows RDP) - 包含Administrator用户的错误和离线状态
-const computerCount = computed(() => servers.value.filter(s => s.port === 3389).length)
+const computerCount = computed(() => servers.value.filter(s => s.port === RDP_PORT).length)
 
 // Show filtered servers in dialog
 const showFilteredServersDialog = (filterType) => {
@@ -1451,7 +1693,7 @@ const showFilteredServersDialog = (filterType) => {
     title = '错误服务器'
   } else if (filterType === 'computer') {
     // 电脑对话框：显示所有Windows RDP服务器（包含Administrator的错误和离线状态）
-    result = result.filter(server => server.port === 3389)
+    result = result.filter(server => server.port === RDP_PORT)
     title = '电脑 (Windows RDP)'
   }
   
@@ -1795,25 +2037,127 @@ const handleTerminalDialogClosed = () => {
   if (terminalRef.value) {
     terminalRef.value.disconnect()
   }
+  // 重置文件浏览器状态
+  terminalConnected.value = false
+  currentPath.value = '/'
+  fileList.value = []
+  fileBrowserError.value = ''
 }
 
 const handleTerminalConnected = () => {
   ElMessage.success('终端连接成功')
+  terminalConnected.value = true
+  // 连接成功后自动加载根目录文件列表
+  loadDirectoryFiles('/')
 }
 
 const handleTerminalDisconnected = () => {
   ElMessage.info('终端已断开')
+  terminalConnected.value = false
 }
 
 const handleTerminalError = (errorMsg) => {
   ElMessage.error(errorMsg || '终端连接失败')
 }
 
+// 文件浏览器方法
+const loadDirectoryFiles = async (path) => {
+  if (!terminalServer.value) return
+  
+  fileBrowserLoading.value = true
+  fileBrowserError.value = ''
+  
+  try {
+    const response = await serversAPI.listDirectory(terminalServer.value.id, path)
+    fileList.value = response.data.files || []
+    currentPath.value = response.data.path || path
+  } catch (error) {
+    const message = error.response?.data?.message || '加载目录失败'
+    fileBrowserError.value = message
+    fileList.value = []
+  } finally {
+    fileBrowserLoading.value = false
+  }
+}
+
+const refreshFileList = () => {
+  loadDirectoryFiles(currentPath.value)
+}
+
+const navigateToPath = (index) => {
+  if (index === 0) {
+    loadDirectoryFiles('/')
+  } else {
+    const parts = currentPath.value.split('/').filter(p => p !== '')
+    const newPath = '/' + parts.slice(0, index).join('/')
+    loadDirectoryFiles(newPath)
+  }
+}
+
+const openDirectory = (file) => {
+  const newPath = currentPath.value === '/' 
+    ? `/${file.name}` 
+    : `${currentPath.value}/${file.name}`
+  loadDirectoryFiles(newPath)
+}
+
+const handleFileClick = (row) => {
+  if (row.type === 'directory') {
+    openDirectory(row)
+  }
+}
+
+const viewFileContent = async (file) => {
+  if (!terminalServer.value) return
+  
+  const filePath = currentPath.value === '/' 
+    ? `/${file.name}` 
+    : `${currentPath.value}/${file.name}`
+  
+  fileEditorPath.value = filePath
+  fileEditorReadonly.value = true
+  fileEditorLoading.value = true
+  fileEditorVisible.value = true
+  fileEditorContent.value = ''
+  
+  try {
+    const response = await serversAPI.readFile(terminalServer.value.id, filePath)
+    fileEditorContent.value = response.data.content || ''
+  } catch (error) {
+    const message = error.response?.data?.message || '读取文件失败'
+    ElMessage.error(message)
+    fileEditorVisible.value = false
+  } finally {
+    fileEditorLoading.value = false
+  }
+}
+
+const enableEditing = () => {
+  fileEditorReadonly.value = false
+}
+
+const saveFileContent = async () => {
+  if (!terminalServer.value || !fileEditorPath.value) return
+  
+  fileEditorSaving.value = true
+  
+  try {
+    await serversAPI.saveFile(terminalServer.value.id, fileEditorPath.value, fileEditorContent.value)
+    ElMessage.success('文件保存成功')
+    fileEditorReadonly.value = true
+  } catch (error) {
+    const message = error.response?.data?.message || '保存文件失败'
+    ElMessage.error(message)
+  } finally {
+    fileEditorSaving.value = false
+  }
+}
+
 const getSshCommand = (server) => {
   if (!server) return ''
-  if (server.port === 22) {
+  if (server.port === SSH_PORT) {
     return `ssh ${server.username}@${server.ip_address}`
-  } else if (server.port === 3389) {
+  } else if (server.port === RDP_PORT) {
     return `mstsc /v:${server.ip_address}`
   } else {
     return `ssh -p ${server.port} ${server.username}@${server.ip_address}`
@@ -2016,64 +2360,6 @@ const handleChangePassword = async () => {
       }
     }
   })
-}
-
-// 读取服务器配置文件
-const readServerFile = async (server) => {
-  // 检查是否为Windows服务器（RDP端口）
-  if (server.port === 3389) {
-    ElMessage.warning('Windows远程桌面服务不支持读取文件')
-    return
-  }
-
-  // 弹出对话框让用户输入文件路径
-  try {
-    const { value } = await ElMessageBox.prompt(
-      `请输入要读取的文件路径（服务器 ${server.ip_address}）`,
-      '读取文件',
-      {
-        inputValue: '/etc/passwd',
-        inputPlaceholder: '例如: /etc/passwd, /var/log/syslog',
-        confirmButtonText: '读取',
-        cancelButtonText: '取消',
-        inputPattern: /^\/(?!.*\.\.)(?!.*[;|&$`\n\r])[^\0]*$/,
-        inputErrorMessage: '请输入有效的文件路径（以 / 开头，不能包含 .. 或特殊字符）'
-      }
-    )
-
-    if (!value || !value.trim()) {
-      return
-    }
-
-    const filePath = value.trim()
-
-    // 额外的前端验证
-    const dangerousPatterns = ['..', ';', '|', '&', '$', '`']
-    for (const pattern of dangerousPatterns) {
-      if (filePath.includes(pattern)) {
-        ElMessage.warning(`文件路径不能包含 "${pattern}"`)
-        return
-      }
-    }
-
-    fileDialogServer.value = server
-    fileDialogLoading.value = true
-    fileDialogContent.value = null
-    fileDialogFilename.value = ''
-    fileDialogVisible.value = true
-
-    const response = await serversAPI.readFile(server.id, filePath)
-    fileDialogContent.value = response.data.content
-    fileDialogFilename.value = response.data.filename
-    fileDialogLoading.value = false
-  } catch (error) {
-    if (error !== 'cancel' && error !== 'close') {
-      const message = error.response?.data?.message || '读取文件失败'
-      ElMessage.warning(message)
-      fileDialogLoading.value = false
-      fileDialogVisible.value = false
-    }
-  }
 }
 </script>
 
@@ -3274,5 +3560,168 @@ const readServerFile = async (server) => {
   overflow-y: auto;
   margin: 0;
   box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* File Browser Section Styles */
+.file-browser-section {
+  margin-top: 20px;
+  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+}
+
+.file-browser-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.file-browser-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.file-browser-title .el-icon {
+  color: #ed8936;
+}
+
+.file-browser-path {
+  flex: 1;
+}
+
+.breadcrumb-item-clickable {
+  cursor: pointer;
+  color: #3182ce;
+  transition: color 0.2s;
+}
+
+.breadcrumb-item-clickable:hover {
+  color: #2c5282;
+  text-decoration: underline;
+}
+
+.file-browser-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px;
+  color: #718096;
+}
+
+.file-browser-error {
+  padding: 16px;
+}
+
+.file-browser-content {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.file-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-icon {
+  font-size: 18px;
+  color: #718096;
+}
+
+.folder-icon {
+  color: #ed8936;
+}
+
+.file-name {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 13px;
+}
+
+.permission-code {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 12px;
+  background: #edf2f7;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #4a5568;
+}
+
+.file-actions {
+  display: flex;
+  gap: 4px;
+}
+
+/* File Editor Dialog Styles */
+.file-editor-dialog :deep(.el-dialog) {
+  margin-top: 6vh;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 25px 80px rgba(66, 153, 225, 0.25);
+}
+
+.file-editor-dialog :deep(.el-dialog__header) {
+  background: linear-gradient(135deg, #2c5282 0%, #3182ce 50%, #4299e1 100%);
+  color: white;
+  padding: 20px 28px;
+  margin: 0;
+}
+
+.file-editor-dialog :deep(.el-dialog__title) {
+  color: white;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.file-editor-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
+  color: white;
+  font-size: 20px;
+}
+
+.file-editor-dialog :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.file-editor-dialog :deep(.el-dialog__body) {
+  padding: 24px;
+  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+}
+
+.file-editor-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.file-editor-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.file-editor-textarea :deep(.el-textarea__inner) {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  background: #1a202c;
+  color: #68d391;
+  border-radius: 12px;
+  padding: 16px;
+  min-height: 400px;
+}
+
+.file-editor-textarea :deep(.el-textarea__inner:read-only) {
+  background: #2d3748;
 }
 </style>

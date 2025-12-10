@@ -1,9 +1,56 @@
 import paramiko
 import socket
 import logging
+import os
 from config import Config
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_remote_path(path, path_type='file'):
+    """验证远程路径的安全性
+    
+    Args:
+        path: 要验证的路径
+        path_type: 路径类型 ('file' 或 'directory')，用于错误消息
+    
+    Returns:
+        dict: 包含验证结果，成功时返回 {'valid': True}，
+              失败时返回 {'valid': False, 'message': str, 'error_type': str}
+    """
+    type_name = '文件' if path_type == 'file' else '目录'
+    
+    if not path or not path.startswith('/'):
+        return {
+            'valid': False,
+            'message': f'{type_name}路径必须以 / 开头',
+            'error_type': 'invalid_path'
+        }
+    
+    # 规范化路径并检查是否尝试通过 .. 逃逸
+    # 使用 os.path.normpath 处理 .. 和 . 序列
+    normalized = os.path.normpath(path)
+    
+    # 检查规范化后的路径是否仍然以 / 开头
+    # 并且不包含 .. 在路径开始（表示尝试逃逸根目录）
+    if not normalized.startswith('/'):
+        return {
+            'valid': False,
+            'message': f'{type_name}路径无效',
+            'error_type': 'invalid_path'
+        }
+    
+    # 检查危险的 shell 特殊字符（不包括 ..，因为已经通过 normpath 处理）
+    dangerous_patterns = [';', '|', '&', '$', '`', '\n', '\r']
+    for pattern in dangerous_patterns:
+        if pattern in path:
+            return {
+                'valid': False,
+                'message': f'{type_name}路径包含不允许的字符',
+                'error_type': 'invalid_path'
+            }
+    
+    return {'valid': True}
 
 
 class SSHService:
@@ -223,22 +270,13 @@ class SSHService:
             dict: 包含文件内容或错误信息的字典
         """
         # 验证文件路径安全性
-        if not file_path or not file_path.startswith('/'):
+        validation = _validate_remote_path(file_path, 'file')
+        if not validation['valid']:
             return {
                 'success': False,
-                'message': '文件路径必须以 / 开头',
-                'error_type': 'invalid_path'
+                'message': validation['message'],
+                'error_type': validation['error_type']
             }
-
-        # 检查危险的路径模式
-        dangerous_patterns = ['..', ';', '|', '&', '$', '`', '\n', '\r']
-        for pattern in dangerous_patterns:
-            if pattern in file_path:
-                return {
-                    'success': False,
-                    'message': f'文件路径包含不允许的字符: {pattern}',
-                    'error_type': 'invalid_path'
-                }
 
         if not self.connect():
             return {
@@ -282,6 +320,161 @@ class SSHService:
                 'success': False,
                 'message': f'读取文件失败: {str(e)}',
                 'error_type': 'read_error'
+            }
+        finally:
+            self.disconnect()
+
+    def list_directory(self, dir_path):
+        """列出远程服务器上的目录内容
+
+        Args:
+            dir_path: 远程服务器上的目录路径
+
+        Returns:
+            dict: 包含目录文件列表或错误信息的字典
+        """
+        # 验证目录路径安全性
+        validation = _validate_remote_path(dir_path, 'directory')
+        if not validation['valid']:
+            return {
+                'success': False,
+                'message': validation['message'],
+                'error_type': validation['error_type']
+            }
+
+        if not self.connect():
+            return {
+                'success': False,
+                'message': '无法连接到服务器',
+                'error_type': 'connection_error'
+            }
+
+        try:
+            import shlex
+            safe_path = shlex.quote(dir_path)
+
+            # 检查目录是否存在
+            dir_exists = self.execute_command(f'test -d {safe_path} && echo "exists"')
+            if dir_exists != 'exists':
+                return {
+                    'success': False,
+                    'message': f'目录不存在: {dir_path}',
+                    'error_type': 'dir_not_found'
+                }
+
+            # 使用 ls -la 命令获取目录内容，格式化输出
+            # 输出格式: type|permissions|size|name
+            # type: d=目录, -=文件, l=链接
+            ls_output = self.execute_command(
+                f'ls -la {safe_path} | tail -n +2'
+            )
+
+            if ls_output is None:
+                return {
+                    'success': False,
+                    'message': f'无法读取目录: {dir_path}',
+                    'error_type': 'read_error'
+                }
+
+            files = []
+            for line in ls_output.split('\n'):
+                if not line.strip():
+                    continue
+
+                parts = line.split()
+                if len(parts) < 9:
+                    continue
+
+                permissions = parts[0]
+                size = parts[4]
+                name = ' '.join(parts[8:])  # 文件名可能包含空格
+
+                # 跳过 . 和 .. 目录
+                if name in ['.', '..']:
+                    continue
+
+                file_type = 'directory' if permissions.startswith('d') else 'file'
+                if permissions.startswith('l'):
+                    file_type = 'link'
+
+                files.append({
+                    'name': name,
+                    'type': file_type,
+                    'size': size,
+                    'permissions': permissions
+                })
+
+            # 按类型和名称排序：目录在前，文件在后
+            files.sort(key=lambda x: (0 if x['type'] == 'directory' else 1, x['name'].lower()))
+
+            return {
+                'success': True,
+                'path': dir_path,
+                'files': files
+            }
+        except Exception as e:
+            logger.error(f"Failed to list directory {dir_path} from {self.host}: {str(e)}")
+            return {
+                'success': False,
+                'message': f'读取目录失败: {str(e)}',
+                'error_type': 'read_error'
+            }
+        finally:
+            self.disconnect()
+
+    def write_remote_file(self, file_path, content):
+        """写入内容到远程服务器上的文件
+
+        Args:
+            file_path: 远程服务器上的文件路径
+            content: 要写入的内容
+
+        Returns:
+            dict: 包含操作结果或错误信息的字典
+        """
+        # 验证文件路径安全性
+        validation = _validate_remote_path(file_path, 'file')
+        if not validation['valid']:
+            return {
+                'success': False,
+                'message': validation['message'],
+                'error_type': validation['error_type']
+            }
+
+        if not self.connect():
+            return {
+                'success': False,
+                'message': '无法连接到服务器',
+                'error_type': 'connection_error'
+            }
+
+        try:
+            # 使用 SFTP 写入文件
+            sftp = self.client.open_sftp()
+            try:
+                with sftp.file(file_path, 'w') as f:
+                    f.write(content)
+
+                return {
+                    'success': True,
+                    'message': '文件保存成功',
+                    'file_path': file_path
+                }
+            finally:
+                sftp.close()
+        except PermissionError:
+            logger.error(f"Permission denied writing to {file_path} on {self.host}")
+            return {
+                'success': False,
+                'message': f'没有权限写入文件: {file_path}',
+                'error_type': 'permission_denied'
+            }
+        except Exception as e:
+            logger.error(f"Failed to write file {file_path} to {self.host}: {str(e)}")
+            return {
+                'success': False,
+                'message': f'写入文件失败: {str(e)}',
+                'error_type': 'write_error'
             }
         finally:
             self.disconnect()
