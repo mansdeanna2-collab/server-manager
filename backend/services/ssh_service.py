@@ -212,3 +212,54 @@ class SSHService:
                 'message': f'连接错误: {str(e)}',
                 'error_type': 'connection_error'
             }
+
+    def read_remote_file(self, file_path):
+        """读取远程服务器上的文件内容
+
+        Args:
+            file_path: 远程服务器上的文件路径
+
+        Returns:
+            dict: 包含文件内容或错误信息的字典
+        """
+        if not self.connect():
+            return {
+                'success': False,
+                'message': '无法连接到服务器',
+                'error_type': 'connection_error'
+            }
+
+        try:
+            # 使用 cat 命令读取文件内容
+            content = self.execute_command(f'cat {file_path}')
+
+            if content is None:
+                return {
+                    'success': False,
+                    'message': f'无法读取文件: {file_path}',
+                    'error_type': 'read_error'
+                }
+
+            # 检查文件是否存在
+            file_exists = self.execute_command(f'test -f {file_path} && echo "exists"')
+            if file_exists != 'exists':
+                return {
+                    'success': False,
+                    'message': f'文件不存在: {file_path}',
+                    'error_type': 'file_not_found'
+                }
+
+            return {
+                'success': True,
+                'content': content,
+                'file_path': file_path
+            }
+        except Exception as e:
+            logger.error(f"Failed to read file {file_path} from {self.host}: {str(e)}")
+            return {
+                'success': False,
+                'message': f'读取文件失败: {str(e)}',
+                'error_type': 'read_error'
+            }
+        finally:
+            self.disconnect()
