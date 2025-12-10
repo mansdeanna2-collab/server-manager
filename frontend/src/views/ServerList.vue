@@ -2036,8 +2036,8 @@ const readServerFile = async (server) => {
         inputPlaceholder: '例如: /etc/passwd, /var/log/syslog',
         confirmButtonText: '读取',
         cancelButtonText: '取消',
-        inputPattern: /^\/[^\0]*$/,
-        inputErrorMessage: '请输入有效的文件路径（以 / 开头）'
+        inputPattern: /^\/(?!.*\.\.)(?!.*[;|&$`\n\r])[^\0]*$/,
+        inputErrorMessage: '请输入有效的文件路径（以 / 开头，不能包含 .. 或特殊字符）'
       }
     )
 
@@ -2046,6 +2046,15 @@ const readServerFile = async (server) => {
     }
 
     const filePath = value.trim()
+
+    // 额外的前端验证
+    const dangerousPatterns = ['..', ';', '|', '&', '$', '`']
+    for (const pattern of dangerousPatterns) {
+      if (filePath.includes(pattern)) {
+        ElMessage.warning(`文件路径不能包含 "${pattern}"`)
+        return
+      }
+    }
 
     fileDialogServer.value = server
     fileDialogLoading.value = true
