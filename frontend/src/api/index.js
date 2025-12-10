@@ -95,7 +95,7 @@ export const serversAPI = {
   getIpRegion: (ipAddress) => api.get(`/servers/ip-region/${ipAddress}`),
   getPortType: (port) => api.get(`/servers/port-type/${port}`),
   importFromFiles: () => api.post('/servers/import-from-files'),
-  readFile: (id) => api.get(`/servers/${id}/read-file`)
+  readFile: (id, filePath) => api.post(`/servers/${id}/read-file`, { file_path: filePath })
 }
 
 export default api

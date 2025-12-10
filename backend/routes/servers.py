@@ -501,56 +501,40 @@ def import_servers_from_files(_current_user):
     }), 200
 
 
-@servers_bp.route('/<int:server_id>/read-file', methods=['GET'])
+@servers_bp.route('/<int:server_id>/read-file', methods=['POST'])
 @token_required
 def read_server_file(_current_user, server_id):
-    """读取服务器对应的配置文件内容"""
+    """通过SSH读取远程服务器上的文件内容"""
     server = Server.query.get(server_id)
 
     if not server:
         return jsonify({'message': 'Server not found'}), 404
 
-    server_files_dir = Config.SERVER_FILES_DIR
-    if not os.path.exists(server_files_dir):
-        return jsonify({'message': f'目录不存在: {server_files_dir}'}), 404
+    data = request.get_json()
+    file_path = data.get('file_path', '') if data else ''
 
-    # 获取服务器IP地址
-    ip_address = server.ip_address
+    if not file_path:
+        return jsonify({'message': '请提供文件路径'}), 400
 
-    # 搜索包含该IP地址的文件
-    try:
-        files = os.listdir(server_files_dir)
-    except PermissionError:
-        return jsonify({'message': f'无权限访问目录: {server_files_dir}'}), 403
-    except OSError as e:
-        return jsonify({'message': f'读取目录失败: {str(e)}'}), 500
+    # 检查端口是否为SSH端口
+    if server.port == 3389:
+        return jsonify({'message': 'Windows远程桌面服务不支持读取文件'}), 400
 
-    txt_files = [f for f in files if f.endswith('.txt')]
+    # Decrypt password
+    password = password_encryptor.decrypt(server.encrypted_password)
 
-    for filename in txt_files:
-        filepath = os.path.join(server_files_dir, filename)
-        try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                content = f.read().strip()
+    # Create SSH connection and read file
+    ssh = SSHService(server.ip_address, server.port, server.username, password)
+    result = ssh.read_remote_file(file_path)
 
-            if not content:
-                continue
-
-            try:
-                data = json.loads(content)
-                ips = data.get('ips', [])
-                if ip_address in ips:
-                    return jsonify({
-                        'filename': filename,
-                        'content': data,
-                        'raw_content': content
-                    }), 200
-            except json.JSONDecodeError:
-                continue
-
-        except (PermissionError, OSError):
-            continue
-
-    return jsonify({
-        'message': f'未找到IP地址 {ip_address} 对应的配置文件'
-    }), 404
+    if result['success']:
+        return jsonify({
+            'filename': file_path.split('/')[-1],
+            'file_path': result['file_path'],
+            'content': result['content']
+        }), 200
+    else:
+        return jsonify({
+            'message': result['message'],
+            'error_type': result.get('error_type')
+        }), 400

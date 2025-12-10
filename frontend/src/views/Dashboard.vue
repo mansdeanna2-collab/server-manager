@@ -11,9 +11,9 @@
         <el-menu
           mode="horizontal"
           :default-active="activeMenu"
-          background-color="#409EFF"
+          background-color="transparent"
           text-color="#fff"
-          active-text-color="#ffd04b"
+          active-text-color="#fff"
           class="header-menu"
           @select="handleMenuSelect"
         >
@@ -645,14 +645,14 @@ const handleChangePassword = async () => {
   background: linear-gradient(135deg, #f5f7fa 0%, #e4e7ed 100%);
 }
 
-/* 头部样式 */
+/* 头部样式 - 统一淡蓝色导航 */
 .header-container {
-  background: linear-gradient(135deg, #409EFF 0%, #337ecc 100%);
+  background: linear-gradient(135deg, #5b9bd5 0%, #7db8e8 50%, #9ecae1 100%);
   color: white;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 4px 20px 0 rgba(64, 158, 255, 0.3);
+  box-shadow: 0 4px 24px 0 rgba(91, 155, 213, 0.35);
 }
 
 .header-logo {
@@ -670,6 +670,27 @@ const handleChangePassword = async () => {
   border: none;
   flex: 1;
   margin-left: 50px;
+  background: transparent !important;
+}
+
+.header-menu :deep(.el-menu-item) {
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-weight: 500;
+  font-size: 15px;
+  border-radius: 8px;
+  margin: 0 4px;
+  transition: all 0.3s ease;
+}
+
+.header-menu :deep(.el-menu-item:hover) {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: #fff !important;
+}
+
+.header-menu :deep(.el-menu-item.is-active) {
+  background: rgba(255, 255, 255, 0.25) !important;
+  color: #fff !important;
+  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.2);
 }
 
 .user-dropdown {
@@ -681,10 +702,11 @@ const handleChangePassword = async () => {
   color: white;
   transition: all 0.3s;
   border-radius: 8px;
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .user-dropdown:hover {
-  background-color: rgba(255, 255, 255, 0.15);
+  background-color: rgba(255, 255, 255, 0.25);
 }
 
 /* 主内容区 */

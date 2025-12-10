@@ -212,3 +212,76 @@ class SSHService:
                 'message': f'连接错误: {str(e)}',
                 'error_type': 'connection_error'
             }
+
+    def read_remote_file(self, file_path):
+        """读取远程服务器上的文件内容
+
+        Args:
+            file_path: 远程服务器上的文件路径
+
+        Returns:
+            dict: 包含文件内容或错误信息的字典
+        """
+        # 验证文件路径安全性
+        if not file_path or not file_path.startswith('/'):
+            return {
+                'success': False,
+                'message': '文件路径必须以 / 开头',
+                'error_type': 'invalid_path'
+            }
+
+        # 检查危险的路径模式
+        dangerous_patterns = ['..', ';', '|', '&', '$', '`', '\n', '\r']
+        for pattern in dangerous_patterns:
+            if pattern in file_path:
+                return {
+                    'success': False,
+                    'message': f'文件路径包含不允许的字符: {pattern}',
+                    'error_type': 'invalid_path'
+                }
+
+        if not self.connect():
+            return {
+                'success': False,
+                'message': '无法连接到服务器',
+                'error_type': 'connection_error'
+            }
+
+        try:
+            # 使用 shlex.quote 进行 shell 转义以防止命令注入
+            import shlex
+            safe_path = shlex.quote(file_path)
+
+            # 先检查文件是否存在
+            file_exists = self.execute_command(f'test -f {safe_path} && echo "exists"')
+            if file_exists != 'exists':
+                return {
+                    'success': False,
+                    'message': f'文件不存在: {file_path}',
+                    'error_type': 'file_not_found'
+                }
+
+            # 使用 cat 命令读取文件内容
+            content = self.execute_command(f'cat {safe_path}')
+
+            if content is None:
+                return {
+                    'success': False,
+                    'message': f'无法读取文件: {file_path}',
+                    'error_type': 'read_error'
+                }
+
+            return {
+                'success': True,
+                'content': content,
+                'file_path': file_path
+            }
+        except Exception as e:
+            logger.error(f"Failed to read file {file_path} from {self.host}: {str(e)}")
+            return {
+                'success': False,
+                'message': f'读取文件失败: {str(e)}',
+                'error_type': 'read_error'
+            }
+        finally:
+            self.disconnect()

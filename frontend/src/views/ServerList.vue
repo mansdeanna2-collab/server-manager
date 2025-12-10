@@ -11,9 +11,9 @@
         <el-menu
           mode="horizontal"
           :default-active="activeMenu"
-          background-color="#409EFF"
+          background-color="transparent"
           text-color="#fff"
-          active-text-color="#ffd04b"
+          active-text-color="#fff"
           class="header-menu"
           @select="handleMenuSelect"
         >
@@ -1052,14 +1052,14 @@
             type="info"
             effect="plain"
           >
-            文件名: {{ fileDialogFilename }}
+            文件路径: {{ fileDialogFilename }}
           </el-tag>
         </div>
-        <pre class="file-content">{{ JSON.stringify(fileDialogContent, null, 2) }}</pre>
+        <pre class="file-content">{{ fileDialogContent }}</pre>
       </div>
       <el-empty
         v-else
-        description="未找到对应的配置文件"
+        description="文件内容为空或读取失败"
       />
     </el-dialog>
   </div>
@@ -2020,21 +2020,59 @@ const handleChangePassword = async () => {
 
 // 读取服务器配置文件
 const readServerFile = async (server) => {
-  fileDialogServer.value = server
-  fileDialogLoading.value = true
-  fileDialogContent.value = null
-  fileDialogFilename.value = ''
-  fileDialogVisible.value = true
-  
+  // 检查是否为Windows服务器（RDP端口）
+  if (server.port === 3389) {
+    ElMessage.warning('Windows远程桌面服务不支持读取文件')
+    return
+  }
+
+  // 弹出对话框让用户输入文件路径
   try {
-    const response = await serversAPI.readFile(server.id)
+    const { value } = await ElMessageBox.prompt(
+      `请输入要读取的文件路径（服务器 ${server.ip_address}）`,
+      '读取文件',
+      {
+        inputValue: '/etc/passwd',
+        inputPlaceholder: '例如: /etc/passwd, /var/log/syslog',
+        confirmButtonText: '读取',
+        cancelButtonText: '取消',
+        inputPattern: /^\/(?!.*\.\.)(?!.*[;|&$`\n\r])[^\0]*$/,
+        inputErrorMessage: '请输入有效的文件路径（以 / 开头，不能包含 .. 或特殊字符）'
+      }
+    )
+
+    if (!value || !value.trim()) {
+      return
+    }
+
+    const filePath = value.trim()
+
+    // 额外的前端验证
+    const dangerousPatterns = ['..', ';', '|', '&', '$', '`']
+    for (const pattern of dangerousPatterns) {
+      if (filePath.includes(pattern)) {
+        ElMessage.warning(`文件路径不能包含 "${pattern}"`)
+        return
+      }
+    }
+
+    fileDialogServer.value = server
+    fileDialogLoading.value = true
+    fileDialogContent.value = null
+    fileDialogFilename.value = ''
+    fileDialogVisible.value = true
+
+    const response = await serversAPI.readFile(server.id, filePath)
     fileDialogContent.value = response.data.content
     fileDialogFilename.value = response.data.filename
-  } catch (error) {
-    const message = error.response?.data?.message || '读取文件失败'
-    ElMessage.warning(message)
-  } finally {
     fileDialogLoading.value = false
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      const message = error.response?.data?.message || '读取文件失败'
+      ElMessage.warning(message)
+      fileDialogLoading.value = false
+      fileDialogVisible.value = false
+    }
   }
 }
 </script>
@@ -2046,14 +2084,14 @@ const readServerFile = async (server) => {
   background: linear-gradient(135deg, #f0f4f8 0%, #d7e3ec 50%, #e8eef3 100%);
 }
 
-/* Header styles - 企业级导航美化 */
+/* Header styles - 统一淡蓝色导航美化 */
 .header-container {
-  background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 50%, #3182ce 100%);
+  background: linear-gradient(135deg, #5b9bd5 0%, #7db8e8 50%, #9ecae1 100%);
   color: white;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 4px 24px 0 rgba(30, 58, 95, 0.4);
+  box-shadow: 0 4px 24px 0 rgba(91, 155, 213, 0.35);
   height: 70px;
   padding: 0 30px;
   position: relative;
@@ -2066,7 +2104,7 @@ const readServerFile = async (server) => {
   left: 0;
   right: 0;
   height: 3px;
-  background: linear-gradient(90deg, #63b3ed 0%, #4fd1c5 50%, #68d391 100%);
+  background: linear-gradient(90deg, #90cdf4 0%, #bee3f8 50%, #e0f0ff 100%);
 }
 
 .header-logo {
@@ -2076,8 +2114,8 @@ const readServerFile = async (server) => {
 }
 
 .header-logo :deep(.el-icon) {
-  color: #63b3ed;
-  filter: drop-shadow(0 2px 4px rgba(99, 179, 237, 0.4));
+  color: #ffffff;
+  filter: drop-shadow(0 2px 4px rgba(255, 255, 255, 0.4));
 }
 
 .header-logo h2 {
@@ -2099,7 +2137,7 @@ const readServerFile = async (server) => {
 }
 
 .header-menu :deep(.el-menu-item) {
-  color: rgba(255, 255, 255, 0.85) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
   font-weight: 500;
   font-size: 15px;
   border-radius: 8px;
@@ -2108,14 +2146,14 @@ const readServerFile = async (server) => {
 }
 
 .header-menu :deep(.el-menu-item:hover) {
-  background: rgba(255, 255, 255, 0.15) !important;
+  background: rgba(255, 255, 255, 0.2) !important;
   color: #fff !important;
 }
 
 .header-menu :deep(.el-menu-item.is-active) {
-  background: linear-gradient(135deg, rgba(99, 179, 237, 0.3) 0%, rgba(79, 209, 197, 0.3) 100%) !important;
+  background: rgba(255, 255, 255, 0.25) !important;
   color: #fff !important;
-  box-shadow: 0 2px 8px rgba(99, 179, 237, 0.3);
+  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.2);
 }
 
 .user-dropdown {
@@ -2127,13 +2165,13 @@ const readServerFile = async (server) => {
   color: white;
   transition: all 0.3s ease;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.15);
   backdrop-filter: blur(10px);
 }
 
 .user-dropdown:hover {
-  background: rgba(255, 255, 255, 0.2);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 /* Content wrapper */
