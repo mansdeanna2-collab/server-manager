@@ -957,11 +957,25 @@
           class="file-browser-section"
         >
           <div class="file-browser-header">
-            <h4 class="file-browser-title">
-              <el-icon><Folder /></el-icon>
-              服务器文件浏览
-            </h4>
+            <div class="file-browser-title-area">
+              <h4 class="file-browser-title">
+                <el-icon class="file-browser-title-icon">
+                  <Folder />
+                </el-icon>
+                服务器文件浏览
+              </h4>
+              <el-tag
+                type="info"
+                size="small"
+                effect="plain"
+              >
+                {{ fileList.length }} 个项目
+              </el-tag>
+            </div>
             <div class="file-browser-path">
+              <el-icon class="path-home-icon">
+                <FolderOpened />
+              </el-icon>
               <el-breadcrumb separator="/">
                 <el-breadcrumb-item
                   v-for="(pathPart, index) in currentPathParts"
@@ -975,6 +989,8 @@
             <el-button
               size="small"
               :loading="fileBrowserLoading"
+              type="primary"
+              plain
               @click="refreshFileList"
             >
               <el-icon><Refresh /></el-icon>
@@ -986,12 +1002,14 @@
             v-if="fileBrowserLoading"
             class="file-browser-loading"
           >
-            <el-icon
-              class="loading-icon"
-              :size="24"
-            >
-              <Loading />
-            </el-icon>
+            <div class="loading-animation">
+              <el-icon
+                class="loading-icon"
+                :size="32"
+              >
+                <Loading />
+              </el-icon>
+            </div>
             <span>正在加载文件列表...</span>
           </div>
           
@@ -1014,30 +1032,47 @@
             <el-table
               :data="fileList"
               style="width: 100%"
-              max-height="300"
+              max-height="320"
               stripe
               size="small"
+              highlight-current-row
+              :row-class-name="getFileRowClass"
               @row-click="handleFileClick"
             >
               <el-table-column
                 label="名称"
-                min-width="200"
+                min-width="260"
               >
                 <template #default="scope">
                   <div class="file-name-cell">
-                    <el-icon
-                      v-if="scope.row.type === 'directory'"
-                      class="file-icon folder-icon"
+                    <div
+                      class="file-icon-wrapper"
+                      :class="getFileIconClass(scope.row)"
                     >
-                      <FolderOpened />
-                    </el-icon>
-                    <el-icon
-                      v-else
-                      class="file-icon"
-                    >
-                      <DocumentIcon />
-                    </el-icon>
-                    <span class="file-name">{{ scope.row.name }}</span>
+                      <el-icon
+                        v-if="scope.row.type === 'directory'"
+                        class="file-icon folder-icon"
+                      >
+                        <FolderOpened />
+                      </el-icon>
+                      <el-icon
+                        v-else-if="scope.row.type === 'link'"
+                        class="file-icon link-icon"
+                      >
+                        <Link />
+                      </el-icon>
+                      <span
+                        v-else
+                        class="file-ext-icon"
+                      >{{ getFileExtIcon(scope.row.name) }}</span>
+                    </div>
+                    <div class="file-name-info">
+                      <span class="file-name">{{ scope.row.name }}</span>
+                      <span
+                        v-if="isHiddenFile(scope.row.name)"
+                        class="hidden-badge"
+                      >隐藏</span>
+                    </div>
                   </div>
                 </template>
               </el-table-column>
@@ -1048,10 +1083,11 @@
               >
                 <template #default="scope">
                   <el-tag
-                    :type="scope.row.type === 'directory' ? 'warning' : 'info'"
+                    :type="getFileTypeTagType(scope.row.type)"
                     size="small"
+                    effect="plain"
                   >
-                    {{ scope.row.type === 'directory' ? '目录' : scope.row.type === 'link' ? '链接' : '文件' }}
+                    {{ getFileTypeLabel(scope.row.type) }}
                   </el-tag>
                 </template>
               </el-table-column>
@@ -1059,11 +1095,15 @@
                 prop="size"
                 label="大小"
                 width="100"
-              />
+              >
+                <template #default="scope">
+                  <span class="file-size">{{ scope.row.size }}</span>
+                </template>
+              </el-table-column>
               <el-table-column
                 prop="permissions"
                 label="权限"
-                width="120"
+                width="130"
               >
                 <template #default="scope">
                   <code class="permission-code">{{ scope.row.permissions }}</code>
@@ -1071,7 +1111,7 @@
               </el-table-column>
               <el-table-column
                 label="操作"
-                width="150"
+                width="160"
                 fixed="right"
               >
                 <template #default="scope">
@@ -1108,8 +1148,8 @@
     <!-- File Content Viewer/Editor Dialog -->
     <el-dialog
       v-model="fileEditorVisible"
-      :title="`${fileEditorReadonly ? '查看' : '编辑'}文件 - ${fileEditorPath}`"
-      width="900px"
+      :title="`${fileEditorReadonly ? '📄 查看文件' : '✏️ 编辑文件'}`"
+      width="1000px"
       class="file-editor-dialog"
       append-to-body
       :close-on-click-modal="false"
@@ -1132,45 +1172,79 @@
         v-else
         class="file-editor-content"
       >
-        <div class="file-editor-info">
-          <el-tag
-            type="info"
-            effect="plain"
-          >
-            文件路径: {{ fileEditorPath }}
-          </el-tag>
-          <el-button
-            v-if="fileEditorReadonly"
-            size="small"
-            type="primary"
-            @click="enableEditing"
-          >
-            <el-icon><Edit /></el-icon>
-            编辑
-          </el-button>
+        <div class="file-editor-header">
+          <div class="file-editor-info">
+            <div class="file-path-display">
+              <el-icon class="path-icon">
+                <DocumentIcon />
+              </el-icon>
+              <code class="file-path-code">{{ fileEditorPath }}</code>
+            </div>
+            <div class="file-editor-badges">
+              <el-tag
+                :type="fileEditorReadonly ? 'info' : 'success'"
+                size="small"
+                effect="dark"
+              >
+                {{ fileEditorReadonly ? '只读模式' : '编辑模式' }}
+              </el-tag>
+              <el-tag
+                v-if="fileEditorContent"
+                type="info"
+                size="small"
+                effect="plain"
+              >
+                {{ fileEditorContent.split('\n').length }} 行
+              </el-tag>
+            </div>
+          </div>
+          <div class="file-editor-actions">
+            <el-button
+              v-if="fileEditorReadonly"
+              size="small"
+              type="warning"
+              @click="enableEditing"
+            >
+              <el-icon><Edit /></el-icon>
+              切换编辑
+            </el-button>
+          </div>
         </div>
-        <el-input
-          v-model="fileEditorContent"
-          type="textarea"
-          :rows="20"
-          :readonly="fileEditorReadonly"
-          class="file-editor-textarea"
-          placeholder="文件内容为空"
-        />
+        <div class="file-editor-body">
+          <div class="line-numbers">
+            <span
+              v-for="n in lineCount"
+              :key="n"
+              class="line-number"
+            >{{ n }}</span>
+          </div>
+          <el-input
+            v-model="fileEditorContent"
+            type="textarea"
+            :rows="22"
+            :readonly="fileEditorReadonly"
+            class="file-editor-textarea"
+            placeholder="文件内容为空"
+            resize="none"
+          />
+        </div>
       </div>
       <template #footer>
-        <el-button @click="fileEditorVisible = false">
-          关闭
-        </el-button>
-        <el-button
-          v-if="!fileEditorReadonly"
-          type="primary"
-          :loading="fileEditorSaving"
-          @click="saveFileContent"
-        >
-          <el-icon><DocumentIcon /></el-icon>
-          保存
-        </el-button>
+        <div class="file-editor-footer">
+          <el-button @click="fileEditorVisible = false">
+            <el-icon><CircleClose /></el-icon>
+            关闭
+          </el-button>
+          <el-button
+            v-if="!fileEditorReadonly"
+            type="primary"
+            :loading="fileEditorSaving"
+            @click="saveFileContent"
+          >
+            <el-icon><DocumentIcon /></el-icon>
+            保存文件
+          </el-button>
+        </div>
       </template>
     </el-dialog>
     
@@ -1286,12 +1360,51 @@ import {
   Monitor, Odometer, User, ArrowDown, Plus, Refresh,
   Search, View, Edit, Delete, OfficeBuilding, Connection, CopyDocument, Loading,
   CircleCheck, CircleClose, Download, QuestionFilled, WarningFilled, Cpu, Star, EditPen,
-  Clock, Sort, Folder, FolderOpened, Document as DocumentIcon
+  Clock, Sort, Folder, FolderOpened, Document as DocumentIcon, Link
 } from '@element-plus/icons-vue'
 import { serversAPI, authAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
 import ServerForm from '@/components/ServerForm.vue'
 import Terminal from '@/components/Terminal.vue'
+
+// 文件扩展名图标映射配置
+const FILE_EXTENSION_ICONS = {
+  // 代码文件
+  js: '📜', ts: '📜', jsx: '📜', tsx: '📜',
+  py: '🐍', java: '☕', rb: '💎', go: '🔷',
+  rs: '🦀', c: '⚙️', cpp: '⚙️', h: '⚙️',
+  php: '🐘', swift: '🍎', kt: '🔶',
+  // 前端
+  html: '🌐', htm: '🌐', css: '🎨', scss: '🎨', less: '🎨',
+  vue: '💚', svelte: '🧡',
+  // 配置
+  json: '📋', yaml: '📋', yml: '📋', xml: '📋',
+  toml: '📋', ini: '📋', conf: '📋', cfg: '📋',
+  env: '🔐',
+  // 文档
+  md: '📝', txt: '📄', doc: '📄', docx: '📄',
+  pdf: '📕', rtf: '📄',
+  // 数据
+  sql: '🗄️', db: '🗄️', sqlite: '🗄️',
+  csv: '📊', xls: '📊', xlsx: '📊',
+  // 图片
+  jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️',
+  svg: '🖼️', ico: '🖼️', webp: '🖼️',
+  // 压缩
+  zip: '📦', tar: '📦', gz: '📦', rar: '📦', '7z': '📦',
+  // Shell
+  sh: '🖥️', bash: '🖥️', zsh: '🖥️', fish: '🖥️',
+  // 日志
+  log: '📋',
+  // 其他
+  lock: '🔒', key: '🔑', pem: '🔑', crt: '🔐'
+}
+
+// 代码文件扩展名列表
+const CODE_FILE_EXTENSIONS = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'rb', 'go', 'rs', 'c', 'cpp', 'h', 'php', 'swift', 'kt', 'vue', 'svelte']
+
+// 配置文件扩展名列表
+const CONFIG_FILE_EXTENSIONS = ['json', 'yaml', 'yml', 'xml', 'toml', 'ini', 'conf', 'cfg', 'env']
 
 const router = useRouter()
 const route = useRoute()
@@ -1371,6 +1484,12 @@ const fileEditorContent = ref('')
 const fileEditorReadonly = ref(true)
 const fileEditorLoading = ref(false)
 const fileEditorSaving = ref(false)
+
+// 计算文件行数
+const lineCount = computed(() => {
+  if (!fileEditorContent.value) return 1
+  return fileEditorContent.value.split('\n').length
+})
 
 // 计算当前路径的各个部分
 const currentPathParts = computed(() => {
@@ -2105,6 +2224,50 @@ const handleFileClick = (row) => {
   if (row.type === 'directory') {
     openDirectory(row)
   }
+}
+
+// 文件浏览器辅助函数
+const getFileExtIcon = (filename) => {
+  const ext = filename.split('.').pop()?.toLowerCase() || ''
+  return FILE_EXTENSION_ICONS[ext] || '📄'
+}
+
+const getFileIconClass = (file) => {
+  if (file.type === 'directory') return 'folder'
+  if (file.type === 'link') return 'link'
+  const ext = file.name.split('.').pop()?.toLowerCase() || ''
+  if (CODE_FILE_EXTENSIONS.includes(ext)) return 'code'
+  if (CONFIG_FILE_EXTENSIONS.includes(ext)) return 'config'
+  return 'default'
+}
+
+const getFileTypeTagType = (type) => {
+  const typeMap = {
+    'directory': 'warning',
+    'link': 'info',
+    'file': ''
+  }
+  return typeMap[type] || ''
+}
+
+const getFileTypeLabel = (type) => {
+  const labelMap = {
+    'directory': '目录',
+    'link': '链接',
+    'file': '文件'
+  }
+  return labelMap[type] || '未知'
+}
+
+const isHiddenFile = (filename) => {
+  return filename.startsWith('.')
+}
+
+const getFileRowClass = ({ row }) => {
+  const classes = []
+  if (row.type === 'directory') classes.push('directory-row')
+  if (isHiddenFile(row.name)) classes.push('hidden-file-row')
+  return classes.join(' ')
 }
 
 const viewFileContent = async (file) => {
@@ -3562,22 +3725,30 @@ const handleChangePassword = async () => {
   box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
-/* File Browser Section Styles */
+/* File Browser Section Styles - 升级版 */
 .file-browser-section {
   margin-top: 20px;
-  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
-  border-radius: 12px;
-  padding: 16px;
-  border: 1px solid #e2e8f0;
+  background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid #30363d;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
 .file-browser-header {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 16px;
   margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #30363d;
+}
+
+.file-browser-title-area {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .file-browser-title {
@@ -3587,35 +3758,67 @@ const handleChangePassword = async () => {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #2d3748;
+  color: #f0f6fc;
 }
 
-.file-browser-title .el-icon {
-  color: #ed8936;
+.file-browser-title-icon {
+  color: #f0883e;
+  font-size: 20px;
 }
 
 .file-browser-path {
   flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #21262d;
+  padding: 8px 16px;
+  border-radius: 8px;
+  min-width: 200px;
+}
+
+.path-home-icon {
+  color: #f0883e;
+  font-size: 18px;
+}
+
+.file-browser-path :deep(.el-breadcrumb__separator) {
+  color: #484f58;
 }
 
 .breadcrumb-item-clickable {
   cursor: pointer;
-  color: #3182ce;
-  transition: color 0.2s;
+  color: #58a6ff;
+  transition: all 0.2s;
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
 .breadcrumb-item-clickable:hover {
-  color: #2c5282;
-  text-decoration: underline;
+  color: #79c0ff;
+  background: rgba(88, 166, 255, 0.1);
+  text-decoration: none;
 }
 
 .file-browser-loading {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 40px;
-  color: #718096;
+  gap: 16px;
+  padding: 60px 20px;
+  color: #8b949e;
+}
+
+.loading-animation {
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #21262d 0%, #161b22 100%);
+  border-radius: 50%;
+  border: 2px solid #30363d;
 }
 
 .file-browser-error {
@@ -3623,38 +3826,127 @@ const handleChangePassword = async () => {
 }
 
 .file-browser-content {
-  background: white;
-  border-radius: 8px;
+  background: #161b22;
+  border-radius: 12px;
   overflow: hidden;
+  border: 1px solid #30363d;
+}
+
+.file-browser-content :deep(.el-table) {
+  background: transparent;
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-header-bg-color: #21262d;
+  --el-table-header-text-color: #c9d1d9;
+  --el-table-text-color: #c9d1d9;
+  --el-table-border-color: #30363d;
+  --el-table-row-hover-bg-color: rgba(88, 166, 255, 0.1);
+}
+
+.file-browser-content :deep(.el-table__body tr.directory-row) {
+  background: rgba(240, 136, 62, 0.05);
+}
+
+.file-browser-content :deep(.el-table__body tr.hidden-file-row) {
+  opacity: 0.6;
+}
+
+.file-browser-content :deep(.el-table__body tr:hover) {
+  cursor: pointer;
 }
 
 .file-name-cell {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
-.file-icon {
+.file-icon-wrapper {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
   font-size: 18px;
-  color: #718096;
+  transition: transform 0.2s;
 }
 
-.folder-icon {
-  color: #ed8936;
+.file-icon-wrapper.folder {
+  background: linear-gradient(135deg, #f0883e 0%, #d29922 100%);
+  color: white;
+}
+
+.file-icon-wrapper.link {
+  background: linear-gradient(135deg, #a371f7 0%, #8957e5 100%);
+  color: white;
+}
+
+.file-icon-wrapper.code {
+  background: linear-gradient(135deg, #3fb950 0%, #238636 100%);
+}
+
+.file-icon-wrapper.config {
+  background: linear-gradient(135deg, #58a6ff 0%, #1f6feb 100%);
+}
+
+.file-icon-wrapper.default {
+  background: linear-gradient(135deg, #6e7681 0%, #484f58 100%);
+}
+
+.file-ext-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.file-name-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .file-name {
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-family: 'Cascadia Code', 'Fira Code', Monaco, Menlo, Consolas, monospace;
   font-size: 13px;
+  color: #f0f6fc;
+}
+
+.hidden-badge {
+  font-size: 10px;
+  color: #8b949e;
+  background: #21262d;
+  padding: 1px 6px;
+  border-radius: 4px;
+  width: fit-content;
+}
+
+.file-size {
+  font-family: 'Cascadia Code', monospace;
+  font-size: 12px;
+  color: #8b949e;
+}
+
+.file-icon {
+  font-size: 20px;
+  color: #8b949e;
+}
+
+.folder-icon {
+  color: #f0883e;
+}
+
+.link-icon {
+  color: #a371f7;
 }
 
 .permission-code {
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-  font-size: 12px;
-  background: #edf2f7;
-  padding: 2px 6px;
-  border-radius: 4px;
-  color: #4a5568;
+  font-family: 'Cascadia Code', Monaco, Menlo, Consolas, monospace;
+  font-size: 11px;
+  background: #21262d;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: #7ee787;
+  letter-spacing: 0.5px;
 }
 
 .file-actions {
@@ -3662,66 +3954,152 @@ const handleChangePassword = async () => {
   gap: 4px;
 }
 
-/* File Editor Dialog Styles */
+/* File Editor Dialog Styles - 升级版 */
 .file-editor-dialog :deep(.el-dialog) {
-  margin-top: 6vh;
-  border-radius: 20px;
+  margin-top: 4vh;
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 25px 80px rgba(66, 153, 225, 0.25);
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5);
+  border: 1px solid #30363d;
 }
 
 .file-editor-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #2c5282 0%, #3182ce 50%, #4299e1 100%);
+  background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
   color: white;
   padding: 20px 28px;
   margin: 0;
+  border-bottom: 1px solid #30363d;
 }
 
 .file-editor-dialog :deep(.el-dialog__title) {
-  color: white;
-  font-weight: 700;
+  color: #f0f6fc;
+  font-weight: 600;
   font-size: 18px;
 }
 
 .file-editor-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
-  color: white;
+  color: #8b949e;
   font-size: 20px;
 }
 
 .file-editor-dialog :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
-  color: rgba(255, 255, 255, 0.8);
+  color: #f85149;
 }
 
 .file-editor-dialog :deep(.el-dialog__body) {
-  padding: 24px;
-  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+  padding: 0;
+  background: #0d1117;
+}
+
+.file-editor-dialog :deep(.el-dialog__footer) {
+  background: #161b22;
+  border-top: 1px solid #30363d;
+  padding: 16px 24px;
 }
 
 .file-editor-content {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+}
+
+.file-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  background: #161b22;
+  border-bottom: 1px solid #30363d;
 }
 
 .file-editor-info {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file-path-display {
+  display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
+}
+
+.path-icon {
+  color: #58a6ff;
+  font-size: 18px;
+}
+
+.file-path-code {
+  font-family: 'Cascadia Code', Monaco, Menlo, Consolas, monospace;
+  font-size: 13px;
+  color: #79c0ff;
+  background: #21262d;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #30363d;
+}
+
+.file-editor-badges {
+  display: flex;
+  gap: 8px;
+}
+
+.file-editor-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.file-editor-body {
+  display: flex;
+  min-height: 450px;
+}
+
+.line-numbers {
+  display: flex;
+  flex-direction: column;
+  background: #161b22;
+  padding: 16px 12px;
+  border-right: 1px solid #30363d;
+  user-select: none;
+  min-width: 50px;
+}
+
+.line-number {
+  font-family: 'Cascadia Code', Monaco, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #484f58;
+  text-align: right;
+}
+
+.file-editor-textarea {
+  flex: 1;
 }
 
 .file-editor-textarea :deep(.el-textarea__inner) {
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-family: 'Cascadia Code', 'Fira Code', Monaco, Menlo, Consolas, monospace;
   font-size: 13px;
   line-height: 1.6;
-  background: #1a202c;
-  color: #68d391;
-  border-radius: 12px;
+  background: #0d1117;
+  color: #c9d1d9;
+  border-radius: 0;
   padding: 16px;
-  min-height: 400px;
+  min-height: 450px;
+  border: none;
+  resize: none;
 }
 
 .file-editor-textarea :deep(.el-textarea__inner:read-only) {
-  background: #2d3748;
+  background: #0d1117;
+  color: #8b949e;
+}
+
+.file-editor-textarea :deep(.el-textarea__inner:focus) {
+  box-shadow: none;
+}
+
+.file-editor-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 </style>
