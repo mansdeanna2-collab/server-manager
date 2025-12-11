@@ -25,6 +25,20 @@
             <el-icon><OfficeBuilding /></el-icon>
             服务器
           </el-menu-item>
+          <el-sub-menu index="main-program">
+            <template #title>
+              <el-icon><Setting /></el-icon>
+              主程序功能
+            </template>
+            <el-menu-item index="/information-query">
+              <el-icon><Search /></el-icon>
+              信息查询
+            </el-menu-item>
+            <el-menu-item index="/system-backup">
+              <el-icon><FolderOpened /></el-icon>
+              系统备份
+            </el-menu-item>
+          </el-sub-menu>
         </el-menu>
         <el-dropdown @command="handleCommand">
           <span class="user-dropdown">
@@ -57,20 +71,180 @@
                   >
                     <Search />
                   </el-icon>
-                  <span>信息查询</span>
+                  <span>信息查询 - IP段配置</span>
                 </div>
                 <el-button
-                  type="default"
-                  @click="goBack"
+                  type="primary"
+                  :loading="loading"
+                  @click="loadServers"
                 >
-                  <el-icon><Back /></el-icon>
-                  返回仪表盘
+                  <el-icon><Refresh /></el-icon>
+                  刷新数据
                 </el-button>
               </div>
             </template>
             
             <div class="info-content">
-              <el-empty description="信息查询功能页面" />
+              <!-- Loading State -->
+              <div
+                v-if="loading"
+                class="loading-container"
+              >
+                <el-icon
+                  class="loading-icon"
+                  :size="40"
+                >
+                  <Loading />
+                </el-icon>
+                <p class="loading-text">
+                  正在加载数据...
+                </p>
+              </div>
+
+              <!-- Error State -->
+              <el-result
+                v-else-if="loadError"
+                icon="error"
+                title="加载失败"
+                :sub-title="loadError"
+              >
+                <template #extra>
+                  <el-button
+                    type="primary"
+                    @click="loadServers"
+                  >
+                    <el-icon><Refresh /></el-icon>
+                    重新加载
+                  </el-button>
+                </template>
+              </el-result>
+
+              <!-- Empty State -->
+              <el-empty
+                v-else-if="ipSegments.length === 0"
+                description="暂无服务器数据"
+              />
+
+              <!-- IP Segment List -->
+              <div
+                v-else
+                class="segment-list"
+              >
+                <div class="segment-stats">
+                  <el-tag
+                    type="info"
+                    size="large"
+                    effect="dark"
+                  >
+                    共 {{ ipSegments.length }} 个IP段
+                  </el-tag>
+                  <el-tag
+                    type="success"
+                    size="large"
+                    effect="dark"
+                  >
+                    共 {{ totalServers }} 台服务器
+                  </el-tag>
+                </div>
+
+                <el-table
+                  :data="paginatedSegments"
+                  style="width: 100%"
+                  stripe
+                  border
+                >
+                  <el-table-column
+                    label="IP段"
+                    width="180"
+                  >
+                    <template #default="scope">
+                      <span class="ip-segment-text">{{ scope.row.segment }}.x</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    prop="count"
+                    label="服务器数量"
+                    width="120"
+                    align="center"
+                  >
+                    <template #default="scope">
+                      <el-tag
+                        type="primary"
+                        effect="plain"
+                      >
+                        {{ scope.row.count }} 台
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    label="在线状态"
+                    width="200"
+                    align="center"
+                  >
+                    <template #default="scope">
+                      <div class="status-tags">
+                        <el-tag
+                          v-if="scope.row.onlineCount > 0"
+                          type="success"
+                          size="small"
+                        >
+                          在线 {{ scope.row.onlineCount }}
+                        </el-tag>
+                        <el-tag
+                          v-if="scope.row.offlineCount > 0"
+                          type="danger"
+                          size="small"
+                        >
+                          离线 {{ scope.row.offlineCount }}
+                        </el-tag>
+                        <el-tag
+                          v-if="scope.row.unknownCount > 0"
+                          type="info"
+                          size="small"
+                        >
+                          未知 {{ scope.row.unknownCount }}
+                        </el-tag>
+                      </div>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    label="备注"
+                    min-width="200"
+                  >
+                    <template #default="scope">
+                      <span
+                        v-if="scope.row.note"
+                        class="segment-note"
+                      >{{ scope.row.note }}</span>
+                      <span
+                        v-else
+                        class="no-note"
+                      >暂无备注</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    label="IP范围"
+                    min-width="180"
+                  >
+                    <template #default="scope">
+                      <span class="ip-range">{{ scope.row.segment }}.1 - {{ scope.row.segment }}.255</span>
+                    </template>
+                  </el-table-column>
+                </el-table>
+
+                <div
+                  v-if="ipSegments.length > PAGE_SIZE"
+                  class="pagination-container"
+                >
+                  <el-pagination
+                    v-model:current-page="currentPage"
+                    :page-size="PAGE_SIZE"
+                    :total="ipSegments.length"
+                    layout="prev, pager, next"
+                    background
+                  />
+                </div>
+              </div>
             </div>
           </el-card>
         </div>
@@ -144,9 +318,9 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
-  ArrowDown, Back, Monitor, Odometer, OfficeBuilding, Search, User
+  ArrowDown, Monitor, Odometer, OfficeBuilding, Search, User, Setting, FolderOpened, Refresh, Loading
 } from '@element-plus/icons-vue'
-import { authAPI } from '@/api'
+import { authAPI, serversAPI } from '@/api'
 
 const router = useRouter()
 const route = useRoute()
@@ -154,6 +328,16 @@ const currentUser = ref(null)
 const passwordDialogVisible = ref(false)
 const changingPassword = ref(false)
 const passwordFormRef = ref(null)
+const loading = ref(false)
+const loadError = ref('')
+const servers = ref([])
+const currentPage = ref(1)
+const PAGE_SIZE = 15
+
+// IP段备注存储键
+const SEGMENT_NOTES_KEY = 'server_manager_segment_notes'
+const segmentNotes = ref({})
+
 const passwordForm = reactive({
   old_password: '',
   new_password: '',
@@ -184,16 +368,113 @@ const passwordRules = {
 
 const activeMenu = computed(() => route.path)
 
-onMounted(() => {
+// 获取IP段（前3个字节）
+const getIpSegment = (ipAddress) => {
+  if (!ipAddress || typeof ipAddress !== 'string') {
+    return ''
+  }
+  const parts = ipAddress.split('.')
+  if (parts.length >= 3) {
+    return `${parts[0]}.${parts[1]}.${parts[2]}`
+  }
+  return ipAddress
+}
+
+// 比较IP段（数值排序）
+const compareIpSegments = (a, b) => {
+  const partsA = a.segment.split('.').map(Number)
+  const partsB = b.segment.split('.').map(Number)
+  for (let i = 0; i < Math.min(partsA.length, partsB.length); i++) {
+    if (partsA[i] !== partsB[i]) {
+      return partsA[i] - partsB[i]
+    }
+  }
+  return partsA.length - partsB.length
+}
+
+// 按IP段分组的服务器数据
+const ipSegments = computed(() => {
+  const segmentMap = new Map()
+
+  servers.value.forEach(server => {
+    const segment = getIpSegment(server.ip_address)
+    if (!segment) return
+    
+    if (!segmentMap.has(segment)) {
+      segmentMap.set(segment, {
+        segment: segment,
+        count: 0,
+        onlineCount: 0,
+        offlineCount: 0,
+        unknownCount: 0,
+        note: segmentNotes.value[segment] || ''
+      })
+    }
+    
+    const segmentData = segmentMap.get(segment)
+    segmentData.count++
+    
+    if (server.status === 'online') {
+      segmentData.onlineCount++
+    } else if (server.status === 'offline') {
+      segmentData.offlineCount++
+    } else {
+      segmentData.unknownCount++
+    }
+  })
+
+  // 转换为数组并按IP段排序
+  const result = Array.from(segmentMap.values())
+  result.sort(compareIpSegments)
+  return result
+})
+
+// 服务器总数
+const totalServers = computed(() => servers.value.length)
+
+// 分页后的IP段数据
+const paginatedSegments = computed(() => {
+  const start = (currentPage.value - 1) * PAGE_SIZE
+  const end = start + PAGE_SIZE
+  return ipSegments.value.slice(start, end)
+})
+
+// 加载服务器数据
+const loadServers = async () => {
+  loading.value = true
+  loadError.value = ''
+  try {
+    const response = await serversAPI.getAll()
+    servers.value = response.data || []
+  } catch (error) {
+    const message = error.response?.data?.message || error.message || '网络连接失败'
+    loadError.value = message
+    ElMessage.error(`加载数据失败: ${message}`)
+  } finally {
+    loading.value = false
+  }
+}
+
+// 初始化备注数据
+const initSegmentNotes = () => {
+  try {
+    const savedNotes = localStorage.getItem(SEGMENT_NOTES_KEY)
+    if (savedNotes) {
+      segmentNotes.value = JSON.parse(savedNotes)
+    }
+  } catch (_e) {
+    segmentNotes.value = {}
+  }
+}
+
+onMounted(async () => {
   const userStr = localStorage.getItem('user')
   if (userStr) {
     currentUser.value = JSON.parse(userStr)
   }
+  initSegmentNotes()
+  await loadServers()
 })
-
-const goBack = () => {
-  router.push('/dashboard')
-}
 
 const handleMenuSelect = (index) => {
   router.push(index)
@@ -296,6 +577,27 @@ const handleChangePassword = async () => {
   box-shadow: 0 2px 8px rgba(255, 255, 255, 0.2);
 }
 
+/* 子菜单样式 */
+.header-menu :deep(.el-sub-menu__title) {
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-weight: 500;
+  font-size: 15px;
+  border-radius: 8px;
+  margin: 0 4px;
+  transition: all 0.3s ease;
+}
+
+.header-menu :deep(.el-sub-menu__title:hover) {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: #fff !important;
+}
+
+.header-menu :deep(.el-sub-menu.is-active .el-sub-menu__title) {
+  background: rgba(255, 255, 255, 0.25) !important;
+  color: #fff !important;
+  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.2);
+}
+
 .user-dropdown {
   display: flex;
   align-items: center;
@@ -356,8 +658,84 @@ const handleChangePassword = async () => {
 
 .info-content {
   min-height: 400px;
+}
+
+/* 加载状态 */
+.loading-container {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 60px 20px;
+  color: #909399;
+}
+
+.loading-icon {
+  color: #409EFF;
+  animation: rotate 1s linear infinite;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  margin-top: 16px;
+  font-size: 14px;
+  color: #606266;
+}
+
+/* IP段列表 */
+.segment-list {
+  padding: 16px 0;
+}
+
+.segment-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.ip-segment-text {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 15px;
+  font-weight: 600;
+  color: #409EFF;
+}
+
+.status-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.segment-note {
+  color: #606266;
+}
+
+.no-note {
+  color: #c0c4cc;
+  font-style: italic;
+}
+
+.ip-range {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 13px;
+  color: #909399;
+}
+
+/* 分页容器 */
+.pagination-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #f0f0f0;
 }
 </style>
