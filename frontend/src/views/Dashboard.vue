@@ -17,11 +17,11 @@
           class="header-menu"
           @select="handleMenuSelect"
         >
-          <el-menu-item index="dashboard">
+          <el-menu-item index="/dashboard">
             <el-icon><Odometer /></el-icon>
             仪表盘
           </el-menu-item>
-          <el-menu-item index="servers">
+          <el-menu-item index="/servers">
             <el-icon><OfficeBuilding /></el-icon>
             服务器
           </el-menu-item>
@@ -30,11 +30,11 @@
               <el-icon><Setting /></el-icon>
               主程序功能
             </template>
-            <el-menu-item index="information-query">
+            <el-menu-item index="/information-query">
               <el-icon><Search /></el-icon>
               信息查询
             </el-menu-item>
-            <el-menu-item index="system-backup">
+            <el-menu-item index="/system-backup">
               <el-icon><FolderOpened /></el-icon>
               系统备份
             </el-menu-item>
@@ -460,7 +460,7 @@ const passwordRules = {
 }
 
 // 当前顶部菜单（用于高亮显示）
-const currentTopMenu = ref('dashboard')
+const currentTopMenu = ref('/dashboard')
 
 // 端口类型颜色映射
 const PORT_TYPE_MAP = {
@@ -609,17 +609,11 @@ const formatDate = (dateStr) => {
 }
 
 const handleMenuSelect = (index) => {
-  if (index === 'dashboard') {
+  if (index === '/dashboard') {
     // 当前就是仪表盘，无需操作
-  } else if (index === 'information-query') {
-    // 导航到信息查询页面
-    router.push('/information-query')
-  } else if (index === 'system-backup') {
-    // 导航到系统备份页面
-    router.push('/system-backup')
-  } else if (index === 'servers') {
-    // 导航到服务器页面
-    router.push('/servers')
+  } else {
+    // 导航到对应页面
+    router.push(index)
   }
 }
 
