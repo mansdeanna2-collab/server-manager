@@ -230,6 +230,22 @@
                       <span class="ip-range">{{ scope.row.segment }}.1 - {{ scope.row.segment }}.255</span>
                     </template>
                   </el-table-column>
+                  <el-table-column
+                    label="操作"
+                    width="100"
+                    align="center"
+                  >
+                    <template #default="scope">
+                      <el-button
+                        type="primary"
+                        size="small"
+                        @click="showIpListDialog(scope.row)"
+                      >
+                        <el-icon><View /></el-icon>
+                        查看
+                      </el-button>
+                    </template>
+                  </el-table-column>
                 </el-table>
 
                 <div
@@ -310,6 +326,100 @@
         </el-button>
       </template>
     </el-dialog>
+    
+    <!-- IP List Dialog -->
+    <el-dialog
+      v-model="ipListDialogVisible"
+      :title="ipListDialogTitle"
+      width="700px"
+      class="ip-list-dialog"
+    >
+      <div class="ip-list-content">
+        <div class="ip-list-stats">
+          <el-tag
+            type="success"
+            size="large"
+            effect="dark"
+          >
+            已存在 {{ existingIpCount }} 个
+          </el-tag>
+          <el-tag
+            type="info"
+            size="large"
+            effect="dark"
+          >
+            未存在 {{ notExistingIpCount }} 个
+          </el-tag>
+        </div>
+        <el-table
+          :data="paginatedIpList"
+          style="width: 100%"
+          stripe
+          border
+          max-height="400"
+        >
+          <el-table-column
+            label="IP地址"
+            width="180"
+          >
+            <template #default="scope">
+              <span
+                :class="['ip-address', scope.row.exists ? 'ip-exists' : 'ip-not-exists']"
+              >{{ scope.row.ip }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="状态"
+            width="100"
+            align="center"
+          >
+            <template #default="scope">
+              <el-tag
+                :type="scope.row.exists ? 'success' : 'info'"
+                size="small"
+              >
+                {{ scope.row.exists ? '已存在' : '未存在' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="备注"
+            min-width="200"
+          >
+            <template #default="scope">
+              <span
+                v-if="scope.row.exists"
+                class="ip-note"
+              >{{ scope.row.note || '暂无备注' }}</span>
+              <span
+                v-else
+                class="ip-not-exists-note"
+              >{{ scope.row.note }}</span>
+            </template>
+          </el-table-column>
+        </el-table>
+        <div
+          v-if="currentIpList.length > IP_LIST_PAGE_SIZE"
+          class="ip-list-pagination"
+        >
+          <el-pagination
+            v-model:current-page="ipListCurrentPage"
+            :page-size="IP_LIST_PAGE_SIZE"
+            :total="currentIpList.length"
+            layout="prev, pager, next"
+            background
+          />
+        </div>
+      </div>
+      <template #footer>
+        <el-button
+          type="primary"
+          @click="ipListDialogVisible = false"
+        >
+          关闭
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -318,7 +428,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
-  ArrowDown, Monitor, Odometer, OfficeBuilding, Search, User, Setting, FolderOpened, Refresh, Loading
+  ArrowDown, Monitor, Odometer, OfficeBuilding, Search, User, Setting, FolderOpened, Refresh, Loading, View
 } from '@element-plus/icons-vue'
 import { authAPI, serversAPI } from '@/api'
 
@@ -333,6 +443,16 @@ const loadError = ref('')
 const servers = ref([])
 const currentPage = ref(1)
 const PAGE_SIZE = 15
+
+// IP列表对话框相关
+const ipListDialogVisible = ref(false)
+const ipListDialogTitle = ref('')
+const currentIpList = ref([])
+const ipListCurrentPage = ref(1)
+const IP_LIST_PAGE_SIZE = 50
+
+// IP未存在时的备注文本
+const NOT_EXISTS_NOTE = '未存在'
 
 // IP段备注存储键
 const SEGMENT_NOTES_KEY = 'server_manager_segment_notes'
@@ -438,6 +558,61 @@ const paginatedSegments = computed(() => {
   const end = start + PAGE_SIZE
   return ipSegments.value.slice(start, end)
 })
+
+// IP列表统计
+const existingIpCount = computed(() => {
+  return currentIpList.value.filter(ip => ip.exists).length
+})
+
+const notExistingIpCount = computed(() => {
+  return currentIpList.value.filter(ip => !ip.exists).length
+})
+
+// 分页后的IP列表数据
+const paginatedIpList = computed(() => {
+  const start = (ipListCurrentPage.value - 1) * IP_LIST_PAGE_SIZE
+  const end = start + IP_LIST_PAGE_SIZE
+  return currentIpList.value.slice(start, end)
+})
+
+// 显示IP列表对话框
+const showIpListDialog = (segmentData) => {
+  const segment = segmentData.segment
+  ipListDialogTitle.value = `IP段详情: ${segment}.1 - ${segment}.255`
+  ipListCurrentPage.value = 1
+  
+  // 构建该IP段内所有服务器的IP映射，方便快速查找
+  const serverIpMap = new Map()
+  servers.value.forEach(server => {
+    const serverSegment = getIpSegment(server.ip_address)
+    if (serverSegment === segment) {
+      serverIpMap.set(server.ip_address, server)
+    }
+  })
+  
+  // 生成1-255的IP列表
+  const ipList = []
+  for (let i = 1; i <= 255; i++) {
+    const ip = `${segment}.${i}`
+    const server = serverIpMap.get(ip)
+    if (server) {
+      ipList.push({
+        ip: ip,
+        exists: true,
+        note: server.notes || ''
+      })
+    } else {
+      ipList.push({
+        ip: ip,
+        exists: false,
+        note: NOT_EXISTS_NOTE
+      })
+    }
+  }
+  
+  currentIpList.value = ipList
+  ipListDialogVisible.value = true
+}
 
 // 加载服务器数据
 const loadServers = async () => {
@@ -736,6 +911,48 @@ const handleChangePassword = async () => {
   justify-content: center;
   margin-top: 20px;
   padding-top: 20px;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* IP列表对话框样式 */
+.ip-list-content {
+  padding: 0;
+}
+
+.ip-list-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.ip-address {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.ip-exists {
+  color: #67C23A;
+}
+
+.ip-not-exists {
+  color: #909399;
+}
+
+.ip-note {
+  color: #606266;
+}
+
+.ip-not-exists-note {
+  color: #c0c4cc;
+  font-style: italic;
+}
+
+.ip-list-pagination {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+  padding-top: 16px;
   border-top: 1px solid #f0f0f0;
 }
 </style>
