@@ -390,6 +390,45 @@ def _is_valid_ip(ip):
     return True
 
 
+@servers_bp.route('/check-ip-status', methods=['POST'])
+@token_required
+def check_ip_status(_current_user):
+    """检查IP地址的在线状态和端口状态（22和3389）
+    
+    Request body:
+        ip_address: IP地址
+    
+    Returns:
+        ping: 是否可以ping通
+        port_22: 端口22是否开放
+        port_3389: 端口3389是否开放
+    """
+    data = request.get_json() or {}
+    ip_address = data.get('ip_address', '')
+    
+    if not ip_address:
+        return jsonify({'message': '请提供IP地址'}), 400
+    
+    if not _is_valid_ip(ip_address):
+        return jsonify({'message': '无效的IP地址格式'}), 400
+    
+    # Check ping status
+    ping_status = CheckService.ping_check(ip_address)
+    
+    # Check port 22 (SSH)
+    port_22_status = CheckService.port_check(ip_address, 22)
+    
+    # Check port 3389 (RDP)
+    port_3389_status = CheckService.port_check(ip_address, 3389)
+    
+    return jsonify({
+        'ip_address': ip_address,
+        'ping': ping_status,
+        'port_22': port_22_status,
+        'port_3389': port_3389_status
+    }), 200
+
+
 @servers_bp.route('/import-from-files', methods=['POST'])
 @token_required
 def import_servers_from_files(_current_user):
