@@ -98,3 +98,24 @@ body {
   font-size: 12px;
   margin-bottom: 16px;
 }
+
+/* 主程序功能子菜单下拉弹出框样式 - 修复白色文字看不清的问题 */
+/* Element Plus 水平菜单的弹出子菜单使用 .el-menu--popup 类 */
+.el-menu--popup {
+  background-color: #fff !important;
+}
+
+.el-menu--popup .el-menu-item {
+  color: #303133 !important;
+  background-color: #fff !important;
+}
+
+.el-menu--popup .el-menu-item:hover {
+  color: #409EFF !important;
+  background-color: #ecf5ff !important;
+}
+
+.el-menu--popup .el-menu-item.is-active {
+  color: #409EFF !important;
+  background-color: #ecf5ff !important;
+}
