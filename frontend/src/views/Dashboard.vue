@@ -17,18 +17,28 @@
           class="header-menu"
           @select="handleMenuSelect"
         >
-          <el-menu-item index="dashboard">
+          <el-menu-item index="/dashboard">
             <el-icon><Odometer /></el-icon>
             仪表盘
           </el-menu-item>
-          <el-menu-item index="servers">
+          <el-menu-item index="/servers">
             <el-icon><OfficeBuilding /></el-icon>
             服务器
           </el-menu-item>
-          <el-menu-item index="main-program">
-            <el-icon><Setting /></el-icon>
-            主程序功能
-          </el-menu-item>
+          <el-sub-menu index="main-program">
+            <template #title>
+              <el-icon><Setting /></el-icon>
+              主程序功能
+            </template>
+            <el-menu-item index="/information-query">
+              <el-icon><Search /></el-icon>
+              信息查询
+            </el-menu-item>
+            <el-menu-item index="/system-backup">
+              <el-icon><FolderOpened /></el-icon>
+              系统备份
+            </el-menu-item>
+          </el-sub-menu>
         </el-menu>
         <el-dropdown @command="handleCommand">
           <span class="user-dropdown">
@@ -51,377 +61,286 @@
       
       <el-main class="main-content">
         <div class="dashboard-layout">
-          <!-- 左侧主程序功能菜单（仅在主程序功能模式显示） -->
-          <div
-            v-if="showMainProgramSidebar"
-            class="main-program-sidebar"
-          >
-            <div class="sidebar-header">
-              <el-icon :size="18">
-                <Setting />
-              </el-icon>
-              <span>主程序功能</span>
-            </div>
-            <div class="sidebar-menu">
-              <div
-                class="sidebar-menu-item"
-                :class="{ active: activeSubMenu === 'information-query' }"
-                @click="selectSubMenu('information-query')"
-              >
-                <el-icon><Search /></el-icon>
-                <span>信息查询</span>
-              </div>
-              <div
-                class="sidebar-menu-item"
-                :class="{ active: activeSubMenu === 'system-backup' }"
-                @click="selectSubMenu('system-backup')"
-              >
-                <el-icon><FolderOpened /></el-icon>
-                <span>系统备份</span>
-              </div>
-            </div>
-          </div>
-          
-          <!-- 右侧主内容区 -->
+          <!-- 主内容区 -->
           <div class="content-wrapper">
-            <!-- 仪表盘内容（仅在仪表盘模式显示） -->
-            <template v-if="!showMainProgramSidebar">
-              <!-- 欢迎横幅 -->
-              <div class="welcome-banner">
-                <div class="welcome-content">
-                  <h1 class="welcome-title">
-                    👋 欢迎回来，{{ currentUser?.username || '管理员' }}
-                  </h1>
-                  <p class="welcome-subtitle">
-                    这是您的服务器管理仪表盘，随时监控服务器状态
-                  </p>
+            <!-- 欢迎横幅 -->
+            <div class="welcome-banner">
+              <div class="welcome-content">
+                <h1 class="welcome-title">
+                  👋 欢迎回来，{{ currentUser?.username || '管理员' }}
+                </h1>
+                <p class="welcome-subtitle">
+                  这是您的服务器管理仪表盘，随时监控服务器状态
+                </p>
+              </div>
+              <div class="welcome-decoration">
+                <div class="decoration-circle circle-1" />
+                <div class="decoration-circle circle-2" />
+                <div class="decoration-circle circle-3" />
+              </div>
+            </div>
+            
+            <!-- 统计卡片 -->
+            <div class="stats-grid">
+              <div class="stat-card stat-card-total">
+                <div class="stat-card-bg" />
+                <div class="stat-card-content">
+                  <div class="stat-card-icon-wrapper stat-icon-total">
+                    <el-icon :size="28">
+                      <OfficeBuilding />
+                    </el-icon>
+                  </div>
+                  <div class="stat-card-info">
+                    <div class="stat-card-value">
+                      {{ stats.total }}
+                    </div>
+                    <div class="stat-card-title">
+                      服务器总数
+                    </div>
+                  </div>
                 </div>
-                <div class="welcome-decoration">
-                  <div class="decoration-circle circle-1" />
-                  <div class="decoration-circle circle-2" />
-                  <div class="decoration-circle circle-3" />
+                <div class="stat-card-trend">
+                  <el-icon><DataAnalysis /></el-icon>
+                  全部服务器
                 </div>
               </div>
-            
-              <!-- 统计卡片 -->
-              <div class="stats-grid">
-                <div class="stat-card stat-card-total">
-                  <div class="stat-card-bg" />
-                  <div class="stat-card-content">
-                    <div class="stat-card-icon-wrapper stat-icon-total">
-                      <el-icon :size="28">
-                        <OfficeBuilding />
-                      </el-icon>
-                    </div>
-                    <div class="stat-card-info">
-                      <div class="stat-card-value">
-                        {{ stats.total }}
-                      </div>
-                      <div class="stat-card-title">
-                        服务器总数
-                      </div>
-                    </div>
+              
+              <div class="stat-card stat-card-online">
+                <div class="stat-card-bg" />
+                <div class="stat-card-content">
+                  <div class="stat-card-icon-wrapper stat-icon-online">
+                    <el-icon :size="28">
+                      <CircleCheck />
+                    </el-icon>
                   </div>
-                  <div class="stat-card-trend">
-                    <el-icon><DataAnalysis /></el-icon>
-                    全部服务器
+                  <div class="stat-card-info">
+                    <div class="stat-card-value">
+                      {{ stats.online }}
+                    </div>
+                    <div class="stat-card-title">
+                      正常运行
+                    </div>
                   </div>
                 </div>
-              
-                <div class="stat-card stat-card-online">
-                  <div class="stat-card-bg" />
-                  <div class="stat-card-content">
-                    <div class="stat-card-icon-wrapper stat-icon-online">
-                      <el-icon :size="28">
-                        <CircleCheck />
-                      </el-icon>
-                    </div>
-                    <div class="stat-card-info">
-                      <div class="stat-card-value">
-                        {{ stats.online }}
-                      </div>
-                      <div class="stat-card-title">
-                        正常运行
-                      </div>
-                    </div>
-                  </div>
-                  <div class="stat-card-trend trend-success">
-                    <el-icon><TrendCharts /></el-icon>
-                    {{ onlinePercentage }}% 运行率
-                  </div>
-                </div>
-              
-                <div class="stat-card stat-card-offline">
-                  <div class="stat-card-bg" />
-                  <div class="stat-card-content">
-                    <div class="stat-card-icon-wrapper stat-icon-offline">
-                      <el-icon :size="28">
-                        <CircleClose />
-                      </el-icon>
-                    </div>
-                    <div class="stat-card-info">
-                      <div class="stat-card-value">
-                        {{ stats.offline }}
-                      </div>
-                      <div class="stat-card-title">
-                        离线
-                      </div>
-                    </div>
-                  </div>
-                  <div class="stat-card-trend trend-danger">
-                    <el-icon><Warning /></el-icon>
-                    需要关注
-                  </div>
-                </div>
-              
-                <div class="stat-card stat-card-unknown">
-                  <div class="stat-card-bg" />
-                  <div class="stat-card-content">
-                    <div class="stat-card-icon-wrapper stat-icon-unknown">
-                      <el-icon :size="28">
-                        <QuestionFilled />
-                      </el-icon>
-                    </div>
-                    <div class="stat-card-info">
-                      <div class="stat-card-value">
-                        {{ stats.unknown }}
-                      </div>
-                      <div class="stat-card-title">
-                        未知状态
-                      </div>
-                    </div>
-                  </div>
-                  <div class="stat-card-trend trend-info">
-                    <el-icon><InfoFilled /></el-icon>
-                    待检测
-                  </div>
+                <div class="stat-card-trend trend-success">
+                  <el-icon><TrendCharts /></el-icon>
+                  {{ onlinePercentage }}% 运行率
                 </div>
               </div>
+              
+              <div class="stat-card stat-card-offline">
+                <div class="stat-card-bg" />
+                <div class="stat-card-content">
+                  <div class="stat-card-icon-wrapper stat-icon-offline">
+                    <el-icon :size="28">
+                      <CircleClose />
+                    </el-icon>
+                  </div>
+                  <div class="stat-card-info">
+                    <div class="stat-card-value">
+                      {{ stats.offline }}
+                    </div>
+                    <div class="stat-card-title">
+                      离线
+                    </div>
+                  </div>
+                </div>
+                <div class="stat-card-trend trend-danger">
+                  <el-icon><Warning /></el-icon>
+                  需要关注
+                </div>
+              </div>
+              
+              <div class="stat-card stat-card-unknown">
+                <div class="stat-card-bg" />
+                <div class="stat-card-content">
+                  <div class="stat-card-icon-wrapper stat-icon-unknown">
+                    <el-icon :size="28">
+                      <QuestionFilled />
+                    </el-icon>
+                  </div>
+                  <div class="stat-card-info">
+                    <div class="stat-card-value">
+                      {{ stats.unknown }}
+                    </div>
+                    <div class="stat-card-title">
+                      未知状态
+                    </div>
+                  </div>
+                </div>
+                <div class="stat-card-trend trend-info">
+                  <el-icon><InfoFilled /></el-icon>
+                  待检测
+                </div>
+              </div>
+            </div>
             
-              <!-- 服务器列表卡片 -->
-              <el-card class="server-list-card">
-                <template #header>
-                  <div class="card-header">
-                    <div class="card-header-title">
-                      <el-icon
-                        class="card-header-icon"
-                        :size="20"
-                      >
-                        <List />
-                      </el-icon>
-                      <span>近期服务器</span>
-                    </div>
-                    <el-button
-                      type="primary"
-                      :loading="checkingAll"
-                      class="check-all-btn"
-                      @click="checkAllServers"
+            <!-- 服务器列表卡片 -->
+            <el-card class="server-list-card">
+              <template #header>
+                <div class="card-header">
+                  <div class="card-header-title">
+                    <el-icon
+                      class="card-header-icon"
+                      :size="20"
                     >
-                      <el-icon><Refresh /></el-icon>
-                      一键检测
-                    </el-button>
+                      <List />
+                    </el-icon>
+                    <span>近期服务器</span>
                   </div>
-                </template>
-              
-                <!-- Loading State -->
-                <div
-                  v-if="loading"
-                  class="loading-container"
-                >
-                  <el-icon
-                    class="loading-icon"
-                    :size="40"
+                  <el-button
+                    type="primary"
+                    :loading="checkingAll"
+                    class="check-all-btn"
+                    @click="checkAllServers"
                   >
-                    <Loading />
-                  </el-icon>
-                  <p class="loading-text">
-                    正在加载服务器...
-                  </p>
+                    <el-icon><Refresh /></el-icon>
+                    一键检测
+                  </el-button>
                 </div>
+              </template>
               
-                <!-- Error State -->
-                <el-result
-                  v-else-if="loadError"
-                  icon="error"
-                  title="加载失败"
-                  :sub-title="loadError"
-                >
-                  <template #extra>
-                    <el-button
-                      type="primary"
-                      @click="loadServers"
-                    >
-                      <el-icon><Refresh /></el-icon>
-                      重新加载
-                    </el-button>
-                  </template>
-                </el-result>
-              
-                <el-empty
-                  v-else-if="servers.length === 0"
-                  description="未找到服务器"
-                />
-              
-                <template v-else>
-                  <el-table
-                    :data="paginatedServers"
-                    style="width: 100%"
-                    stripe
-                    class="server-table"
-                  >
-                    <el-table-column
-                      label="IP地址"
-                      width="160"
-                    >
-                      <template #default="scope">
-                        <span class="ip-text">{{ scope.row.ip_address }}</span>
-                      </template>
-                    </el-table-column>
-                    <el-table-column
-                      label="端口"
-                      width="100"
-                    >
-                      <template #default="scope">
-                        <el-tag
-                          :type="getPortTagType(scope.row.port)"
-                          size="small"
-                          effect="dark"
-                          round
-                        >
-                          {{ scope.row.port }}
-                        </el-tag>
-                      </template>
-                    </el-table-column>
-                    <el-table-column
-                      prop="username"
-                      label="用户名"
-                      width="120"
-                    />
-                    <el-table-column
-                      label="状态"
-                      width="120"
-                    >
-                      <template #default="scope">
-                        <StatusBadge
-                          :status="scope.row.status"
-                          :detail="scope.row.checkDetail"
-                          :error-type="scope.row.error_type"
-                        />
-                      </template>
-                    </el-table-column>
-                    <el-table-column
-                      label="操作系统"
-                    >
-                      <template #default="scope">
-                        <span v-if="scope.row.os_info">
-                          {{ getOsIcon(scope.row.os_info) }} {{ scope.row.os_info }}
-                        </span>
-                        <span
-                          v-else
-                          class="no-info"
-                        >暂无</span>
-                      </template>
-                    </el-table-column>
-                    <el-table-column
-                      label="最近检查"
-                      width="180"
-                    >
-                      <template #default="scope">
-                        <span class="check-time">
-                          <el-icon><Timer /></el-icon>
-                          {{ formatDate(scope.row.last_checked) }}
-                        </span>
-                      </template>
-                    </el-table-column>
-                    <el-table-column
-                      label="操作"
-                      width="100"
-                    >
-                      <template #default="scope">
-                        <el-button
-                          size="small"
-                          type="primary"
-                          :loading="scope.row.checking"
-                          @click="checkServer(scope.row)"
-                        >
-                          <el-icon><Search /></el-icon>
-                          检测
-                        </el-button>
-                      </template>
-                    </el-table-column>
-                  </el-table>
-                  <div
-                    v-if="servers.length > PAGE_SIZE"
-                    class="pagination-container"
-                  >
-                    <el-pagination
-                      v-model:current-page="currentPage"
-                      :page-size="PAGE_SIZE"
-                      :total="servers.length"
-                      layout="prev, pager, next"
-                      background
-                    />
-                  </div>
-                </template>
-              </el-card>
-            </template>
-
-            <!-- 主程序功能内容（仅在主程序功能模式显示） -->
-            <template v-else>
-              <!-- 信息查询内容 -->
-              <el-card
-                v-if="activeSubMenu === 'information-query'"
-                class="sub-page-card"
-              >
-                <template #header>
-                  <div class="card-header">
-                    <div class="card-header-title">
-                      <el-icon
-                        class="card-header-icon"
-                        :size="20"
-                      >
-                        <Search />
-                      </el-icon>
-                      <span>信息查询</span>
-                    </div>
-                  </div>
-                </template>
-                <div class="sub-page-content">
-                  <el-empty description="信息查询功能页面" />
-                </div>
-              </el-card>
-
-              <!-- 系统备份内容 -->
-              <el-card
-                v-else-if="activeSubMenu === 'system-backup'"
-                class="sub-page-card"
-              >
-                <template #header>
-                  <div class="card-header">
-                    <div class="card-header-title">
-                      <el-icon
-                        class="card-header-icon card-header-icon-success"
-                        :size="20"
-                      >
-                        <FolderOpened />
-                      </el-icon>
-                      <span>系统备份</span>
-                    </div>
-                  </div>
-                </template>
-                <div class="sub-page-content">
-                  <el-empty description="系统备份功能页面" />
-                </div>
-              </el-card>
-
-              <!-- 默认提示：请选择功能 -->
+              <!-- Loading State -->
               <div
-                v-else
-                class="select-hint"
+                v-if="loading"
+                class="loading-container"
               >
-                <el-empty description="请从左侧菜单选择功能" />
+                <el-icon
+                  class="loading-icon"
+                  :size="40"
+                >
+                  <Loading />
+                </el-icon>
+                <p class="loading-text">
+                  正在加载服务器...
+                </p>
               </div>
-            </template>
+              
+              <!-- Error State -->
+              <el-result
+                v-else-if="loadError"
+                icon="error"
+                title="加载失败"
+                :sub-title="loadError"
+              >
+                <template #extra>
+                  <el-button
+                    type="primary"
+                    @click="loadServers"
+                  >
+                    <el-icon><Refresh /></el-icon>
+                    重新加载
+                  </el-button>
+                </template>
+              </el-result>
+              
+              <el-empty
+                v-else-if="servers.length === 0"
+                description="未找到服务器"
+              />
+              
+              <template v-else>
+                <el-table
+                  :data="paginatedServers"
+                  style="width: 100%"
+                  stripe
+                  class="server-table"
+                >
+                  <el-table-column
+                    label="IP地址"
+                    width="160"
+                  >
+                    <template #default="scope">
+                      <span class="ip-text">{{ scope.row.ip_address }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    label="端口"
+                    width="100"
+                  >
+                    <template #default="scope">
+                      <el-tag
+                        :type="getPortTagType(scope.row.port)"
+                        size="small"
+                        effect="dark"
+                        round
+                      >
+                        {{ scope.row.port }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    prop="username"
+                    label="用户名"
+                    width="120"
+                  />
+                  <el-table-column
+                    label="状态"
+                    width="120"
+                  >
+                    <template #default="scope">
+                      <StatusBadge
+                        :status="scope.row.status"
+                        :detail="scope.row.checkDetail"
+                        :error-type="scope.row.error_type"
+                      />
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    label="操作系统"
+                  >
+                    <template #default="scope">
+                      <span v-if="scope.row.os_info">
+                        {{ getOsIcon(scope.row.os_info) }} {{ scope.row.os_info }}
+                      </span>
+                      <span
+                        v-else
+                        class="no-info"
+                      >暂无</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    label="最近检查"
+                    width="180"
+                  >
+                    <template #default="scope">
+                      <span class="check-time">
+                        <el-icon><Timer /></el-icon>
+                        {{ formatDate(scope.row.last_checked) }}
+                      </span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    label="操作"
+                    width="100"
+                  >
+                    <template #default="scope">
+                      <el-button
+                        size="small"
+                        type="primary"
+                        :loading="scope.row.checking"
+                        @click="checkServer(scope.row)"
+                      >
+                        <el-icon><Search /></el-icon>
+                        检测
+                      </el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
+                <div
+                  v-if="servers.length > PAGE_SIZE"
+                  class="pagination-container"
+                >
+                  <el-pagination
+                    v-model:current-page="currentPage"
+                    :page-size="PAGE_SIZE"
+                    :total="servers.length"
+                    layout="prev, pager, next"
+                    background
+                  />
+                </div>
+              </template>
+            </el-card>
           </div>
         </div>
       </el-main>
@@ -540,17 +459,8 @@ const passwordRules = {
   ]
 }
 
-// 主程序功能相关状态
-const showMainProgramSidebar = ref(false)
-const activeSubMenu = ref('')
-
 // 当前顶部菜单（用于高亮显示）
-const currentTopMenu = computed(() => {
-  if (showMainProgramSidebar.value) {
-    return 'main-program'
-  }
-  return 'dashboard'
-})
+const currentTopMenu = ref('/dashboard')
 
 // 端口类型颜色映射
 const PORT_TYPE_MAP = {
@@ -699,23 +609,12 @@ const formatDate = (dateStr) => {
 }
 
 const handleMenuSelect = (index) => {
-  if (index === 'dashboard') {
-    showMainProgramSidebar.value = false
-    activeSubMenu.value = ''
-  } else if (index === 'main-program') {
-    showMainProgramSidebar.value = true
-    // 默认选中信息查询
-    if (!activeSubMenu.value) {
-      activeSubMenu.value = 'information-query'
-    }
-  } else if (index === 'servers') {
-    // 导航到服务器页面
-    router.push('/servers')
+  if (index === '/dashboard') {
+    // 当前就是仪表盘，无需操作
+  } else {
+    // 导航到对应页面
+    router.push(index)
   }
-}
-
-const selectSubMenu = (menuKey) => {
-  activeSubMenu.value = menuKey
 }
 
 const handleCommand = async (command) => {
@@ -816,6 +715,27 @@ const handleChangePassword = async () => {
   box-shadow: 0 2px 8px rgba(255, 255, 255, 0.2);
 }
 
+/* 子菜单样式 */
+.header-menu :deep(.el-sub-menu__title) {
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-weight: 500;
+  font-size: 15px;
+  border-radius: 8px;
+  margin: 0 4px;
+  transition: all 0.3s ease;
+}
+
+.header-menu :deep(.el-sub-menu__title:hover) {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: #fff !important;
+}
+
+.header-menu :deep(.el-sub-menu.is-active .el-sub-menu__title) {
+  background: rgba(255, 255, 255, 0.25) !important;
+  color: #fff !important;
+  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.2);
+}
+
 .user-dropdown {
   display: flex;
   align-items: center;
@@ -842,67 +762,6 @@ const handleChangePassword = async () => {
   display: flex;
   gap: 24px;
   padding: 24px;
-}
-
-/* 主程序功能侧边栏 */
-.main-program-sidebar {
-  width: 180px;
-  flex-shrink: 0;
-  background: white;
-  border-radius: 16px;
-  box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.05);
-  padding: 16px;
-  height: fit-content;
-}
-
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 16px;
-  font-weight: 600;
-  color: #303133;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #f0f0f0;
-  margin-bottom: 12px;
-}
-
-.sidebar-header .el-icon {
-  color: #409EFF;
-}
-
-.sidebar-menu {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.sidebar-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  color: #606266;
-  font-size: 14px;
-}
-
-.sidebar-menu-item:hover {
-  background: linear-gradient(135deg, #409EFF 0%, #337ecc 100%);
-  color: white;
-  box-shadow: 0 4px 12px 0 rgba(64, 158, 255, 0.3);
-}
-
-.sidebar-menu-item.active {
-  background: linear-gradient(135deg, #409EFF 0%, #337ecc 100%);
-  color: white;
-  box-shadow: 0 4px 12px 0 rgba(64, 158, 255, 0.3);
-}
-
-.sidebar-menu-item .el-icon {
-  font-size: 16px;
 }
 
 .content-wrapper {
@@ -1222,38 +1081,5 @@ const handleChangePassword = async () => {
   margin-top: 16px;
   font-size: 14px;
   color: #606266;
-}
-
-/* 子页面卡片样式 */
-.sub-page-card {
-  border-radius: 16px;
-  box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.05);
-  border: none;
-}
-
-.sub-page-card :deep(.el-card__header) {
-  border-bottom: 1px solid #f0f0f0;
-  padding: 20px 24px;
-}
-
-.sub-page-content {
-  min-height: 400px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.card-header-icon-success {
-  color: #67C23A !important;
-}
-
-.select-hint {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 400px;
-  background: white;
-  border-radius: 16px;
-  box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.05);
 }
 </style>
