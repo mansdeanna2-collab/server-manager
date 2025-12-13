@@ -103,4 +103,28 @@ export const serversAPI = {
   queryId: (ipAddress) => api.post('/servers/query-id', { ip_address: ipAddress }, { timeout: 300000 })  // 5 minutes timeout
 }
 
+// Preferences API - 用户偏好设置（存储在服务器数据库）
+export const preferencesAPI = {
+  // IP检测状态
+  getIpCheckStatus: () => api.get('/preferences/ip-check-status'),
+  saveIpCheckStatus: (data) => api.post('/preferences/ip-check-status', data),
+  saveIpCheckStatusBatch: (data) => api.post('/preferences/ip-check-status/batch', data),
+
+  // IP ID查询结果
+  getIpIdResults: () => api.get('/preferences/ip-id-results'),
+  saveIpIdResult: (data) => api.post('/preferences/ip-id-results', data),
+
+  // IP段备注
+  getSegmentNotes: () => api.get('/preferences/segment-notes'),
+  saveSegmentNote: (segment, note) => api.post('/preferences/segment-notes', { segment, note }),
+
+  // IP段收藏
+  getSegmentFavorites: () => api.get('/preferences/segment-favorites'),
+  toggleSegmentFavorite: (segment) => api.post('/preferences/segment-favorites', { segment }),
+
+  // 服务器收藏
+  getServerFavorites: () => api.get('/preferences/server-favorites'),
+  toggleServerFavorite: (serverId) => api.post('/preferences/server-favorites', { server_id: serverId })
+}
+
 export default api

@@ -5,8 +5,12 @@ from flask_socketio import SocketIO
 from sqlalchemy import inspect, text
 from models import db
 from models.user import User
+from models.user_preference import (
+    IpCheckStatus, IpIdResult, SegmentNote, SegmentFavorite, ServerFavorite
+)
 from routes.auth import auth_bp
 from routes.servers import servers_bp
+from routes.preferences import preferences_bp
 from extensions import limiter
 from config import Config
 import logging
@@ -87,6 +91,7 @@ def create_app():
     # Register blueprints
     app.register_blueprint(auth_bp)
     app.register_blueprint(servers_bp)
+    app.register_blueprint(preferences_bp)
 
     # Register terminal WebSocket events
     from routes.terminal import register_terminal_events

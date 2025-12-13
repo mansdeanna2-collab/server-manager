@@ -1390,7 +1390,7 @@ import {
   CircleCheck, CircleClose, Download, QuestionFilled, WarningFilled, Cpu, Star, EditPen,
   Clock, Sort, Folder, FolderOpened, Document as DocumentIcon, Link, Setting
 } from '@element-plus/icons-vue'
-import { serversAPI, authAPI } from '@/api'
+import { serversAPI, authAPI, preferencesAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
 import ServerForm from '@/components/ServerForm.vue'
 import Terminal from '@/components/Terminal.vue'
@@ -1538,29 +1538,24 @@ const filteredDialogCurrentPage = ref(1)
 // IP段对话框排序选项
 const segmentDialogSortBy = ref('time') // 'time' | 'ip'
 
-// IP段收藏和备注功能
-const FAVORITES_KEY = 'server_manager_segment_favorites'
-const SEGMENT_NOTES_KEY = 'server_manager_segment_notes'
-const SERVER_FAVORITES_KEY = 'server_manager_server_favorites'
+// IP段收藏和备注功能（从服务器加载）
 const segmentFavorites = ref(new Set())
 const segmentNotes = ref({})
 const serverFavorites = ref(new Set())
 
-// 初始化收藏和备注数据
-const initSegmentData = () => {
+// 初始化收藏和备注数据（从服务器加载）
+const initSegmentData = async () => {
   try {
-    const savedFavorites = localStorage.getItem(FAVORITES_KEY)
-    if (savedFavorites) {
-      segmentFavorites.value = new Set(JSON.parse(savedFavorites))
-    }
-    const savedNotes = localStorage.getItem(SEGMENT_NOTES_KEY)
-    if (savedNotes) {
-      segmentNotes.value = JSON.parse(savedNotes)
-    }
-    const savedServerFavorites = localStorage.getItem(SERVER_FAVORITES_KEY)
-    if (savedServerFavorites) {
-      serverFavorites.value = new Set(JSON.parse(savedServerFavorites))
-    }
+    // 并行加载所有数据
+    const [favoritesRes, notesRes, serverFavoritesRes] = await Promise.all([
+      preferencesAPI.getSegmentFavorites(),
+      preferencesAPI.getSegmentNotes(),
+      preferencesAPI.getServerFavorites()
+    ])
+    
+    segmentFavorites.value = new Set(favoritesRes.data || [])
+    segmentNotes.value = notesRes.data || {}
+    serverFavorites.value = new Set(serverFavoritesRes.data || [])
   } catch (_e) {
     segmentFavorites.value = new Set()
     segmentNotes.value = {}
@@ -1574,15 +1569,19 @@ const isSegmentFavorited = (segment) => {
 }
 
 // 切换IP段收藏状态
-const toggleSegmentFavorite = (segment) => {
-  if (segmentFavorites.value.has(segment)) {
-    segmentFavorites.value.delete(segment)
-    ElMessage.success(`已取消收藏 ${segment}.x`)
-  } else {
-    segmentFavorites.value.add(segment)
-    ElMessage.success(`已收藏 ${segment}.x`)
+const toggleSegmentFavorite = async (segment) => {
+  try {
+    const response = await preferencesAPI.toggleSegmentFavorite(segment)
+    if (response.data.favorited) {
+      segmentFavorites.value.add(segment)
+      ElMessage.success(`已收藏 ${segment}.x`)
+    } else {
+      segmentFavorites.value.delete(segment)
+      ElMessage.success(`已取消收藏 ${segment}.x`)
+    }
+  } catch (_e) {
+    ElMessage.error('操作失败')
   }
-  localStorage.setItem(FAVORITES_KEY, JSON.stringify([...segmentFavorites.value]))
 }
 
 // 获取IP段备注
@@ -1603,16 +1602,17 @@ const editSegmentNote = async (segment) => {
       inputErrorMessage: '备注长度不能超过100个字符'
     })
     if (value !== undefined) {
-      if (value.trim()) {
-        segmentNotes.value[segment] = value.trim()
+      const noteValue = value.trim()
+      await preferencesAPI.saveSegmentNote(segment, noteValue)
+      if (noteValue) {
+        segmentNotes.value[segment] = noteValue
       } else {
         delete segmentNotes.value[segment]
       }
-      localStorage.setItem(SEGMENT_NOTES_KEY, JSON.stringify(segmentNotes.value))
       ElMessage.success('备注已保存')
     }
   } catch (_e) {
-    // 用户取消操作
+    // 用户取消操作或保存失败
   }
 }
 
@@ -1622,15 +1622,19 @@ const isServerFavorited = (serverId) => {
 }
 
 // 切换服务器收藏状态
-const toggleServerFavorite = (server) => {
-  if (serverFavorites.value.has(server.id)) {
-    serverFavorites.value.delete(server.id)
-    ElMessage.success(`已取消收藏 ${server.ip_address}`)
-  } else {
-    serverFavorites.value.add(server.id)
-    ElMessage.success(`已收藏 ${server.ip_address}`)
+const toggleServerFavorite = async (server) => {
+  try {
+    const response = await preferencesAPI.toggleServerFavorite(server.id)
+    if (response.data.favorited) {
+      serverFavorites.value.add(server.id)
+      ElMessage.success(`已收藏 ${server.ip_address}`)
+    } else {
+      serverFavorites.value.delete(server.id)
+      ElMessage.success(`已取消收藏 ${server.ip_address}`)
+    }
+  } catch (_e) {
+    ElMessage.error('操作失败')
   }
-  localStorage.setItem(SERVER_FAVORITES_KEY, JSON.stringify([...serverFavorites.value]))
 }
 
 // 获取表格行样式类名 - 为收藏的服务器添加高亮
@@ -2034,7 +2038,7 @@ const paginatedFilteredServers = computed(() => {
 })
 
 onMounted(async () => {
-  initSegmentData()
+  await initSegmentData()
   const userStr = localStorage.getItem('user')
   if (userStr) {
     currentUser.value = JSON.parse(userStr)
