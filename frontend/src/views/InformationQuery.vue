@@ -893,10 +893,18 @@ const showLogDialog = (item) => {
   }
 }
 
+// 根据IP地址查找当前列表中的item
+const findItemByIp = (ipAddress) => {
+  return currentIpList.value.find(item => item.ip === ipAddress)
+}
+
 // 查询IP的ID（使用WebSocket实时流式输出）
 const queryIdForIp = (item) => {
   item.queryingId = true
   item.logOutput = ''  // 清空之前的日志
+  
+  // 保存IP地址，避免闭包中使用可能过期的item引用
+  const targetIp = item.ip
   
   const token = localStorage.getItem('token')
   if (!token) {
@@ -936,7 +944,7 @@ const queryIdForIp = (item) => {
   queryIdSocket.on('connect', () => {
     // 发送启动查询ID请求
     queryIdSocket.emit('start_query_id', {
-      ip_address: item.ip,
+      ip_address: targetIp,
       token: token
     })
   })
@@ -950,33 +958,44 @@ const queryIdForIp = (item) => {
 
   queryIdSocket.on('query_id_output', (data) => {
     // 实时更新日志输出
-    if (data.ip_address === item.ip) {
-      item.logOutput = (item.logOutput || '') + data.data
-      // 如果日志对话框正在显示此IP，实时更新内容
-      if (logDialogVisible.value && logDialogTitle.value.includes(item.ip)) {
-        logDialogContent.value = item.logOutput
+    if (data.ip_address === targetIp) {
+      // 查找当前列表中的item（对话框可能被关闭再打开）
+      const currentItem = findItemByIp(targetIp)
+      if (currentItem) {
+        currentItem.logOutput = (currentItem.logOutput || '') + data.data
+        // 如果日志对话框正在显示此IP，实时更新内容
+        if (logDialogVisible.value && logDialogTitle.value.includes(targetIp)) {
+          logDialogContent.value = currentItem.logOutput
+        }
       }
     }
   })
 
   queryIdSocket.on('query_id_completed', (data) => {
-    if (data.ip_address === item.ip) {
-      item.idResult = data.id_result || null
-      item.logOutput = data.output || item.logOutput
-      item.queryingId = false
+    if (data.ip_address === targetIp) {
+      const idResult = data.id_result || null
+      const logOutput = data.output || ''
       
-      // 保存到localStorage
-      saveIpIdResult(item.ip, item.idResult, item.logOutput)
+      // 保存到localStorage（无论对话框是否打开都要保存）
+      saveIpIdResult(targetIp, idResult, logOutput)
       
-      // 更新日志对话框内容
-      if (logDialogVisible.value && logDialogTitle.value.includes(item.ip)) {
-        logDialogContent.value = item.logOutput
+      // 查找当前列表中的item并更新（对话框可能被关闭再打开）
+      const currentItem = findItemByIp(targetIp)
+      if (currentItem) {
+        currentItem.idResult = idResult
+        currentItem.logOutput = logOutput
+        currentItem.queryingId = false
+        
+        // 更新日志对话框内容
+        if (logDialogVisible.value && logDialogTitle.value.includes(targetIp)) {
+          logDialogContent.value = currentItem.logOutput
+        }
       }
       
       if (data.success) {
-        ElMessage.success(`${item.ip} 查询ID完成`)
+        ElMessage.success(`${targetIp} 查询ID完成`)
       } else {
-        ElMessage.warning(`${item.ip} 查询ID失败: ${data.message || '未知错误'}`)
+        ElMessage.warning(`${targetIp} 查询ID失败: ${data.message || '未知错误'}`)
       }
       
       // 断开WebSocket连接
@@ -988,14 +1007,22 @@ const queryIdForIp = (item) => {
   })
 
   queryIdSocket.on('query_id_error', (data) => {
-    if (data.ip_address === item.ip || !data.ip_address) {
+    if (data.ip_address === targetIp || !data.ip_address) {
       const message = data.message || '查询失败'
-      item.logOutput = (item.logOutput || '') + '\n' + message
-      item.queryingId = false
       
-      saveIpIdResult(item.ip, null, item.logOutput)
+      // 查找当前列表中的item并更新
+      const currentItem = findItemByIp(targetIp)
+      const logOutput = currentItem ? (currentItem.logOutput || '') + '\n' + message : message
       
-      ElMessage.warning(`${item.ip} 查询ID失败: ${message}`)
+      // 保存到localStorage
+      saveIpIdResult(targetIp, null, logOutput)
+      
+      if (currentItem) {
+        currentItem.logOutput = logOutput
+        currentItem.queryingId = false
+      }
+      
+      ElMessage.warning(`${targetIp} 查询ID失败: ${message}`)
       
       // 断开WebSocket连接
       if (queryIdSocket) {
@@ -1007,14 +1034,19 @@ const queryIdForIp = (item) => {
 
   queryIdSocket.on('connect_error', (error) => {
     const message = error.message || '连接失败'
-    item.logOutput = message
-    item.queryingId = false
+    
+    // 查找当前列表中的item并更新
+    const currentItem = findItemByIp(targetIp)
+    if (currentItem) {
+      currentItem.logOutput = message
+      currentItem.queryingId = false
+    }
     
     if (import.meta.env.DEV) {
       // eslint-disable-next-line no-console
       console.warn(`WebSocket连接失败: ${message}`)
     }
-    ElMessage.warning(`${item.ip} 查询ID连接失败: ${message}`)
+    ElMessage.warning(`${targetIp} 查询ID连接失败: ${message}`)
     
     queryIdSocket = null
   })
