@@ -35,29 +35,34 @@ def save_ip_check_status(current_user):
 
     ip_address = data['ip_address']
 
-    # 查找或创建记录
-    status = IpCheckStatus.query.filter_by(
-        user_id=current_user.id,
-        ip_address=ip_address
-    ).first()
-
-    if not status:
-        status = IpCheckStatus(
+    try:
+        # 查找或创建记录
+        status = IpCheckStatus.query.filter_by(
             user_id=current_user.id,
             ip_address=ip_address
-        )
-        db.session.add(status)
+        ).first()
 
-    # 更新状态
-    status.port_checked = data.get('port_checked', False)
-    status.ping_checked = data.get('ping_checked', False)
-    status.ping_online = data.get('ping_online', False)
-    status.port_22 = data.get('port_22', False)
-    status.port_3389 = data.get('port_3389', False)
-    status.last_checked = china_now()
-    status.updated_at = china_now()
+        if not status:
+            status = IpCheckStatus(
+                user_id=current_user.id,
+                ip_address=ip_address
+            )
+            db.session.add(status)
 
-    db.session.commit()
+        # 更新状态
+        status.port_checked = data.get('port_checked', False)
+        status.ping_checked = data.get('ping_checked', False)
+        status.ping_online = data.get('ping_online', False)
+        status.port_22 = data.get('port_22', False)
+        status.port_3389 = data.get('port_3389', False)
+        status.last_checked = china_now()
+        status.updated_at = china_now()
+
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error saving IP check status: {str(e)}")
+        return jsonify({'message': '保存失败'}), 500
 
     return jsonify(status.to_dict()), 200
 
@@ -72,34 +77,39 @@ def save_ip_check_status_batch(current_user):
         return jsonify({'message': '请提供IP检测状态列表'}), 400
 
     results = []
-    for item in data:
-        ip_address = item.get('ip_address')
-        if not ip_address:
-            continue
+    try:
+        for item in data:
+            ip_address = item.get('ip_address')
+            if not ip_address:
+                continue
 
-        status = IpCheckStatus.query.filter_by(
-            user_id=current_user.id,
-            ip_address=ip_address
-        ).first()
-
-        if not status:
-            status = IpCheckStatus(
+            status = IpCheckStatus.query.filter_by(
                 user_id=current_user.id,
                 ip_address=ip_address
-            )
-            db.session.add(status)
+            ).first()
 
-        status.port_checked = item.get('port_checked', False)
-        status.ping_checked = item.get('ping_checked', False)
-        status.ping_online = item.get('ping_online', False)
-        status.port_22 = item.get('port_22', False)
-        status.port_3389 = item.get('port_3389', False)
-        status.last_checked = china_now()
-        status.updated_at = china_now()
+            if not status:
+                status = IpCheckStatus(
+                    user_id=current_user.id,
+                    ip_address=ip_address
+                )
+                db.session.add(status)
 
-        results.append(status.to_dict())
+            status.port_checked = item.get('port_checked', False)
+            status.ping_checked = item.get('ping_checked', False)
+            status.ping_online = item.get('ping_online', False)
+            status.port_22 = item.get('port_22', False)
+            status.port_3389 = item.get('port_3389', False)
+            status.last_checked = china_now()
+            status.updated_at = china_now()
 
-    db.session.commit()
+            results.append(status.to_dict())
+
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error saving IP check status batch: {str(e)}")
+        return jsonify({'message': '保存失败'}), 500
 
     return jsonify(results), 200
 
@@ -128,26 +138,31 @@ def save_ip_id_result(current_user):
 
     ip_address = data['ip_address']
 
-    # 查找或创建记录
-    result = IpIdResult.query.filter_by(
-        user_id=current_user.id,
-        ip_address=ip_address
-    ).first()
-
-    if not result:
-        result = IpIdResult(
+    try:
+        # 查找或创建记录
+        result = IpIdResult.query.filter_by(
             user_id=current_user.id,
             ip_address=ip_address
-        )
-        db.session.add(result)
+        ).first()
 
-    # 更新结果
-    result.id_result = data.get('id_result')
-    result.log_output = data.get('log_output')
-    result.last_queried = china_now()
-    result.updated_at = china_now()
+        if not result:
+            result = IpIdResult(
+                user_id=current_user.id,
+                ip_address=ip_address
+            )
+            db.session.add(result)
 
-    db.session.commit()
+        # 更新结果
+        result.id_result = data.get('id_result')
+        result.log_output = data.get('log_output')
+        result.last_queried = china_now()
+        result.updated_at = china_now()
+
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error saving IP ID result: {str(e)}")
+        return jsonify({'message': '保存失败'}), 500
 
     return jsonify(result.to_dict()), 200
 
@@ -177,30 +192,35 @@ def save_segment_note(current_user):
     segment = data['segment']
     note_text = data.get('note', '').strip()
 
-    # 查找现有记录
-    note = SegmentNote.query.filter_by(
-        user_id=current_user.id,
-        segment=segment
-    ).first()
-
-    if not note_text:
-        # 如果备注为空，删除记录
-        if note:
-            db.session.delete(note)
-            db.session.commit()
-        return jsonify({'message': '备注已删除'}), 200
-
-    if not note:
-        note = SegmentNote(
+    try:
+        # 查找现有记录
+        note = SegmentNote.query.filter_by(
             user_id=current_user.id,
             segment=segment
-        )
-        db.session.add(note)
+        ).first()
 
-    note.note = note_text
-    note.updated_at = china_now()
+        if not note_text:
+            # 如果备注为空，删除记录
+            if note:
+                db.session.delete(note)
+                db.session.commit()
+            return jsonify({'message': '备注已删除'}), 200
 
-    db.session.commit()
+        if not note:
+            note = SegmentNote(
+                user_id=current_user.id,
+                segment=segment
+            )
+            db.session.add(note)
+
+        note.note = note_text
+        note.updated_at = china_now()
+
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error saving segment note: {str(e)}")
+        return jsonify({'message': '保存失败'}), 500
 
     return jsonify(note.to_dict()), 200
 
@@ -226,26 +246,31 @@ def toggle_segment_favorite(current_user):
 
     segment = data['segment']
 
-    # 查找现有收藏
-    favorite = SegmentFavorite.query.filter_by(
-        user_id=current_user.id,
-        segment=segment
-    ).first()
-
-    if favorite:
-        # 取消收藏
-        db.session.delete(favorite)
-        db.session.commit()
-        return jsonify({'favorited': False, 'segment': segment}), 200
-    else:
-        # 添加收藏
-        favorite = SegmentFavorite(
+    try:
+        # 查找现有收藏
+        favorite = SegmentFavorite.query.filter_by(
             user_id=current_user.id,
             segment=segment
-        )
-        db.session.add(favorite)
-        db.session.commit()
-        return jsonify({'favorited': True, 'segment': segment}), 200
+        ).first()
+
+        if favorite:
+            # 取消收藏
+            db.session.delete(favorite)
+            db.session.commit()
+            return jsonify({'favorited': False, 'segment': segment}), 200
+        else:
+            # 添加收藏
+            favorite = SegmentFavorite(
+                user_id=current_user.id,
+                segment=segment
+            )
+            db.session.add(favorite)
+            db.session.commit()
+            return jsonify({'favorited': True, 'segment': segment}), 200
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error toggling segment favorite: {str(e)}")
+        return jsonify({'message': '操作失败'}), 500
 
 
 # ============ Server Favorites APIs ============
@@ -269,23 +294,28 @@ def toggle_server_favorite(current_user):
 
     server_id = data['server_id']
 
-    # 查找现有收藏
-    favorite = ServerFavorite.query.filter_by(
-        user_id=current_user.id,
-        server_id=server_id
-    ).first()
-
-    if favorite:
-        # 取消收藏
-        db.session.delete(favorite)
-        db.session.commit()
-        return jsonify({'favorited': False, 'server_id': server_id}), 200
-    else:
-        # 添加收藏
-        favorite = ServerFavorite(
+    try:
+        # 查找现有收藏
+        favorite = ServerFavorite.query.filter_by(
             user_id=current_user.id,
             server_id=server_id
-        )
-        db.session.add(favorite)
-        db.session.commit()
-        return jsonify({'favorited': True, 'server_id': server_id}), 200
+        ).first()
+
+        if favorite:
+            # 取消收藏
+            db.session.delete(favorite)
+            db.session.commit()
+            return jsonify({'favorited': False, 'server_id': server_id}), 200
+        else:
+            # 添加收藏
+            favorite = ServerFavorite(
+                user_id=current_user.id,
+                server_id=server_id
+            )
+            db.session.add(favorite)
+            db.session.commit()
+            return jsonify({'favorited': True, 'server_id': server_id}), 200
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error toggling server favorite: {str(e)}")
+        return jsonify({'message': '操作失败'}), 500

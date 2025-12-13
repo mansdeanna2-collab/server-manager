@@ -1199,9 +1199,9 @@ onMounted(async () => {
   if (userStr) {
     currentUser.value = JSON.parse(userStr)
   }
-  initSegmentNotes()
-  initIpCheckStatus()
-  initIpIdResults()
+  await initSegmentNotes()
+  await initIpCheckStatus()
+  await initIpIdResults()
   await loadServers()
 })
 
