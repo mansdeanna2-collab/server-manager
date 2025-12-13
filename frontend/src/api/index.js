@@ -99,7 +99,8 @@ export const serversAPI = {
   importFromFiles: () => api.post('/servers/import-from-files'),
   readFile: (id, filePath) => api.post(`/servers/${id}/read-file`, { file_path: filePath }),
   listDirectory: (id, dirPath) => api.post(`/servers/${id}/list-directory`, { dir_path: dirPath }),
-  saveFile: (id, filePath, content) => api.post(`/servers/${id}/save-file`, { file_path: filePath, content })
+  saveFile: (id, filePath, content) => api.post(`/servers/${id}/save-file`, { file_path: filePath, content }),
+  queryId: (ipAddress) => api.post('/servers/query-id', { ip_address: ipAddress })
 }
 
 export default api

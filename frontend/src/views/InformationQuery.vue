@@ -447,23 +447,37 @@
           </el-table-column>
           <el-table-column
             label="操作"
-            width="100"
+            width="160"
             align="center"
             fixed="right"
           >
             <template #default="scope">
-              <el-button
-                type="warning"
-                size="small"
-                :loading="scope.row.checking"
-                :disabled="scope.row.checking"
-                @click="checkSingleIpStatus(scope.row)"
-              >
-                <el-icon v-if="!scope.row.checking">
-                  <Search />
-                </el-icon>
-                检测
-              </el-button>
+              <div class="operation-buttons">
+                <el-button
+                  type="warning"
+                  size="small"
+                  :loading="scope.row.checking"
+                  :disabled="scope.row.checking || scope.row.queryingId"
+                  @click="checkSingleIpStatus(scope.row)"
+                >
+                  <el-icon v-if="!scope.row.checking">
+                    <Search />
+                  </el-icon>
+                  检测
+                </el-button>
+                <el-button
+                  type="success"
+                  size="small"
+                  :loading="scope.row.queryingId"
+                  :disabled="scope.row.checking || scope.row.queryingId"
+                  @click="queryIdForIp(scope.row)"
+                >
+                  <el-icon v-if="!scope.row.queryingId">
+                    <Key />
+                  </el-icon>
+                  查询id
+                </el-button>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -507,7 +521,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
-  ArrowDown, Monitor, Odometer, OfficeBuilding, Search, User, Setting, FolderOpened, Refresh, Loading, View
+  ArrowDown, Monitor, Odometer, OfficeBuilding, Search, User, Setting, FolderOpened, Refresh, Loading, View, Key
 } from '@element-plus/icons-vue'
 import { authAPI, serversAPI } from '@/api'
 
@@ -689,6 +703,7 @@ const showIpListDialog = (segmentData) => {
         onlineStatus: server.status || null,
         errorType: server.error_type || null,
         checking: false,
+        queryingId: false,
         portChecked: savedStatus?.portChecked || false,
         pingChecked: savedStatus?.pingChecked || false,
         pingOnline: savedStatus?.pingOnline || false,
@@ -703,6 +718,7 @@ const showIpListDialog = (segmentData) => {
         onlineStatus: null,
         errorType: null,
         checking: false,
+        queryingId: false,
         portChecked: savedStatus?.portChecked || false,
         pingChecked: savedStatus?.pingChecked || false,
         pingOnline: savedStatus?.pingOnline || false,
@@ -780,6 +796,34 @@ const checkSingleIpStatus = async (item) => {
     ElMessage.warning(`${item.ip} 检测失败`)
   } finally {
     item.checking = false
+  }
+}
+
+// 查询IP的ID
+const queryIdForIp = async (item) => {
+  item.queryingId = true
+  
+  try {
+    const response = await serversAPI.queryId(item.ip)
+    const data = response.data
+    
+    if (data.success) {
+      ElMessage.success(`${item.ip} 查询ID完成`)
+      // 如果有输出，可以在控制台显示
+      if (import.meta.env.DEV && data.output) {
+        console.log(`查询ID输出:\n${data.output}`)
+      }
+    } else {
+      ElMessage.warning(`${item.ip} 查询ID失败: ${data.message || '未知错误'}`)
+    }
+  } catch (error) {
+    const message = error.response?.data?.message || error.message || '查询失败'
+    if (import.meta.env.DEV) {
+      console.warn(`查询IP ${item.ip} ID失败:`, message)
+    }
+    ElMessage.warning(`${item.ip} 查询ID失败: ${message}`)
+  } finally {
+    item.queryingId = false
   }
 }
 
@@ -1256,6 +1300,14 @@ const handleChangePassword = async () => {
 
 .port-checking {
   color: #409EFF;
+}
+
+/* 操作按钮容器 */
+.operation-buttons {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 /* 对话框底部样式 */
