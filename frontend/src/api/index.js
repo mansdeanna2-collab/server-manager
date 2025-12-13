@@ -90,6 +90,7 @@ export const serversAPI = {
   delete: (id) => api.delete(`/servers/${id}`),
   check: (id) => api.post(`/servers/${id}/check`),
   checkAll: () => api.post('/servers/check-all'),
+  checkIpStatus: (ipAddress) => api.post('/servers/check-ip-status', { ip_address: ipAddress }),
   verifyPassword: (id) => api.post(`/servers/${id}/verify-password`),
   checkPort: (id) => api.post(`/servers/${id}/check-port`),
   getSystemInfo: (id) => api.get(`/servers/${id}/system-info`),

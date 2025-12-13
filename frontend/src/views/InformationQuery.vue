@@ -331,7 +331,7 @@
     <el-dialog
       v-model="ipListDialogVisible"
       :title="ipListDialogTitle"
-      width="700px"
+      width="900px"
       class="ip-list-dialog"
     >
       <div class="ip-list-content">
@@ -360,7 +360,7 @@
         >
           <el-table-column
             label="IP地址"
-            width="180"
+            width="150"
           >
             <template #default="scope">
               <span
@@ -370,21 +370,66 @@
           </el-table-column>
           <el-table-column
             label="状态"
-            width="100"
+            width="180"
             align="center"
           >
             <template #default="scope">
-              <el-tag
-                :type="scope.row.exists ? 'success' : 'info'"
-                size="small"
-              >
-                {{ scope.row.exists ? '已存在' : '未存在' }}
-              </el-tag>
+              <div class="status-cell">
+                <el-tag
+                  :type="scope.row.exists ? 'success' : 'info'"
+                  size="small"
+                >
+                  {{ scope.row.exists ? '已存在' : '未存在' }}
+                </el-tag>
+                <template v-if="scope.row.exists && scope.row.onlineStatus">
+                  <span class="status-separator">/</span>
+                  <el-tag
+                    :type="scope.row.onlineStatus === 'online' ? 'success' : 'danger'"
+                    size="small"
+                  >
+                    {{ scope.row.onlineStatus === 'online' ? '在线' : '离线' }}
+                  </el-tag>
+                  <template v-if="scope.row.errorType">
+                    <span class="status-separator">/</span>
+                    <el-tag
+                      type="danger"
+                      size="small"
+                    >
+                      {{ getErrorTypeText(scope.row.errorType) }}
+                    </el-tag>
+                  </template>
+                </template>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="端口 22/3389"
+            width="140"
+            align="center"
+          >
+            <template #default="scope">
+              <div class="port-status-cell">
+                <span
+                  v-if="scope.row.checking"
+                  class="port-checking"
+                >
+                  <el-icon class="is-loading"><Loading /></el-icon>
+                </span>
+                <template v-else-if="scope.row.portChecked">
+                  <span :class="['port-text', scope.row.port22 ? 'port-open-ssh' : 'port-closed']">22</span>
+                  <span class="port-separator">/</span>
+                  <span :class="['port-text', scope.row.port3389 ? 'port-open-rdp' : 'port-closed']">3389</span>
+                </template>
+                <span
+                  v-else
+                  class="port-unchecked"
+                >-</span>
+              </div>
             </template>
           </el-table-column>
           <el-table-column
             label="备注"
-            min-width="200"
+            min-width="180"
           >
             <template #default="scope">
               <span
@@ -412,12 +457,22 @@
         </div>
       </div>
       <template #footer>
-        <el-button
-          type="primary"
-          @click="ipListDialogVisible = false"
-        >
-          关闭
-        </el-button>
+        <div class="dialog-footer">
+          <el-button
+            type="warning"
+            :loading="checkingIpStatus"
+            @click="checkAllIpStatus"
+          >
+            <el-icon><Search /></el-icon>
+            检查状态
+          </el-button>
+          <el-button
+            type="primary"
+            @click="ipListDialogVisible = false"
+          >
+            关闭
+          </el-button>
+        </div>
       </template>
     </el-dialog>
   </div>
@@ -450,6 +505,7 @@ const ipListDialogTitle = ref('')
 const currentIpList = ref([])
 const ipListCurrentPage = ref(1)
 const IP_LIST_PAGE_SIZE = 50
+const checkingIpStatus = ref(false)
 
 // IP未存在时的备注文本
 const NOT_EXISTS_NOTE = '未存在'
@@ -599,19 +655,101 @@ const showIpListDialog = (segmentData) => {
       ipList.push({
         ip: ip,
         exists: true,
-        note: server.notes || ''
+        note: server.notes || '',
+        onlineStatus: server.status || null,
+        errorType: server.error_type || null,
+        checking: false,
+        portChecked: false,
+        port22: false,
+        port3389: false
       })
     } else {
       ipList.push({
         ip: ip,
         exists: false,
-        note: NOT_EXISTS_NOTE
+        note: NOT_EXISTS_NOTE,
+        onlineStatus: null,
+        errorType: null,
+        checking: false,
+        portChecked: false,
+        port22: false,
+        port3389: false
       })
     }
   }
   
   currentIpList.value = ipList
   ipListDialogVisible.value = true
+}
+
+// 获取错误类型文本
+const getErrorTypeText = (errorType) => {
+  const errorTypeMap = {
+    'auth_failed': '认证失败',
+    'password_error': '密码错误',
+    'unreachable': '不可达',
+    'port_closed': '端口关闭',
+    'timeout': '超时',
+    'connection_refused': '连接拒绝'
+  }
+  return errorTypeMap[errorType] || errorType || ''
+}
+
+// 检查所有IP的状态
+const checkAllIpStatus = async () => {
+  checkingIpStatus.value = true
+  
+  // 检查所有尚未检查端口状态的IP（无论是否存在于系统中）
+  // 这样可以发现网络中存在但尚未添加到系统的服务器
+  const ipsToCheck = currentIpList.value.filter(item => !item.portChecked)
+  
+  // 设置所有IP为检查中状态
+  ipsToCheck.forEach(item => {
+    item.checking = true
+  })
+  
+  // 并发检查，但限制并发数
+  const concurrencyLimit = 10
+  const chunks = []
+  for (let i = 0; i < ipsToCheck.length; i += concurrencyLimit) {
+    chunks.push(ipsToCheck.slice(i, i + concurrencyLimit))
+  }
+  
+  for (const chunk of chunks) {
+    await Promise.all(chunk.map(async (item) => {
+      try {
+        const response = await serversAPI.checkIpStatus(item.ip)
+        const data = response.data
+        item.portChecked = true
+        item.port22 = data.port_22 || false
+        item.port3389 = data.port_3389 || false
+        // 对于未存在于系统中的IP，根据检查结果更新在线状态
+        // 已存在的服务器保留其数据库中的状态，仅更新端口信息
+        if (!item.exists) {
+          item.onlineStatus = (data.ping || data.port_22 || data.port_3389) ? 'online' : 'offline'
+        }
+      } catch (error) {
+        // 检查失败时，将端口状态设为关闭
+        item.portChecked = true
+        item.port22 = false
+        item.port3389 = false
+        // 对于未存在的IP，检查失败视为离线
+        if (!item.exists) {
+          item.onlineStatus = 'offline'
+        }
+        // 记录错误以便调试（不显示给用户避免过多干扰）
+         
+        if (import.meta.env.DEV) {
+          console.warn(`检查IP ${item.ip} 失败:`, error.message || error)
+        }
+      } finally {
+        item.checking = false
+      }
+    }))
+  }
+  
+  checkingIpStatus.value = false
+  ElMessage.success('状态检查完成')
 }
 
 // 加载服务器数据
@@ -954,5 +1092,69 @@ const handleChangePassword = async () => {
   margin-top: 16px;
   padding-top: 16px;
   border-top: 1px solid #f0f0f0;
+}
+
+/* 状态单元格样式 */
+.status-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.status-separator {
+  color: #909399;
+  margin: 0 2px;
+}
+
+/* 端口状态单元格样式 */
+.port-status-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.port-text {
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.port-separator {
+  color: #909399;
+  margin: 0 4px;
+}
+
+.port-open-ssh {
+  color: #67C23A;
+  background-color: rgba(103, 194, 58, 0.1);
+}
+
+.port-open-rdp {
+  color: #409EFF;
+  background-color: rgba(64, 158, 255, 0.1);
+}
+
+.port-closed {
+  color: #F56C6C;
+  background-color: rgba(245, 108, 108, 0.1);
+}
+
+.port-unchecked {
+  color: #c0c4cc;
+}
+
+.port-checking {
+  color: #409EFF;
+}
+
+/* 对话框底部样式 */
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 </style>
