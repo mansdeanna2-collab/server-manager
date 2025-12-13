@@ -331,7 +331,7 @@
     <el-dialog
       v-model="ipListDialogVisible"
       :title="ipListDialogTitle"
-      width="900px"
+      width="1200px"
       class="ip-list-dialog"
     >
       <div class="ip-list-content">
@@ -431,6 +431,28 @@
             </template>
           </el-table-column>
           <el-table-column
+            label="ID"
+            width="100"
+            align="center"
+          >
+            <template #default="scope">
+              <span
+                v-if="scope.row.queryingId"
+                class="id-querying"
+              >
+                <el-icon class="is-loading"><Loading /></el-icon>
+              </span>
+              <span
+                v-else-if="scope.row.idResult"
+                class="id-result"
+              >{{ scope.row.idResult }}</span>
+              <span
+                v-else
+                class="id-unchecked"
+              >-</span>
+            </template>
+          </el-table-column>
+          <el-table-column
             label="备注"
             min-width="180"
           >
@@ -447,7 +469,7 @@
           </el-table-column>
           <el-table-column
             label="操作"
-            width="160"
+            width="230"
             align="center"
             fixed="right"
           >
@@ -476,6 +498,15 @@
                     <Key />
                   </el-icon>
                   查询id
+                </el-button>
+                <el-button
+                  type="info"
+                  size="small"
+                  :disabled="!scope.row.logOutput"
+                  @click="showLogDialog(scope.row)"
+                >
+                  <el-icon><Document /></el-icon>
+                  日志
                 </el-button>
               </div>
             </template>
@@ -513,6 +544,28 @@
         </div>
       </template>
     </el-dialog>
+    
+    <!-- Log Output Dialog -->
+    <el-dialog
+      v-model="logDialogVisible"
+      :title="logDialogTitle"
+      width="800px"
+      class="log-dialog"
+    >
+      <div class="log-content">
+        <pre class="log-output">{{ logDialogContent }}</pre>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button
+            type="primary"
+            @click="logDialogVisible = false"
+          >
+            关闭
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -521,7 +574,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
-  ArrowDown, Monitor, Odometer, OfficeBuilding, Search, User, Setting, FolderOpened, Refresh, Loading, View, Key
+  ArrowDown, Monitor, Odometer, OfficeBuilding, Search, User, Setting, FolderOpened, Refresh, Loading, View, Key, Document
 } from '@element-plus/icons-vue'
 import { authAPI, serversAPI } from '@/api'
 
@@ -555,6 +608,15 @@ const segmentNotes = ref({})
 // IP检测状态存储键
 const IP_CHECK_STATUS_KEY = 'server_manager_ip_check_status'
 const savedIpCheckStatus = ref({})
+
+// ID查询结果存储键
+const IP_ID_RESULT_KEY = 'server_manager_ip_id_result'
+const savedIpIdResults = ref({})
+
+// 日志对话框相关
+const logDialogVisible = ref(false)
+const logDialogTitle = ref('')
+const logDialogContent = ref('')
 
 const passwordForm = reactive({
   old_password: '',
@@ -694,6 +756,7 @@ const showIpListDialog = (segmentData) => {
     const ip = `${segment}.${i}`
     const server = serverIpMap.get(ip)
     const savedStatus = savedIpCheckStatus.value[ip] || null
+    const savedIdResult = savedIpIdResults.value[ip] || null
     
     if (server) {
       ipList.push({
@@ -708,7 +771,9 @@ const showIpListDialog = (segmentData) => {
         pingChecked: savedStatus?.pingChecked || false,
         pingOnline: savedStatus?.pingOnline || false,
         port22: savedStatus?.port22 || false,
-        port3389: savedStatus?.port3389 || false
+        port3389: savedStatus?.port3389 || false,
+        idResult: savedIdResult?.idResult || null,
+        logOutput: savedIdResult?.logOutput || null
       })
     } else {
       ipList.push({
@@ -723,7 +788,9 @@ const showIpListDialog = (segmentData) => {
         pingChecked: savedStatus?.pingChecked || false,
         pingOnline: savedStatus?.pingOnline || false,
         port22: savedStatus?.port22 || false,
-        port3389: savedStatus?.port3389 || false
+        port3389: savedStatus?.port3389 || false,
+        idResult: savedIdResult?.idResult || null,
+        logOutput: savedIdResult?.logOutput || null
       })
     }
   }
@@ -799,6 +866,29 @@ const checkSingleIpStatus = async (item) => {
   }
 }
 
+// 保存IP的ID结果到localStorage
+const saveIpIdResult = (ip, idResult, logOutput) => {
+  savedIpIdResults.value[ip] = {
+    idResult: idResult || null,
+    logOutput: logOutput || null,
+    lastQueried: new Date().toISOString()
+  }
+  try {
+    localStorage.setItem(IP_ID_RESULT_KEY, JSON.stringify(savedIpIdResults.value))
+  } catch (_e) {
+    // 忽略localStorage错误
+  }
+}
+
+// 显示日志对话框
+const showLogDialog = (item) => {
+  if (item.logOutput) {
+    logDialogTitle.value = `日志输出 - ${item.ip}`
+    logDialogContent.value = item.logOutput
+    logDialogVisible.value = true
+  }
+}
+
 // 查询IP的ID
 const queryIdForIp = async (item) => {
   item.queryingId = true
@@ -808,17 +898,33 @@ const queryIdForIp = async (item) => {
     const data = response.data
     
     if (data.success) {
+      // 保存ID结果和日志输出
+      item.idResult = data.id_result || null
+      item.logOutput = data.output || null
+      
+      // 保存到localStorage
+      saveIpIdResult(item.ip, item.idResult, item.logOutput)
+      
       ElMessage.success(`${item.ip} 查询ID完成`)
       // 如果有输出，可以在控制台显示
       if (import.meta.env.DEV && data.output) {
+        // eslint-disable-next-line no-console
         console.log(`查询ID输出:\n${data.output}`)
       }
     } else {
+      // 即使失败也保存日志输出
+      item.logOutput = data.output || data.message || null
+      saveIpIdResult(item.ip, null, item.logOutput)
+      
       ElMessage.warning(`${item.ip} 查询ID失败: ${data.message || '未知错误'}`)
     }
   } catch (error) {
     const message = error.response?.data?.message || error.message || '查询失败'
+    item.logOutput = message
+    saveIpIdResult(item.ip, null, item.logOutput)
+    
     if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
       console.warn(`查询IP ${item.ip} ID失败:`, message)
     }
     ElMessage.warning(`${item.ip} 查询ID失败: ${message}`)
@@ -925,6 +1031,18 @@ const initIpCheckStatus = () => {
   }
 }
 
+// 初始化IP的ID结果数据
+const initIpIdResults = () => {
+  try {
+    const savedResults = localStorage.getItem(IP_ID_RESULT_KEY)
+    if (savedResults) {
+      savedIpIdResults.value = JSON.parse(savedResults)
+    }
+  } catch (_e) {
+    savedIpIdResults.value = {}
+  }
+}
+
 onMounted(async () => {
   const userStr = localStorage.getItem('user')
   if (userStr) {
@@ -932,6 +1050,7 @@ onMounted(async () => {
   }
   initSegmentNotes()
   initIpCheckStatus()
+  initIpIdResults()
   await loadServers()
 })
 
@@ -1302,6 +1421,25 @@ const handleChangePassword = async () => {
   color: #409EFF;
 }
 
+/* ID列样式 */
+.id-result {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: #67C23A;
+  background-color: rgba(103, 194, 58, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.id-unchecked {
+  color: #c0c4cc;
+}
+
+.id-querying {
+  color: #409EFF;
+}
+
 /* 操作按钮容器 */
 .operation-buttons {
   display: flex;
@@ -1315,5 +1453,24 @@ const handleChangePassword = async () => {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+
+/* 日志对话框样式 */
+.log-content {
+  max-height: 500px;
+  overflow: auto;
+}
+
+.log-output {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #303133;
+  background-color: #f5f7fa;
+  padding: 16px;
+  border-radius: 8px;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 </style>
