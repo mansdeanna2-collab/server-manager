@@ -11,6 +11,7 @@ from config import Config
 import logging
 import os
 import json
+import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 servers_bp = Blueprint('servers', __name__, url_prefix='/api/servers')
@@ -666,3 +667,99 @@ def save_server_file(_current_user, server_id):
             'message': result['message'],
             'error_type': result.get('error_type')
         }), 400
+
+
+@servers_bp.route('/query-id', methods=['POST'])
+@token_required
+def query_id(_current_user):
+    """运行IP查询ID脚本
+    
+    Request body:
+        ip_address: IP地址
+    
+    Returns:
+        output: 脚本执行输出
+        success: 是否执行成功
+    """
+    data = request.get_json() or {}
+    ip_address = data.get('ip_address', '')
+    
+    if not ip_address:
+        return jsonify({'message': '请提供IP地址', 'success': False}), 400
+    
+    if not _is_valid_ip(ip_address):
+        return jsonify({'message': '无效的IP地址格式', 'success': False}), 400
+    
+    # 获取Python目录路径（相对于当前文件的路径）
+    backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    python_dir = os.path.join(backend_dir, 'Python')
+    
+    # 验证 Python 目录在 backend 目录下（防止目录遍历）
+    python_dir = os.path.realpath(python_dir)
+    backend_dir = os.path.realpath(backend_dir)
+    if not python_dir.startswith(backend_dir):
+        return jsonify({
+            'message': '无效的目录路径',
+            'success': False
+        }), 400
+    
+    ip_file = os.path.join(python_dir, 'ip.txt')
+    script_file = os.path.join(python_dir, 'ip.sh')
+    id_py_file = os.path.join(python_dir, 'id.py')
+    
+    # 检查脚本文件是否存在
+    if not os.path.exists(script_file):
+        return jsonify({
+            'message': 'ip.sh 脚本不存在',
+            'success': False
+        }), 404
+    
+    if not os.path.exists(id_py_file):
+        return jsonify({
+            'message': 'id.py 脚本不存在',
+            'success': False
+        }), 404
+    
+    try:
+        # 将IP写入ip.txt文件（设置受限权限 600）
+        with open(ip_file, 'w', encoding='utf-8') as f:
+            f.write(ip_address)
+        os.chmod(ip_file, 0o600)
+        
+        # 执行ip.sh脚本
+        result = subprocess.run(
+            ['bash', script_file],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            cwd=python_dir
+        )
+        
+        output = result.stdout
+        if result.stderr:
+            output += '\n' + result.stderr
+        
+        if result.returncode == 0:
+            return jsonify({
+                'message': '查询ID完成',
+                'output': output,
+                'success': True
+            }), 200
+        else:
+            return jsonify({
+                'message': '脚本执行失败',
+                'output': output,
+                'success': False
+            }), 400
+            
+    except subprocess.TimeoutExpired:
+        return jsonify({
+            'message': '脚本执行超时',
+            'success': False
+        }), 408
+    except Exception as e:
+        logger.error(f"Error running query-id script: {str(e)}")
+        return jsonify({
+            'message': f'执行失败: {str(e)}',
+            'success': False
+        }), 500
