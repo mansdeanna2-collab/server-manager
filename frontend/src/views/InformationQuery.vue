@@ -570,13 +570,14 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   ArrowDown, Monitor, Odometer, OfficeBuilding, Search, User, Setting, FolderOpened, Refresh, Loading, View, Key, Document
 } from '@element-plus/icons-vue'
 import { authAPI, serversAPI } from '@/api'
+import { io } from 'socket.io-client'
 
 const router = useRouter()
 const route = useRoute()
@@ -617,6 +618,9 @@ const savedIpIdResults = ref({})
 const logDialogVisible = ref(false)
 const logDialogTitle = ref('')
 const logDialogContent = ref('')
+
+// WebSocket连接
+let queryIdSocket = null
 
 const passwordForm = reactive({
   old_password: '',
@@ -889,48 +893,138 @@ const showLogDialog = (item) => {
   }
 }
 
-// 查询IP的ID
-const queryIdForIp = async (item) => {
+// 查询IP的ID（使用WebSocket实时流式输出）
+const queryIdForIp = (item) => {
   item.queryingId = true
+  item.logOutput = ''  // 清空之前的日志
   
-  try {
-    const response = await serversAPI.queryId(item.ip)
-    const data = response.data
-    
-    if (data.success) {
-      // 保存ID结果和日志输出
+  const token = localStorage.getItem('token')
+  if (!token) {
+    ElMessage.error('请先登录')
+    item.queryingId = false
+    return
+  }
+
+  // 获取WebSocket URL
+  let wsUrl = import.meta.env.VITE_WS_URL
+  if (!wsUrl) {
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
+    if (apiBaseUrl && apiBaseUrl.startsWith('http')) {
+      try {
+        const url = new URL(apiBaseUrl)
+        wsUrl = url.origin
+      } catch (_e) {
+        wsUrl = window.location.origin
+      }
+    } else {
+      wsUrl = window.location.origin
+    }
+  }
+
+  // 如果已有连接，先断开
+  if (queryIdSocket) {
+    queryIdSocket.disconnect()
+  }
+
+  // 创建WebSocket连接
+  queryIdSocket = io(`${wsUrl}/query-id`, {
+    transports: ['polling', 'websocket'],
+    reconnection: false,
+    timeout: 300000  // 5 minutes timeout
+  })
+
+  queryIdSocket.on('connect', () => {
+    // 发送启动查询ID请求
+    queryIdSocket.emit('start_query_id', {
+      ip_address: item.ip,
+      token: token
+    })
+  })
+
+  queryIdSocket.on('query_id_started', (data) => {
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.log(`查询ID开始: ${data.message}`)
+    }
+  })
+
+  queryIdSocket.on('query_id_output', (data) => {
+    // 实时更新日志输出
+    if (data.ip_address === item.ip) {
+      item.logOutput = (item.logOutput || '') + data.data
+      // 如果日志对话框正在显示此IP，实时更新内容
+      if (logDialogVisible.value && logDialogTitle.value.includes(item.ip)) {
+        logDialogContent.value = item.logOutput
+      }
+    }
+  })
+
+  queryIdSocket.on('query_id_completed', (data) => {
+    if (data.ip_address === item.ip) {
       item.idResult = data.id_result || null
-      item.logOutput = data.output || null
+      item.logOutput = data.output || item.logOutput
+      item.queryingId = false
       
       // 保存到localStorage
       saveIpIdResult(item.ip, item.idResult, item.logOutput)
       
-      ElMessage.success(`${item.ip} 查询ID完成`)
-      // 如果有输出，可以在控制台显示
-      if (import.meta.env.DEV && data.output) {
-        // eslint-disable-next-line no-console
-        console.log(`查询ID输出:\n${data.output}`)
+      // 更新日志对话框内容
+      if (logDialogVisible.value && logDialogTitle.value.includes(item.ip)) {
+        logDialogContent.value = item.logOutput
       }
-    } else {
-      // 即使失败也保存日志输出
-      item.logOutput = data.output || data.message || null
+      
+      if (data.success) {
+        ElMessage.success(`${item.ip} 查询ID完成`)
+      } else {
+        ElMessage.warning(`${item.ip} 查询ID失败: ${data.message || '未知错误'}`)
+      }
+      
+      // 断开WebSocket连接
+      if (queryIdSocket) {
+        queryIdSocket.disconnect()
+        queryIdSocket = null
+      }
+    }
+  })
+
+  queryIdSocket.on('query_id_error', (data) => {
+    if (data.ip_address === item.ip || !data.ip_address) {
+      const message = data.message || '查询失败'
+      item.logOutput = (item.logOutput || '') + '\n' + message
+      item.queryingId = false
+      
       saveIpIdResult(item.ip, null, item.logOutput)
       
-      ElMessage.warning(`${item.ip} 查询ID失败: ${data.message || '未知错误'}`)
+      ElMessage.warning(`${item.ip} 查询ID失败: ${message}`)
+      
+      // 断开WebSocket连接
+      if (queryIdSocket) {
+        queryIdSocket.disconnect()
+        queryIdSocket = null
+      }
     }
-  } catch (error) {
-    const message = error.response?.data?.message || error.message || '查询失败'
+  })
+
+  queryIdSocket.on('connect_error', (error) => {
+    const message = error.message || '连接失败'
     item.logOutput = message
-    saveIpIdResult(item.ip, null, item.logOutput)
+    item.queryingId = false
     
     if (import.meta.env.DEV) {
       // eslint-disable-next-line no-console
-      console.warn(`查询IP ${item.ip} ID失败:`, message)
+      console.warn(`WebSocket连接失败: ${message}`)
     }
-    ElMessage.warning(`${item.ip} 查询ID失败: ${message}`)
-  } finally {
-    item.queryingId = false
-  }
+    ElMessage.warning(`${item.ip} 查询ID连接失败: ${message}`)
+    
+    queryIdSocket = null
+  })
+
+  queryIdSocket.on('disconnect', () => {
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.log('Query-ID WebSocket disconnected')
+    }
+  })
 }
 
 // 检查所有IP的状态
@@ -1052,6 +1146,14 @@ onMounted(async () => {
   initIpCheckStatus()
   initIpIdResults()
   await loadServers()
+})
+
+onUnmounted(() => {
+  // 清理WebSocket连接（但脚本会在后端继续运行）
+  if (queryIdSocket) {
+    queryIdSocket.disconnect()
+    queryIdSocket = null
+  }
 })
 
 const handleMenuSelect = (index) => {

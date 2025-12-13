@@ -732,7 +732,7 @@ def query_id(_current_user):
             ['python3', id_py_file],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=300,  # 5 minutes timeout
             cwd=python_dir
         )
         
