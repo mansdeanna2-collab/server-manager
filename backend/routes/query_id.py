@@ -4,6 +4,7 @@ import threading
 import subprocess
 import os
 import re
+import sys
 import logging
 from flask import request
 from flask_socketio import emit, disconnect
@@ -13,7 +14,9 @@ import jwt
 logger = logging.getLogger(__name__)
 
 # Store active query-id tasks: {task_id: {ip, output, status, id_result}}
+# Thread-safe access using a lock
 query_id_tasks = {}
+query_id_tasks_lock = threading.Lock()
 
 
 def verify_token(token):
@@ -50,7 +53,8 @@ def _is_valid_ip(ip_address):
 
 def get_task_status(ip_address):
     """获取指定IP的任务状态"""
-    return query_id_tasks.get(ip_address)
+    with query_id_tasks_lock:
+        return query_id_tasks.get(ip_address)
 
 
 def register_query_id_events(socketio):
@@ -108,12 +112,13 @@ def register_query_id_events(socketio):
             return
 
         # 初始化任务状态
-        query_id_tasks[ip_address] = {
-            'status': 'running',
-            'output': '',
-            'id_result': None,
-            'sid': sid
-        }
+        with query_id_tasks_lock:
+            query_id_tasks[ip_address] = {
+                'status': 'running',
+                'output': '',
+                'id_result': None,
+                'sid': sid
+            }
 
         # 通知客户端任务已开始
         emit('query_id_started', {
@@ -130,8 +135,9 @@ def register_query_id_events(socketio):
                 os.chmod(ip_file, 0o600)
 
                 # 2. 使用Popen实现实时输出流
+                # 使用 sys.executable 确保使用正确的 Python 解释器
                 process = subprocess.Popen(
-                    ['python3', '-u', id_py_file],  # -u for unbuffered output
+                    [sys.executable, '-u', id_py_file],  # -u for unbuffered output
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
@@ -146,9 +152,10 @@ def register_query_id_events(socketio):
                     for line in iter(process.stdout.readline, ''):
                         if line:
                             full_output += line
-                            # 更新任务状态
-                            if ip_address in query_id_tasks:
-                                query_id_tasks[ip_address]['output'] = full_output
+                            # 更新任务状态（线程安全）
+                            with query_id_tasks_lock:
+                                if ip_address in query_id_tasks:
+                                    query_id_tasks[ip_address]['output'] = full_output
                             # 实时发送输出到客户端
                             socketio.emit(
                                 'query_id_output',
@@ -165,8 +172,9 @@ def register_query_id_events(socketio):
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait()
-                    if ip_address in query_id_tasks:
-                        query_id_tasks[ip_address]['status'] = 'timeout'
+                    with query_id_tasks_lock:
+                        if ip_address in query_id_tasks:
+                            query_id_tasks[ip_address]['status'] = 'timeout'
                     socketio.emit(
                         'query_id_error',
                         {'message': '脚本执行超时（超过5分钟）', 'ip_address': ip_address},
@@ -185,11 +193,12 @@ def register_query_id_events(socketio):
                     if id_match:
                         id_result = id_match.group(1)
 
-                # 更新任务状态
-                if ip_address in query_id_tasks:
-                    query_id_tasks[ip_address]['status'] = 'completed' if process.returncode == 0 else 'failed'
-                    query_id_tasks[ip_address]['id_result'] = id_result
-                    query_id_tasks[ip_address]['output'] = full_output
+                # 更新任务状态（线程安全）
+                with query_id_tasks_lock:
+                    if ip_address in query_id_tasks:
+                        query_id_tasks[ip_address]['status'] = 'completed' if process.returncode == 0 else 'failed'
+                        query_id_tasks[ip_address]['id_result'] = id_result
+                        query_id_tasks[ip_address]['output'] = full_output
 
                 # 发送完成消息
                 socketio.emit(
@@ -207,8 +216,9 @@ def register_query_id_events(socketio):
 
             except Exception as e:
                 logger.error(f"Error running query-id script: {str(e)}")
-                if ip_address in query_id_tasks:
-                    query_id_tasks[ip_address]['status'] = 'error'
+                with query_id_tasks_lock:
+                    if ip_address in query_id_tasks:
+                        query_id_tasks[ip_address]['status'] = 'error'
                 socketio.emit(
                     'query_id_error',
                     {'message': f'执行失败: {str(e)}', 'ip_address': ip_address},
@@ -228,7 +238,8 @@ def register_query_id_events(socketio):
     def handle_get_task_status(data):
         """获取指定IP的任务状态"""
         ip_address = data.get('ip_address', '')
-        task = query_id_tasks.get(ip_address)
+        with query_id_tasks_lock:
+            task = query_id_tasks.get(ip_address)
         if task:
             emit('task_status', {
                 'ip_address': ip_address,
