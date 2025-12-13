@@ -38,8 +38,9 @@ if ip_file.exists():
     print(f"读取IP地址: {ip_address}")
     print("id.py 占位符 - 请上传实际的脚本文件")
     print("Placeholder - Please upload the actual script file")
-    # 示例输出格式（实际脚本应该查询并返回真实 ID）
-    print(f"前10个最小的id: [0]")
+    # 示例输出格式（占位符值，实际脚本应该查询并返回真实 ID）
+    # Sample output format (placeholder value, actual script should query and return real ID)
+    print(f"前10个最小的id: [PLACEHOLDER_ID]")
 else:
     print("错误: ip.txt 文件不存在")
     print("Error: ip.txt file not found")
