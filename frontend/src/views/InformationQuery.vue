@@ -700,7 +700,7 @@ const showIpListDialog = (segmentData) => {
         ip: ip,
         exists: false,
         note: NOT_EXISTS_NOTE,
-        onlineStatus: savedStatus?.onlineStatus || null,
+        onlineStatus: null,
         errorType: null,
         checking: false,
         portChecked: savedStatus?.portChecked || false,
@@ -737,7 +737,6 @@ const saveIpCheckStatus = (ip, statusData) => {
     pingOnline: statusData.pingOnline || false,
     port22: statusData.port22 || false,
     port3389: statusData.port3389 || false,
-    onlineStatus: statusData.onlineStatus || null,
     lastChecked: new Date().toISOString()
   }
   try {
@@ -760,12 +759,6 @@ const checkSingleIpStatus = async (item) => {
     item.port22 = data.port_22 || false
     item.port3389 = data.port_3389 || false
     
-    // 更新在线状态
-    const isOnline = data.ping || data.port_22 || data.port_3389
-    if (!item.exists) {
-      item.onlineStatus = isOnline ? 'online' : 'offline'
-    }
-    
     // 保存到localStorage
     saveIpCheckStatus(item.ip, item)
     
@@ -777,10 +770,6 @@ const checkSingleIpStatus = async (item) => {
     item.pingOnline = false
     item.port22 = false
     item.port3389 = false
-    
-    if (!item.exists) {
-      item.onlineStatus = 'offline'
-    }
     
     // 保存到localStorage
     saveIpCheckStatus(item.ip, item)
@@ -798,9 +787,9 @@ const checkSingleIpStatus = async (item) => {
 const checkAllIpStatus = async () => {
   checkingIpStatus.value = true
   
-  // 检查所有尚未检查端口状态的IP（无论是否存在于系统中）
-  // 这样可以发现网络中存在但尚未添加到系统的服务器
-  const ipsToCheck = currentIpList.value.filter(item => !item.portChecked && !item.pingChecked)
+  // 检查所有尚未完成检查的IP（无论是否存在于系统中）
+  // 如果ping或port未检查，则需要重新检查
+  const ipsToCheck = currentIpList.value.filter(item => !item.portChecked || !item.pingChecked)
   
   // 设置所有IP为检查中状态
   ipsToCheck.forEach(item => {
@@ -825,13 +814,6 @@ const checkAllIpStatus = async () => {
         item.port22 = data.port_22 || false
         item.port3389 = data.port_3389 || false
         
-        // 对于未存在于系统中的IP，根据检查结果更新在线状态
-        // 已存在的服务器保留其数据库中的状态，仅更新端口信息
-        const isOnline = data.ping || data.port_22 || data.port_3389
-        if (!item.exists) {
-          item.onlineStatus = isOnline ? 'online' : 'offline'
-        }
-        
         // 保存到localStorage
         saveIpCheckStatus(item.ip, item)
       } catch (error) {
@@ -841,11 +823,6 @@ const checkAllIpStatus = async () => {
         item.pingOnline = false
         item.port22 = false
         item.port3389 = false
-        
-        // 对于未存在的IP，检查失败视为离线
-        if (!item.exists) {
-          item.onlineStatus = 'offline'
-        }
         
         // 保存到localStorage
         saveIpCheckStatus(item.ip, item)
