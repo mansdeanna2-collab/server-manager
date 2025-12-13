@@ -576,7 +576,7 @@ import { ElMessage } from 'element-plus'
 import {
   ArrowDown, Monitor, Odometer, OfficeBuilding, Search, User, Setting, FolderOpened, Refresh, Loading, View, Key, Document
 } from '@element-plus/icons-vue'
-import { authAPI, serversAPI } from '@/api'
+import { authAPI, serversAPI, preferencesAPI } from '@/api'
 import { io } from 'socket.io-client'
 
 const router = useRouter()
@@ -602,16 +602,13 @@ const checkingIpStatus = ref(false)
 // IP未存在时的备注文本
 const NOT_EXISTS_NOTE = '未存在'
 
-// IP段备注存储键
-const SEGMENT_NOTES_KEY = 'server_manager_segment_notes'
+// IP段备注（从服务器加载）
 const segmentNotes = ref({})
 
-// IP检测状态存储键
-const IP_CHECK_STATUS_KEY = 'server_manager_ip_check_status'
+// IP检测状态（从服务器加载）
 const savedIpCheckStatus = ref({})
 
-// ID查询结果存储键
-const IP_ID_RESULT_KEY = 'server_manager_ip_id_result'
+// ID查询结果（从服务器加载）
 const savedIpIdResults = ref({})
 
 // 日志对话框相关
@@ -816,8 +813,8 @@ const getErrorTypeText = (errorType) => {
   return errorTypeMap[errorType] || errorType || ''
 }
 
-// 保存IP检测状态到localStorage
-const saveIpCheckStatus = (ip, statusData) => {
+// 保存IP检测状态到服务器数据库
+const saveIpCheckStatus = async (ip, statusData) => {
   savedIpCheckStatus.value[ip] = {
     portChecked: statusData.portChecked || false,
     pingChecked: statusData.pingChecked || false,
@@ -827,9 +824,16 @@ const saveIpCheckStatus = (ip, statusData) => {
     lastChecked: new Date().toISOString()
   }
   try {
-    localStorage.setItem(IP_CHECK_STATUS_KEY, JSON.stringify(savedIpCheckStatus.value))
+    await preferencesAPI.saveIpCheckStatus({
+      ip_address: ip,
+      port_checked: statusData.portChecked || false,
+      ping_checked: statusData.pingChecked || false,
+      ping_online: statusData.pingOnline || false,
+      port_22: statusData.port22 || false,
+      port_3389: statusData.port3389 || false
+    })
   } catch (_e) {
-    // 忽略localStorage错误
+    // 忽略保存错误
   }
 }
 
@@ -846,7 +850,7 @@ const checkSingleIpStatus = async (item) => {
     item.port22 = data.port_22 || false
     item.port3389 = data.port_3389 || false
     
-    // 保存到localStorage
+    // 保存到服务器数据库
     saveIpCheckStatus(item.ip, item)
     
     ElMessage.success(`${item.ip} 检测完成`)
@@ -858,7 +862,7 @@ const checkSingleIpStatus = async (item) => {
     item.port22 = false
     item.port3389 = false
     
-    // 保存到localStorage
+    // 保存到服务器数据库
     saveIpCheckStatus(item.ip, item)
     
     if (import.meta.env.DEV) {
@@ -870,17 +874,21 @@ const checkSingleIpStatus = async (item) => {
   }
 }
 
-// 保存IP的ID结果到localStorage
-const saveIpIdResult = (ip, idResult, logOutput) => {
+// 保存IP的ID结果到服务器数据库
+const saveIpIdResult = async (ip, idResult, logOutput) => {
   savedIpIdResults.value[ip] = {
     idResult: idResult || null,
     logOutput: logOutput || null,
     lastQueried: new Date().toISOString()
   }
   try {
-    localStorage.setItem(IP_ID_RESULT_KEY, JSON.stringify(savedIpIdResults.value))
+    await preferencesAPI.saveIpIdResult({
+      ip_address: ip,
+      id_result: idResult || null,
+      log_output: logOutput || null
+    })
   } catch (_e) {
-    // 忽略localStorage错误
+    // 忽略保存错误
   }
 }
 
@@ -976,7 +984,7 @@ const queryIdForIp = (item) => {
       const idResult = data.id_result || null
       const logOutput = data.output || ''
       
-      // 保存到localStorage（无论对话框是否打开都要保存）
+      // 保存到服务器数据库（无论对话框是否打开都要保存）
       saveIpIdResult(targetIp, idResult, logOutput)
       
       // 查找当前列表中的item并更新（对话框可能被关闭再打开）
@@ -1014,7 +1022,7 @@ const queryIdForIp = (item) => {
       const currentItem = findItemByIp(targetIp)
       const logOutput = currentItem ? (currentItem.logOutput || '') + '\n' + message : message
       
-      // 保存到localStorage
+      // 保存到服务器数据库
       saveIpIdResult(targetIp, null, logOutput)
       
       if (currentItem) {
@@ -1090,7 +1098,7 @@ const checkAllIpStatus = async () => {
         item.port22 = data.port_22 || false
         item.port3389 = data.port_3389 || false
         
-        // 保存到localStorage
+        // 保存到服务器数据库
         saveIpCheckStatus(item.ip, item)
       } catch (error) {
         // 检查失败时，将端口状态设为关闭
@@ -1100,7 +1108,7 @@ const checkAllIpStatus = async () => {
         item.port22 = false
         item.port3389 = false
         
-        // 保存到localStorage
+        // 保存到服务器数据库
         saveIpCheckStatus(item.ip, item)
         
         // 记录错误以便调试（不显示给用户避免过多干扰）
@@ -1133,37 +1141,54 @@ const loadServers = async () => {
   }
 }
 
-// 初始化备注数据
-const initSegmentNotes = () => {
+// 初始化备注数据（从服务器加载）
+const initSegmentNotes = async () => {
   try {
-    const savedNotes = localStorage.getItem(SEGMENT_NOTES_KEY)
-    if (savedNotes) {
-      segmentNotes.value = JSON.parse(savedNotes)
-    }
+    const response = await preferencesAPI.getSegmentNotes()
+    segmentNotes.value = response.data || {}
   } catch (_e) {
     segmentNotes.value = {}
   }
 }
 
-// 初始化IP检测状态数据
-const initIpCheckStatus = () => {
+// 初始化IP检测状态数据（从服务器加载）
+const initIpCheckStatus = async () => {
   try {
-    const savedStatus = localStorage.getItem(IP_CHECK_STATUS_KEY)
-    if (savedStatus) {
-      savedIpCheckStatus.value = JSON.parse(savedStatus)
+    const response = await preferencesAPI.getIpCheckStatus()
+    const data = response.data || {}
+    // 转换数据格式以匹配前端期望的格式
+    const converted = {}
+    for (const [ip, status] of Object.entries(data)) {
+      converted[ip] = {
+        portChecked: status.port_checked,
+        pingChecked: status.ping_checked,
+        pingOnline: status.ping_online,
+        port22: status.port_22,
+        port3389: status.port_3389,
+        lastChecked: status.last_checked
+      }
     }
+    savedIpCheckStatus.value = converted
   } catch (_e) {
     savedIpCheckStatus.value = {}
   }
 }
 
-// 初始化IP的ID结果数据
-const initIpIdResults = () => {
+// 初始化IP的ID结果数据（从服务器加载）
+const initIpIdResults = async () => {
   try {
-    const savedResults = localStorage.getItem(IP_ID_RESULT_KEY)
-    if (savedResults) {
-      savedIpIdResults.value = JSON.parse(savedResults)
+    const response = await preferencesAPI.getIpIdResults()
+    const data = response.data || {}
+    // 转换数据格式以匹配前端期望的格式
+    const converted = {}
+    for (const [ip, result] of Object.entries(data)) {
+      converted[ip] = {
+        idResult: result.id_result,
+        logOutput: result.log_output,
+        lastQueried: result.last_queried
+      }
     }
+    savedIpIdResults.value = converted
   } catch (_e) {
     savedIpIdResults.value = {}
   }
@@ -1174,9 +1199,9 @@ onMounted(async () => {
   if (userStr) {
     currentUser.value = JSON.parse(userStr)
   }
-  initSegmentNotes()
-  initIpCheckStatus()
-  initIpIdResults()
+  await initSegmentNotes()
+  await initIpCheckStatus()
+  await initIpIdResults()
   await loadServers()
 })
 
