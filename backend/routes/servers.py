@@ -669,10 +669,21 @@ def save_server_file(_current_user, server_id):
         }), 400
 
 
+def _ip_to_hex(ip_address):
+    """Convert IP address to hexadecimal representation.
+    
+    This matches the behavior of ip.sh which uses:
+    printf '%s' "$IP" | xxd -p | tr -d '\n'
+    
+    This converts the string characters to hex, not the IP bytes.
+    """
+    return ip_address.encode('utf-8').hex()
+
+
 @servers_bp.route('/query-id', methods=['POST'])
 @token_required
 def query_id(_current_user):
-    """运行IP查询ID脚本
+    """运行IP查询ID脚本（只运行id.py）
     
     Request body:
         ip_address: IP地址
@@ -680,7 +691,10 @@ def query_id(_current_user):
     Returns:
         output: 脚本执行输出
         success: 是否执行成功
+        id_result: 从输出中提取的ID（如果有）
     """
+    import re as regex_module
+    
     data = request.get_json() or {}
     ip_address = data.get('ip_address', '')
     
@@ -704,21 +718,17 @@ def query_id(_current_user):
         }), 400
     
     ip_file = os.path.join(python_dir, 'ip.txt')
-    script_file = os.path.join(python_dir, 'ip.sh')
     id_py_file = os.path.join(python_dir, 'id.py')
     
-    # 检查脚本文件是否存在
-    if not os.path.exists(script_file):
-        return jsonify({
-            'message': 'ip.sh 脚本不存在',
-            'success': False
-        }), 404
-    
+    # 检查id.py脚本文件是否存在
     if not os.path.exists(id_py_file):
         return jsonify({
             'message': 'id.py 脚本不存在',
             'success': False
         }), 404
+    
+    original_content = None
+    file_modified = False
     
     try:
         # 将IP写入ip.txt文件（设置受限权限 600）
@@ -726,9 +736,33 @@ def query_id(_current_user):
             f.write(ip_address)
         os.chmod(ip_file, 0o600)
         
-        # 执行ip.sh脚本
+        # 转换IP为十六进制
+        hex_value = _ip_to_hex(ip_address)
+        
+        # 读取id.py文件内容
+        with open(id_py_file, 'r', encoding='utf-8') as f:
+            original_content = f.read()
+        
+        # 验证目标模式存在
+        pattern = r'(0x25,0x)[0-9a-fA-F]+(,0x25)'
+        if not regex_module.search(pattern, original_content):
+            return jsonify({
+                'message': 'id.py 文件中未找到目标模式 (0x25,0x...,0x25)',
+                'success': False
+            }), 400
+        
+        # 替换模式 0x25,0x...,0x25 中的中间部分
+        replacement = r'\g<1>' + hex_value + r'\g<2>'
+        modified_content = regex_module.sub(pattern, replacement, original_content)
+        
+        # 写入修改后的内容
+        with open(id_py_file, 'w', encoding='utf-8') as f:
+            f.write(modified_content)
+        file_modified = True
+        
+        # 执行id.py脚本
         result = subprocess.run(
-            ['bash', script_file],
+            ['python3', id_py_file],
             capture_output=True,
             text=True,
             timeout=60,
@@ -739,17 +773,31 @@ def query_id(_current_user):
         if result.stderr:
             output += '\n' + result.stderr
         
+        # 从输出中提取ID（格式: "前10个最小的id: [7762]" 或类似）
+        id_result = None
+        # 尝试匹配 "前N个最小的id: [数字]" 或 "[数字]" 模式
+        id_match = regex_module.search(r'前\d+个最小的id[:\s]*\[(\d+)\]', output)
+        if id_match:
+            id_result = id_match.group(1)
+        else:
+            # 尝试匹配单独的 [数字] 模式
+            id_match = regex_module.search(r'\[(\d+)\]', output)
+            if id_match:
+                id_result = id_match.group(1)
+        
         if result.returncode == 0:
             return jsonify({
                 'message': '查询ID完成',
                 'output': output,
-                'success': True
+                'success': True,
+                'id_result': id_result
             }), 200
         else:
             return jsonify({
                 'message': '脚本执行失败',
                 'output': output,
-                'success': False
+                'success': False,
+                'id_result': id_result
             }), 400
             
     except subprocess.TimeoutExpired:
@@ -763,3 +811,11 @@ def query_id(_current_user):
             'message': f'执行失败: {str(e)}',
             'success': False
         }), 500
+    finally:
+        # 恢复原始文件内容
+        if file_modified and original_content is not None:
+            try:
+                with open(id_py_file, 'w', encoding='utf-8') as f:
+                    f.write(original_content)
+            except Exception as restore_error:
+                logger.error(f"Failed to restore id.py: {str(restore_error)}")
