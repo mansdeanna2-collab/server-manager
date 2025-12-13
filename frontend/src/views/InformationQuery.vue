@@ -370,7 +370,7 @@
           </el-table-column>
           <el-table-column
             label="状态"
-            width="180"
+            width="240"
             align="center"
           >
             <template #default="scope">
@@ -381,15 +381,16 @@
                 >
                   {{ scope.row.exists ? '已存在' : '未存在' }}
                 </el-tag>
-                <template v-if="scope.row.exists && scope.row.onlineStatus">
+                <!-- Show online status for all IPs that have been checked -->
+                <template v-if="scope.row.portChecked || scope.row.pingChecked">
                   <span class="status-separator">/</span>
                   <el-tag
-                    :type="scope.row.onlineStatus === 'online' ? 'success' : 'danger'"
+                    :type="(scope.row.pingOnline || scope.row.port22 || scope.row.port3389) ? 'success' : 'danger'"
                     size="small"
                   >
-                    {{ scope.row.onlineStatus === 'online' ? '在线' : '离线' }}
+                    {{ (scope.row.pingOnline || scope.row.port22 || scope.row.port3389) ? '在线' : '离线' }}
                   </el-tag>
-                  <template v-if="scope.row.errorType">
+                  <template v-if="scope.row.exists && scope.row.errorType">
                     <span class="status-separator">/</span>
                     <el-tag
                       type="danger"
@@ -403,8 +404,8 @@
             </template>
           </el-table-column>
           <el-table-column
-            label="端口 22/3389"
-            width="140"
+            label="Ping/端口 22/3389"
+            width="180"
             align="center"
           >
             <template #default="scope">
@@ -415,7 +416,9 @@
                 >
                   <el-icon class="is-loading"><Loading /></el-icon>
                 </span>
-                <template v-else-if="scope.row.portChecked">
+                <template v-else-if="scope.row.portChecked || scope.row.pingChecked">
+                  <span :class="['port-text', scope.row.pingOnline ? 'port-open-ping' : 'port-closed']">P</span>
+                  <span class="port-separator">/</span>
                   <span :class="['port-text', scope.row.port22 ? 'port-open-ssh' : 'port-closed']">22</span>
                   <span class="port-separator">/</span>
                   <span :class="['port-text', scope.row.port3389 ? 'port-open-rdp' : 'port-closed']">3389</span>
@@ -440,6 +443,27 @@
                 v-else
                 class="ip-not-exists-note"
               >{{ scope.row.note }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="操作"
+            width="100"
+            align="center"
+            fixed="right"
+          >
+            <template #default="scope">
+              <el-button
+                type="warning"
+                size="small"
+                :loading="scope.row.checking"
+                :disabled="scope.row.checking"
+                @click="checkSingleIpStatus(scope.row)"
+              >
+                <el-icon v-if="!scope.row.checking">
+                  <Search />
+                </el-icon>
+                检测
+              </el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -513,6 +537,10 @@ const NOT_EXISTS_NOTE = '未存在'
 // IP段备注存储键
 const SEGMENT_NOTES_KEY = 'server_manager_segment_notes'
 const segmentNotes = ref({})
+
+// IP检测状态存储键
+const IP_CHECK_STATUS_KEY = 'server_manager_ip_check_status'
+const savedIpCheckStatus = ref({})
 
 const passwordForm = reactive({
   old_password: '',
@@ -651,6 +679,8 @@ const showIpListDialog = (segmentData) => {
   for (let i = 1; i <= 255; i++) {
     const ip = `${segment}.${i}`
     const server = serverIpMap.get(ip)
+    const savedStatus = savedIpCheckStatus.value[ip] || null
+    
     if (server) {
       ipList.push({
         ip: ip,
@@ -659,21 +689,25 @@ const showIpListDialog = (segmentData) => {
         onlineStatus: server.status || null,
         errorType: server.error_type || null,
         checking: false,
-        portChecked: false,
-        port22: false,
-        port3389: false
+        portChecked: savedStatus?.portChecked || false,
+        pingChecked: savedStatus?.pingChecked || false,
+        pingOnline: savedStatus?.pingOnline || false,
+        port22: savedStatus?.port22 || false,
+        port3389: savedStatus?.port3389 || false
       })
     } else {
       ipList.push({
         ip: ip,
         exists: false,
         note: NOT_EXISTS_NOTE,
-        onlineStatus: null,
+        onlineStatus: savedStatus?.onlineStatus || null,
         errorType: null,
         checking: false,
-        portChecked: false,
-        port22: false,
-        port3389: false
+        portChecked: savedStatus?.portChecked || false,
+        pingChecked: savedStatus?.pingChecked || false,
+        pingOnline: savedStatus?.pingOnline || false,
+        port22: savedStatus?.port22 || false,
+        port3389: savedStatus?.port3389 || false
       })
     }
   }
@@ -695,13 +729,78 @@ const getErrorTypeText = (errorType) => {
   return errorTypeMap[errorType] || errorType || ''
 }
 
+// 保存IP检测状态到localStorage
+const saveIpCheckStatus = (ip, statusData) => {
+  savedIpCheckStatus.value[ip] = {
+    portChecked: statusData.portChecked || false,
+    pingChecked: statusData.pingChecked || false,
+    pingOnline: statusData.pingOnline || false,
+    port22: statusData.port22 || false,
+    port3389: statusData.port3389 || false,
+    onlineStatus: statusData.onlineStatus || null,
+    lastChecked: new Date().toISOString()
+  }
+  try {
+    localStorage.setItem(IP_CHECK_STATUS_KEY, JSON.stringify(savedIpCheckStatus.value))
+  } catch (_e) {
+    // 忽略localStorage错误
+  }
+}
+
+// 检查单个IP的状态
+const checkSingleIpStatus = async (item) => {
+  item.checking = true
+  
+  try {
+    const response = await serversAPI.checkIpStatus(item.ip)
+    const data = response.data
+    item.portChecked = true
+    item.pingChecked = true
+    item.pingOnline = data.ping || false
+    item.port22 = data.port_22 || false
+    item.port3389 = data.port_3389 || false
+    
+    // 更新在线状态
+    const isOnline = data.ping || data.port_22 || data.port_3389
+    if (!item.exists) {
+      item.onlineStatus = isOnline ? 'online' : 'offline'
+    }
+    
+    // 保存到localStorage
+    saveIpCheckStatus(item.ip, item)
+    
+    ElMessage.success(`${item.ip} 检测完成`)
+  } catch (error) {
+    // 检查失败时，将状态设为关闭
+    item.portChecked = true
+    item.pingChecked = true
+    item.pingOnline = false
+    item.port22 = false
+    item.port3389 = false
+    
+    if (!item.exists) {
+      item.onlineStatus = 'offline'
+    }
+    
+    // 保存到localStorage
+    saveIpCheckStatus(item.ip, item)
+    
+    if (import.meta.env.DEV) {
+      console.warn(`检查IP ${item.ip} 失败:`, error.message || error)
+    }
+    ElMessage.warning(`${item.ip} 检测失败`)
+  } finally {
+    item.checking = false
+  }
+}
+
 // 检查所有IP的状态
 const checkAllIpStatus = async () => {
   checkingIpStatus.value = true
   
   // 检查所有尚未检查端口状态的IP（无论是否存在于系统中）
   // 这样可以发现网络中存在但尚未添加到系统的服务器
-  const ipsToCheck = currentIpList.value.filter(item => !item.portChecked)
+  const ipsToCheck = currentIpList.value.filter(item => !item.portChecked && !item.pingChecked)
   
   // 设置所有IP为检查中状态
   ipsToCheck.forEach(item => {
@@ -721,24 +820,37 @@ const checkAllIpStatus = async () => {
         const response = await serversAPI.checkIpStatus(item.ip)
         const data = response.data
         item.portChecked = true
+        item.pingChecked = true
+        item.pingOnline = data.ping || false
         item.port22 = data.port_22 || false
         item.port3389 = data.port_3389 || false
+        
         // 对于未存在于系统中的IP，根据检查结果更新在线状态
         // 已存在的服务器保留其数据库中的状态，仅更新端口信息
+        const isOnline = data.ping || data.port_22 || data.port_3389
         if (!item.exists) {
-          item.onlineStatus = (data.ping || data.port_22 || data.port_3389) ? 'online' : 'offline'
+          item.onlineStatus = isOnline ? 'online' : 'offline'
         }
+        
+        // 保存到localStorage
+        saveIpCheckStatus(item.ip, item)
       } catch (error) {
         // 检查失败时，将端口状态设为关闭
         item.portChecked = true
+        item.pingChecked = true
+        item.pingOnline = false
         item.port22 = false
         item.port3389 = false
+        
         // 对于未存在的IP，检查失败视为离线
         if (!item.exists) {
           item.onlineStatus = 'offline'
         }
+        
+        // 保存到localStorage
+        saveIpCheckStatus(item.ip, item)
+        
         // 记录错误以便调试（不显示给用户避免过多干扰）
-         
         if (import.meta.env.DEV) {
           console.warn(`检查IP ${item.ip} 失败:`, error.message || error)
         }
@@ -780,12 +892,25 @@ const initSegmentNotes = () => {
   }
 }
 
+// 初始化IP检测状态数据
+const initIpCheckStatus = () => {
+  try {
+    const savedStatus = localStorage.getItem(IP_CHECK_STATUS_KEY)
+    if (savedStatus) {
+      savedIpCheckStatus.value = JSON.parse(savedStatus)
+    }
+  } catch (_e) {
+    savedIpCheckStatus.value = {}
+  }
+}
+
 onMounted(async () => {
   const userStr = localStorage.getItem('user')
   if (userStr) {
     currentUser.value = JSON.parse(userStr)
   }
   initSegmentNotes()
+  initIpCheckStatus()
   await loadServers()
 })
 
@@ -1136,6 +1261,11 @@ const handleChangePassword = async () => {
 .port-open-rdp {
   color: #409EFF;
   background-color: rgba(64, 158, 255, 0.1);
+}
+
+.port-open-ping {
+  color: #E6A23C;
+  background-color: rgba(230, 162, 60, 0.1);
 }
 
 .port-closed {
