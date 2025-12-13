@@ -21,14 +21,26 @@ if [ -z "$IP" ]; then
   exit 1
 fi
 
+# 验证 IP 地址格式（仅允许 x.x.x.x 格式）
+if ! echo "$IP" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+  echo "❌ 无效的IP地址格式: $IP"
+  exit 1
+fi
+
 # 检查 id.py 是否存在
 if [ ! -f "$TARGET_FILE" ]; then
   echo "❌ id.py 文件不存在: $TARGET_FILE"
   exit 1
 fi
 
-# 转成 HEX
-HEX=$(echo -n "$IP" | xxd -p | tr -d '\n')
+# 转成 HEX（xxd 仅处理数字和点，输出仅包含十六进制字符，安全无需额外过滤）
+HEX=$(printf '%s' "$IP" | xxd -p | tr -d '\n')
+
+# 验证 HEX 仅包含十六进制字符
+if ! echo "$HEX" | grep -qE '^[0-9a-fA-F]+$'; then
+  echo "❌ HEX 转换异常: $HEX"
+  exit 1
+fi
 
 echo "✅ 原始 IP: $IP"
 echo "✅ 转换后的 HEX: $HEX"
@@ -36,7 +48,7 @@ echo "✅ 转换后的 HEX: $HEX"
 # 创建备份
 cp "$TARGET_FILE" "$TARGET_FILE.bak"
 
-# 用 perl 正则替换中间部分
+# 用 perl 正则替换中间部分（HEX 已验证仅包含十六进制字符，安全使用）
 perl -pe "s/(0x25,0x)[0-9a-fA-F]+(,0x25)/\${1}${HEX}\${2}/g" "$TARGET_FILE.bak" > "$TARGET_FILE"
 
 echo "✅ 替换完成"

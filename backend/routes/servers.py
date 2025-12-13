@@ -690,9 +690,19 @@ def query_id(_current_user):
     if not _is_valid_ip(ip_address):
         return jsonify({'message': '无效的IP地址格式', 'success': False}), 400
     
-    # 获取Python目录路径
+    # 获取Python目录路径（相对于当前文件的路径）
     backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     python_dir = os.path.join(backend_dir, 'Python')
+    
+    # 验证 Python 目录在 backend 目录下（防止目录遍历）
+    python_dir = os.path.realpath(python_dir)
+    backend_dir = os.path.realpath(backend_dir)
+    if not python_dir.startswith(backend_dir):
+        return jsonify({
+            'message': '无效的目录路径',
+            'success': False
+        }), 400
+    
     ip_file = os.path.join(python_dir, 'ip.txt')
     script_file = os.path.join(python_dir, 'ip.sh')
     id_py_file = os.path.join(python_dir, 'id.py')
@@ -711,9 +721,10 @@ def query_id(_current_user):
         }), 404
     
     try:
-        # 将IP写入ip.txt文件
+        # 将IP写入ip.txt文件（设置受限权限 600）
         with open(ip_file, 'w', encoding='utf-8') as f:
             f.write(ip_address)
+        os.chmod(ip_file, 0o600)
         
         # 执行ip.sh脚本
         result = subprocess.run(
