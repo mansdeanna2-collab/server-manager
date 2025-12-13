@@ -670,7 +670,13 @@ def save_server_file(_current_user, server_id):
 
 
 def _ip_to_hex(ip_address):
-    """Convert IP address to hexadecimal representation."""
+    """Convert IP address to hexadecimal representation.
+    
+    This matches the behavior of ip.sh which uses:
+    printf '%s' "$IP" | xxd -p | tr -d '\n'
+    
+    This converts the string characters to hex, not the IP bytes.
+    """
     return ip_address.encode('utf-8').hex()
 
 
@@ -721,6 +727,9 @@ def query_id(_current_user):
             'success': False
         }), 404
     
+    original_content = None
+    file_modified = False
+    
     try:
         # 将IP写入ip.txt文件（设置受限权限 600）
         with open(ip_file, 'w', encoding='utf-8') as f:
@@ -734,19 +743,22 @@ def query_id(_current_user):
         with open(id_py_file, 'r', encoding='utf-8') as f:
             original_content = f.read()
         
-        # 创建备份
-        id_py_bak = id_py_file + '.bak'
-        with open(id_py_bak, 'w', encoding='utf-8') as f:
-            f.write(original_content)
+        # 验证目标模式存在
+        pattern = r'(0x25,0x)[0-9a-fA-F]+(,0x25)'
+        if not regex_module.search(pattern, original_content):
+            return jsonify({
+                'message': 'id.py 文件中未找到目标模式 (0x25,0x...,0x25)',
+                'success': False
+            }), 400
         
         # 替换模式 0x25,0x...,0x25 中的中间部分
-        pattern = r'(0x25,0x)[0-9a-fA-F]+(,0x25)'
         replacement = r'\g<1>' + hex_value + r'\g<2>'
         modified_content = regex_module.sub(pattern, replacement, original_content)
         
         # 写入修改后的内容
         with open(id_py_file, 'w', encoding='utf-8') as f:
             f.write(modified_content)
+        file_modified = True
         
         # 执行id.py脚本
         result = subprocess.run(
@@ -799,3 +811,11 @@ def query_id(_current_user):
             'message': f'执行失败: {str(e)}',
             'success': False
         }), 500
+    finally:
+        # 恢复原始文件内容
+        if file_modified and original_content is not None:
+            try:
+                with open(id_py_file, 'w', encoding='utf-8') as f:
+                    f.write(original_content)
+            except Exception as restore_error:
+                logger.error(f"Failed to restore id.py: {str(restore_error)}")
