@@ -469,7 +469,7 @@
           </el-table-column>
           <el-table-column
             label="操作"
-            width="230"
+            width="340"
             align="center"
             fixed="right"
           >
@@ -479,7 +479,7 @@
                   type="warning"
                   size="small"
                   :loading="scope.row.checking"
-                  :disabled="scope.row.checking || scope.row.queryingId"
+                  :disabled="scope.row.checking || scope.row.queryingId || scope.row.fetchingServer"
                   @click="checkSingleIpStatus(scope.row)"
                 >
                   <el-icon v-if="!scope.row.checking">
@@ -491,13 +491,25 @@
                   type="success"
                   size="small"
                   :loading="scope.row.queryingId"
-                  :disabled="scope.row.checking || scope.row.queryingId"
+                  :disabled="scope.row.checking || scope.row.queryingId || scope.row.fetchingServer"
                   @click="queryIdForIp(scope.row)"
                 >
                   <el-icon v-if="!scope.row.queryingId">
                     <Key />
                   </el-icon>
                   查询id
+                </el-button>
+                <el-button
+                  type="primary"
+                  size="small"
+                  :loading="scope.row.fetchingServer"
+                  :disabled="scope.row.checking || scope.row.queryingId || scope.row.fetchingServer"
+                  @click="fetchServerForIp(scope.row)"
+                >
+                  <el-icon v-if="!scope.row.fetchingServer">
+                    <Download />
+                  </el-icon>
+                  获取服务器
                 </el-button>
                 <el-button
                   type="info"
@@ -574,7 +586,7 @@ import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
-  ArrowDown, Monitor, Odometer, OfficeBuilding, Search, User, Setting, FolderOpened, Refresh, Loading, View, Key, Document
+  ArrowDown, Monitor, Odometer, OfficeBuilding, Search, User, Setting, FolderOpened, Refresh, Loading, View, Key, Document, Download
 } from '@element-plus/icons-vue'
 import { authAPI, serversAPI, preferencesAPI } from '@/api'
 import { io } from 'socket.io-client'
@@ -618,6 +630,7 @@ const logDialogContent = ref('')
 
 // WebSocket连接
 let queryIdSocket = null
+let fetchServerSocket = null
 
 const passwordForm = reactive({
   old_password: '',
@@ -768,6 +781,7 @@ const showIpListDialog = (segmentData) => {
         errorType: server.error_type || null,
         checking: false,
         queryingId: false,
+        fetchingServer: false,
         portChecked: savedStatus?.portChecked || false,
         pingChecked: savedStatus?.pingChecked || false,
         pingOnline: savedStatus?.pingOnline || false,
@@ -785,6 +799,7 @@ const showIpListDialog = (segmentData) => {
         errorType: null,
         checking: false,
         queryingId: false,
+        fetchingServer: false,
         portChecked: savedStatus?.portChecked || false,
         pingChecked: savedStatus?.pingChecked || false,
         pingOnline: savedStatus?.pingOnline || false,
@@ -1067,6 +1082,164 @@ const queryIdForIp = (item) => {
   })
 }
 
+// 获取服务器（运行mm.py脚本，使用WebSocket实时流式输出）
+const fetchServerForIp = (item) => {
+  item.fetchingServer = true
+  item.logOutput = ''  // 清空之前的日志
+  
+  // 保存IP地址，避免闭包中使用可能过期的item引用
+  const targetIp = item.ip
+  
+  const token = localStorage.getItem('token')
+  if (!token) {
+    ElMessage.error('请先登录')
+    item.fetchingServer = false
+    return
+  }
+
+  // 获取WebSocket URL
+  let wsUrl = import.meta.env.VITE_WS_URL
+  if (!wsUrl) {
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
+    if (apiBaseUrl && apiBaseUrl.startsWith('http')) {
+      try {
+        const url = new URL(apiBaseUrl)
+        wsUrl = url.origin
+      } catch (_e) {
+        wsUrl = window.location.origin
+      }
+    } else {
+      wsUrl = window.location.origin
+    }
+  }
+
+  // 如果已有连接，先断开
+  if (fetchServerSocket) {
+    fetchServerSocket.disconnect()
+  }
+
+  // 创建WebSocket连接
+  fetchServerSocket = io(`${wsUrl}/fetch-server`, {
+    transports: ['polling', 'websocket'],
+    reconnection: false,
+    timeout: 1200000  // 20 minutes timeout (script runs ~15 minutes)
+  })
+
+  fetchServerSocket.on('connect', () => {
+    // 发送启动获取服务器请求
+    fetchServerSocket.emit('start_fetch_server', {
+      ip_address: targetIp,
+      token: token
+    })
+  })
+
+  fetchServerSocket.on('fetch_server_started', (data) => {
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.log(`获取服务器开始: ${data.message}`)
+    }
+  })
+
+  fetchServerSocket.on('fetch_server_output', (data) => {
+    // 实时更新日志输出
+    if (data.task_id === targetIp) {
+      // 查找当前列表中的item（对话框可能被关闭再打开）
+      const currentItem = findItemByIp(targetIp)
+      if (currentItem) {
+        currentItem.logOutput = (currentItem.logOutput || '') + data.data
+        // 如果日志对话框正在显示此IP，实时更新内容
+        if (logDialogVisible.value && logDialogTitle.value.includes(targetIp)) {
+          logDialogContent.value = currentItem.logOutput
+        }
+      }
+    }
+  })
+
+  fetchServerSocket.on('fetch_server_completed', async (data) => {
+    if (data.task_id === targetIp) {
+      const logOutput = data.output || ''
+      const addedServers = data.servers || []
+      
+      // 查找当前列表中的item并更新（对话框可能被关闭再打开）
+      const currentItem = findItemByIp(targetIp)
+      if (currentItem) {
+        currentItem.logOutput = logOutput
+        currentItem.fetchingServer = false
+        
+        // 更新日志对话框内容
+        if (logDialogVisible.value && logDialogTitle.value.includes(targetIp)) {
+          logDialogContent.value = currentItem.logOutput
+        }
+      }
+      
+      if (data.success) {
+        if (addedServers.length > 0) {
+          ElMessage.success(`获取服务器完成，新增 ${addedServers.length} 台服务器`)
+          // 刷新服务器列表
+          await loadServers()
+        } else {
+          ElMessage.success('获取服务器完成，无新增服务器')
+        }
+      } else {
+        ElMessage.warning(`获取服务器失败: ${data.message || '未知错误'}`)
+      }
+      
+      // 断开WebSocket连接
+      if (fetchServerSocket) {
+        fetchServerSocket.disconnect()
+        fetchServerSocket = null
+      }
+    }
+  })
+
+  fetchServerSocket.on('fetch_server_error', (data) => {
+    if (data.task_id === targetIp || !data.task_id) {
+      const message = data.message || '获取失败'
+      
+      // 查找当前列表中的item并更新
+      const currentItem = findItemByIp(targetIp)
+      if (currentItem) {
+        currentItem.logOutput = (currentItem.logOutput || '') + '\n' + message
+        currentItem.fetchingServer = false
+      }
+      
+      ElMessage.warning(`${targetIp} 获取服务器失败: ${message}`)
+      
+      // 断开WebSocket连接
+      if (fetchServerSocket) {
+        fetchServerSocket.disconnect()
+        fetchServerSocket = null
+      }
+    }
+  })
+
+  fetchServerSocket.on('connect_error', (error) => {
+    const message = error.message || '连接失败'
+    
+    // 查找当前列表中的item并更新
+    const currentItem = findItemByIp(targetIp)
+    if (currentItem) {
+      currentItem.logOutput = message
+      currentItem.fetchingServer = false
+    }
+    
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.warn(`WebSocket连接失败: ${message}`)
+    }
+    ElMessage.warning(`${targetIp} 获取服务器连接失败: ${message}`)
+    
+    fetchServerSocket = null
+  })
+
+  fetchServerSocket.on('disconnect', () => {
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.log('Fetch-Server WebSocket disconnected')
+    }
+  })
+}
+
 // 检查所有IP的状态
 const checkAllIpStatus = async () => {
   checkingIpStatus.value = true
@@ -1210,6 +1383,10 @@ onUnmounted(() => {
   if (queryIdSocket) {
     queryIdSocket.disconnect()
     queryIdSocket = null
+  }
+  if (fetchServerSocket) {
+    fetchServerSocket.disconnect()
+    fetchServerSocket = null
   }
 })
 
