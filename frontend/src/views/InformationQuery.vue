@@ -565,7 +565,7 @@
       class="log-dialog"
     >
       <div class="log-content">
-        <pre class="log-output">{{ logDialogContent }}</pre>
+        <pre class="log-output">{{ processedLogDialogContent }}</pre>
       </div>
       <template #footer>
         <div class="dialog-footer">
@@ -627,6 +627,94 @@ const savedIpIdResults = ref({})
 const logDialogVisible = ref(false)
 const logDialogTitle = ref('')
 const logDialogContent = ref('')
+
+// 检测是否是tqdm进度条行
+// tqdm format: "prefix:  XX%|███████   | N/M [time<remaining, rate]"
+const isTqdmProgressLine = (line) => {
+  // Match tqdm pattern: contains percentage and progress bar characters
+  return /\d+%\|[█▏▎▍▌▋▊▉ ]*\|/.test(line) || /\d+%\|[ ]*\|/.test(line)
+}
+
+// 获取tqdm行的前缀（用于分组）
+const getTqdmPrefix = (line) => {
+  const match = line.match(/^(.+?):\s*\d+%\|/)
+  return match ? match[1] : null
+}
+
+// 处理tqdm进度条输出，正确处理\r回车符和进度条更新
+// tqdm uses \r to overwrite the current line in terminal
+// This function processes the log output to show only the final state of each overwritten line
+// and consolidates multiple progress bar updates into just the final state
+const processLogContent = (content) => {
+  if (!content) return ''
+  
+  // Split by newlines, keeping track of lines
+  const lines = content.split('\n')
+  const processedLines = []
+  
+  // Track the last progress line for each prefix
+  const progressLinesByPrefix = new Map()
+  const progressLineOrder = [] // Track order of first occurrence
+  
+  for (const line of lines) {
+    let processedLine = line
+    
+    // If line contains \r, only keep the content after the last \r
+    // This simulates terminal behavior where \r moves cursor to beginning of line
+    if (line.includes('\r')) {
+      const parts = line.split('\r')
+      // Get the last non-empty part (after the last \r)
+      for (let i = parts.length - 1; i >= 0; i--) {
+        if (parts[i].trim()) {
+          processedLine = parts[i]
+          break
+        }
+      }
+      if (!processedLine.trim()) {
+        continue // Skip empty lines after \r processing
+      }
+    }
+    
+    // Check if this is a tqdm progress line
+    if (isTqdmProgressLine(processedLine)) {
+      const prefix = getTqdmPrefix(processedLine)
+      if (prefix) {
+        // Only keep the latest progress line for each prefix
+        if (!progressLinesByPrefix.has(prefix)) {
+          progressLineOrder.push(prefix)
+        }
+        progressLinesByPrefix.set(prefix, processedLine)
+        continue
+      }
+    }
+    
+    // For non-progress lines, flush any pending progress and add the line
+    // This ensures progress lines appear in their original position relative to other content
+    for (const p of progressLineOrder) {
+      if (progressLinesByPrefix.has(p)) {
+        processedLines.push(progressLinesByPrefix.get(p))
+        progressLinesByPrefix.delete(p)
+      }
+    }
+    progressLineOrder.length = 0
+    
+    processedLines.push(processedLine)
+  }
+  
+  // Flush any remaining progress lines at the end
+  for (const p of progressLineOrder) {
+    if (progressLinesByPrefix.has(p)) {
+      processedLines.push(progressLinesByPrefix.get(p))
+    }
+  }
+  
+  return processedLines.join('\n')
+}
+
+// Computed property for processed log content display
+const processedLogDialogContent = computed(() => {
+  return processLogContent(logDialogContent.value)
+})
 
 // WebSocket连接
 let queryIdSocket = null
