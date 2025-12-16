@@ -61,6 +61,8 @@ def main():
     
     # 示例输出格式（占位符值，实际脚本应该返回真实服务器信息）
     # Sample output format (placeholder values, actual script should return real server info)
+    # NOTE: This is a placeholder. Replace the actual mm.py script with your real implementation.
+    # 注意：这是一个占位符示例。请用实际的 mm.py 脚本替换此文件。
     sample_server = {
         "region": "placeholder",
         "line": "placeholder",
@@ -72,7 +74,7 @@ def main():
         "os_id": "ubuntu-22.04-server_x86-64",
         "os_name": "Ubuntu 22.04-server 64bit",
         "instance_id": "PLACEHOLDER-001",
-        "password": "PlaceholderPassword123",
+        "password": "PLACEHOLDER_ONLY_DO_NOT_USE",
         "config_id": 1,
         "ips": ["192.168.1.100"],
         "ip": 1,

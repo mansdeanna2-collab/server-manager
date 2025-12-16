@@ -241,7 +241,7 @@ def register_fetch_server_events(socketio):
                             
                             # 加密密码并创建服务器记录
                             encrypted_password = password_encryptor.encrypt(password)
-                            notes = server_data.get('name', '') or server_data.get('instance_id', '')
+                            notes = server_data.get('name') or server_data.get('instance_id') or ''
                             
                             server = Server(
                                 ip_address=ip_address,
