@@ -851,7 +851,7 @@ const checkSingleIpStatus = async (item) => {
     item.port3389 = data.port_3389 || false
     
     // 保存到服务器数据库
-    saveIpCheckStatus(item.ip, item)
+    await saveIpCheckStatus(item.ip, item)
     
     ElMessage.success(`${item.ip} 检测完成`)
   } catch (error) {
@@ -863,7 +863,7 @@ const checkSingleIpStatus = async (item) => {
     item.port3389 = false
     
     // 保存到服务器数据库
-    saveIpCheckStatus(item.ip, item)
+    await saveIpCheckStatus(item.ip, item)
     
     if (import.meta.env.DEV) {
       console.warn(`检查IP ${item.ip} 失败:`, error.message || error)
@@ -979,13 +979,13 @@ const queryIdForIp = (item) => {
     }
   })
 
-  queryIdSocket.on('query_id_completed', (data) => {
+  queryIdSocket.on('query_id_completed', async (data) => {
     if (data.ip_address === targetIp) {
       const idResult = data.id_result || null
       const logOutput = data.output || ''
       
       // 保存到服务器数据库（无论对话框是否打开都要保存）
-      saveIpIdResult(targetIp, idResult, logOutput)
+      await saveIpIdResult(targetIp, idResult, logOutput)
       
       // 查找当前列表中的item并更新（对话框可能被关闭再打开）
       const currentItem = findItemByIp(targetIp)
@@ -1014,7 +1014,7 @@ const queryIdForIp = (item) => {
     }
   })
 
-  queryIdSocket.on('query_id_error', (data) => {
+  queryIdSocket.on('query_id_error', async (data) => {
     if (data.ip_address === targetIp || !data.ip_address) {
       const message = data.message || '查询失败'
       
@@ -1023,7 +1023,7 @@ const queryIdForIp = (item) => {
       const logOutput = currentItem ? (currentItem.logOutput || '') + '\n' + message : message
       
       // 保存到服务器数据库
-      saveIpIdResult(targetIp, null, logOutput)
+      await saveIpIdResult(targetIp, null, logOutput)
       
       if (currentItem) {
         currentItem.logOutput = logOutput
@@ -1099,7 +1099,7 @@ const checkAllIpStatus = async () => {
         item.port3389 = data.port_3389 || false
         
         // 保存到服务器数据库
-        saveIpCheckStatus(item.ip, item)
+        await saveIpCheckStatus(item.ip, item)
       } catch (error) {
         // 检查失败时，将端口状态设为关闭
         item.portChecked = true
@@ -1109,7 +1109,7 @@ const checkAllIpStatus = async () => {
         item.port3389 = false
         
         // 保存到服务器数据库
-        saveIpCheckStatus(item.ip, item)
+        await saveIpCheckStatus(item.ip, item)
         
         // 记录错误以便调试（不显示给用户避免过多干扰）
         if (import.meta.env.DEV) {
