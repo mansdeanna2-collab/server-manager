@@ -101,6 +101,10 @@ def create_app():
     from routes.query_id import register_query_id_events
     register_query_id_events(socketio)
 
+    # Register fetch-server WebSocket events
+    from routes.fetch_server import register_fetch_server_events
+    register_fetch_server_events(socketio)
+
     # Create tables and default admin user
     with app.app_context():
         db.create_all()
