@@ -7,7 +7,7 @@ import re
 import json
 import sys
 import logging
-from flask import request
+from flask import request, current_app
 from flask_socketio import emit, disconnect
 from config import Config
 import jwt
@@ -157,6 +157,10 @@ def register_fetch_server_events(socketio):
             'task_id': task_id
         })
 
+        # 获取Flask app实例，用于在后台线程中创建应用上下文
+        # Get Flask app instance for creating app context in background thread
+        app = current_app._get_current_object()
+
         # 在后台线程中运行脚本
         def run_script():
             try:
@@ -218,11 +222,12 @@ def register_fetch_server_events(socketio):
                     from models import db
                     from models.server import Server
                     from utils.crypto import PasswordEncryption
-                    from flask import current_app
                     
                     password_encryptor = PasswordEncryption(Config.ENCRYPTION_KEY)
                     
-                    with current_app.app_context():
+                    # 使用之前捕获的app实例创建应用上下文
+                    # Use the previously captured app instance to create app context
+                    with app.app_context():
                         for server_data in servers:
                             ips = server_data.get('ips', [])
                             password = server_data.get('password', '')
