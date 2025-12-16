@@ -230,34 +230,41 @@ def register_fetch_server_events(socketio):
                             if not ips or not password:
                                 continue
                             
-                            ip_address = ips[0] if isinstance(ips, list) else str(ips)
+                            # Ensure ips is a list
+                            if not isinstance(ips, list):
+                                ips = [str(ips)]
+                            
                             port, username = _determine_port_and_username(server_data)
                             
-                            # 检查IP是否已存在
-                            existing = Server.query.filter_by(ip_address=ip_address).first()
-                            if existing:
-                                logger.info(f"Server {ip_address} already exists, skipping")
-                                continue
+                            # 生成备注：所有IP用/连接
+                            notes = '/'.join(ips) if len(ips) > 1 else (server_data.get('name') or server_data.get('instance_id') or '')
                             
-                            # 加密密码并创建服务器记录
+                            # 加密密码（所有IP使用相同密码）
                             encrypted_password = password_encryptor.encrypt(password)
-                            notes = server_data.get('name') or server_data.get('instance_id') or ''
                             
-                            server = Server(
-                                ip_address=ip_address,
-                                port=port,
-                                username=username,
-                                encrypted_password=encrypted_password,
-                                notes=notes
-                            )
-                            db.session.add(server)
-                            added_servers.append({
-                                'ip': ip_address,
-                                'port': port,
-                                'username': username,
-                                'notes': notes
-                            })
-                            logger.info(f"Added new server: {ip_address}")
+                            # 为每个IP创建服务器记录
+                            for ip_address in ips:
+                                # 检查IP是否已存在
+                                existing = Server.query.filter_by(ip_address=ip_address).first()
+                                if existing:
+                                    logger.info(f"Server {ip_address} already exists, skipping")
+                                    continue
+                                
+                                server = Server(
+                                    ip_address=ip_address,
+                                    port=port,
+                                    username=username,
+                                    encrypted_password=encrypted_password,
+                                    notes=notes
+                                )
+                                db.session.add(server)
+                                added_servers.append({
+                                    'ip': ip_address,
+                                    'port': port,
+                                    'username': username,
+                                    'notes': notes
+                                })
+                                logger.info(f"Added new server: {ip_address}")
                         
                         if added_servers:
                             db.session.commit()
