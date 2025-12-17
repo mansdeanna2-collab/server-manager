@@ -1175,11 +1175,28 @@ const queryIdForIp = (item) => {
     queryIdSocket = null
   })
 
-  queryIdSocket.on('disconnect', () => {
+  queryIdSocket.on('disconnect', (reason) => {
     if (import.meta.env.DEV) {
       // eslint-disable-next-line no-console
-      console.log('Query-ID WebSocket disconnected')
+      console.log('Query-ID WebSocket disconnected:', reason)
     }
+    
+    // Check if the task was still running when disconnected
+    const currentItem = findItemByIp(targetIp)
+    if (currentItem && currentItem.queryingId) {
+      // Task was still running, this is an unexpected disconnect
+      currentItem.queryingId = false
+      currentItem.logOutput = (currentItem.logOutput || '') + '\n[连接已断开，任务可能仍在后台运行]'
+      
+      // Update log dialog if open
+      if (logDialogVisible.value && logDialogTitle.value.includes(targetIp)) {
+        logDialogContent.value = currentItem.logOutput
+      }
+      
+      ElMessage.warning(`${targetIp} 查询ID连接断开: ${reason || '连接丢失'}`)
+    }
+    
+    queryIdSocket = null
   })
 }
 
@@ -1339,11 +1356,28 @@ const fetchServerForIp = (item) => {
     fetchServerSocket = null
   })
 
-  fetchServerSocket.on('disconnect', () => {
+  fetchServerSocket.on('disconnect', (reason) => {
     if (import.meta.env.DEV) {
       // eslint-disable-next-line no-console
-      console.log('Fetch-Server WebSocket disconnected')
+      console.log('Fetch-Server WebSocket disconnected:', reason)
     }
+    
+    // Check if the task was still running when disconnected
+    const currentItem = findItemByIp(targetIp)
+    if (currentItem && currentItem.fetchingServer) {
+      // Task was still running, this is an unexpected disconnect
+      currentItem.fetchingServer = false
+      currentItem.logOutput = (currentItem.logOutput || '') + '\n[连接已断开，任务可能仍在后台运行]'
+      
+      // Update log dialog if open
+      if (logDialogVisible.value && logDialogTitle.value.includes(targetIp)) {
+        logDialogContent.value = currentItem.logOutput
+      }
+      
+      ElMessage.warning(`${targetIp} 获取服务器连接断开: ${reason || '连接丢失'}`)
+    }
+    
+    fetchServerSocket = null
   })
 }
 
