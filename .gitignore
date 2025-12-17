@@ -76,3 +76,6 @@ server_files/*.json
 
 # Backup files
 backend/backups/
+
+# System settings file
+backend/system_settings.json

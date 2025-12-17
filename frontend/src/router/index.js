@@ -4,6 +4,7 @@ import Dashboard from '@/views/Dashboard.vue'
 import ServerList from '@/views/ServerList.vue'
 import InformationQuery from '@/views/InformationQuery.vue'
 import SystemBackup from '@/views/SystemBackup.vue'
+import SystemSettings from '@/views/SystemSettings.vue'
 
 const routes = [
   {
@@ -38,6 +39,12 @@ const routes = [
     path: '/system-backup',
     name: 'SystemBackup',
     component: SystemBackup,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/system-settings',
+    name: 'SystemSettings',
+    component: SystemSettings,
     meta: { requiresAuth: true }
   }
 ]

@@ -810,3 +810,261 @@ def delete_system_backup(_current_user, backup_id):
             'success': False,
             'message': f'删除备份失败: {str(e)}'
         }), 500
+
+
+# ============ Database Schema APIs ============
+
+@preferences_bp.route('/database/schema', methods=['GET'])
+@token_required
+def get_database_schema(_current_user):
+    """获取数据库结构（所有表和列）
+    
+    Returns:
+        success: 是否成功
+        tables: 表列表，每个包含:
+            - name: 表名
+            - columns: 列列表，每个包含:
+                - name: 列名
+                - type: 数据类型
+                - nullable: 是否可为空
+                - primary_key: 是否为主键
+    """
+    from sqlalchemy import inspect
+    
+    try:
+        inspector = inspect(db.engine)
+        tables = []
+        
+        for table_name in inspector.get_table_names():
+            columns = []
+            pk_columns = {col for col in inspector.get_pk_constraint(table_name).get('constrained_columns', [])}
+            
+            for column in inspector.get_columns(table_name):
+                columns.append({
+                    'name': column['name'],
+                    'type': str(column['type']),
+                    'nullable': column.get('nullable', True),
+                    'primary_key': column['name'] in pk_columns,
+                    'default': str(column.get('default')) if column.get('default') else None
+                })
+            
+            tables.append({
+                'name': table_name,
+                'columns': columns
+            })
+        
+        # Sort tables by name
+        tables.sort(key=lambda x: x['name'])
+        
+        return jsonify({
+            'success': True,
+            'tables': tables
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting database schema: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取数据库结构失败: {str(e)}'
+        }), 500
+
+
+# ============ System Settings APIs ============
+
+# System settings file path
+SYSTEM_SETTINGS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'system_settings.json')
+
+
+def load_system_settings():
+    """Load system settings from file"""
+    default_settings = {
+        'login_whitelist': {
+            'enabled': False,
+            'ip_list': []
+        },
+        'ssl': {
+            'enabled': False,
+            'cert_path': '',
+            'key_path': ''
+        }
+    }
+    
+    if os.path.exists(SYSTEM_SETTINGS_FILE):
+        try:
+            with open(SYSTEM_SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+                # Merge with defaults to ensure all keys exist
+                for key in default_settings:
+                    if key not in settings:
+                        settings[key] = default_settings[key]
+                return settings
+        except Exception as e:
+            logger.error(f"Error loading system settings: {str(e)}")
+    
+    return default_settings
+
+
+def save_system_settings(settings):
+    """Save system settings to file"""
+    try:
+        with open(SYSTEM_SETTINGS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(settings, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        logger.error(f"Error saving system settings: {str(e)}")
+        return False
+
+
+@preferences_bp.route('/system-settings', methods=['GET'])
+@token_required
+def get_system_settings(_current_user):
+    """获取系统设置
+    
+    Returns:
+        success: 是否成功
+        settings: 系统设置，包含:
+            - login_whitelist: 登录白名单设置
+            - ssl: SSL设置
+    """
+    try:
+        settings = load_system_settings()
+        return jsonify({
+            'success': True,
+            'settings': settings
+        }), 200
+    except Exception as e:
+        logger.error(f"Error getting system settings: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取系统设置失败: {str(e)}'
+        }), 500
+
+
+@preferences_bp.route('/system-settings', methods=['POST'])
+@token_required
+def update_system_settings(_current_user):
+    """更新系统设置
+    
+    Request body:
+        settings: 系统设置对象
+    """
+    data = request.get_json()
+    
+    if not data or 'settings' not in data:
+        return jsonify({
+            'success': False,
+            'message': '请提供设置数据'
+        }), 400
+    
+    try:
+        current_settings = load_system_settings()
+        new_settings = data['settings']
+        
+        # Update login whitelist settings
+        if 'login_whitelist' in new_settings:
+            whitelist = new_settings['login_whitelist']
+            current_settings['login_whitelist']['enabled'] = whitelist.get('enabled', False)
+            if 'ip_list' in whitelist:
+                # Validate IP addresses
+                ip_list = whitelist['ip_list']
+                if isinstance(ip_list, list):
+                    current_settings['login_whitelist']['ip_list'] = [ip.strip() for ip in ip_list if ip.strip()]
+        
+        # Update SSL settings
+        if 'ssl' in new_settings:
+            ssl = new_settings['ssl']
+            current_settings['ssl']['enabled'] = ssl.get('enabled', False)
+            current_settings['ssl']['cert_path'] = ssl.get('cert_path', '')
+            current_settings['ssl']['key_path'] = ssl.get('key_path', '')
+        
+        if save_system_settings(current_settings):
+            return jsonify({
+                'success': True,
+                'message': '系统设置已保存',
+                'settings': current_settings
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'message': '保存系统设置失败'
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error updating system settings: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'更新系统设置失败: {str(e)}'
+        }), 500
+
+
+# ============ System Logs APIs ============
+
+@preferences_bp.route('/system-logs', methods=['GET'])
+@token_required
+def get_system_logs(_current_user):
+    """获取系统日志
+    
+    Query params:
+        lines: 返回的行数（默认500，最大5000）
+        
+    Returns:
+        success: 是否成功
+        logs: 日志内容列表
+        total_lines: 总行数
+    """
+    lines = request.args.get('lines', 500, type=int)
+    lines = min(max(1, lines), 5000)  # Limit between 1 and 5000
+    
+    try:
+        log_entries = []
+        
+        # Get Flask application log
+        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        
+        # Check common log file locations
+        log_files = [
+            os.path.join(backend_dir, 'app.log'),
+            os.path.join(backend_dir, 'logs', 'app.log'),
+            '/var/log/server-manager/app.log'
+        ]
+        
+        log_content = []
+        
+        for log_file in log_files:
+            if os.path.exists(log_file):
+                try:
+                    with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
+                        # Read last N lines efficiently
+                        all_lines = f.readlines()
+                        log_content.extend(all_lines[-lines:])
+                except Exception as e:
+                    logger.warning(f"Could not read log file {log_file}: {str(e)}")
+        
+        # If no log files found, try to get from Python logging handlers
+        if not log_content:
+            # Return a message indicating no log files found
+            log_content = [
+                "=== 系统日志 ===\n",
+                f"时间: {china_now().strftime('%Y-%m-%d %H:%M:%S')}\n",
+                "提示: 未找到日志文件。系统日志将在此处显示。\n",
+                "日志文件位置: backend/app.log 或 backend/logs/app.log\n"
+            ]
+        
+        # Parse and format log entries
+        for line in log_content:
+            line = line.strip()
+            if line:
+                log_entries.append(line)
+        
+        return jsonify({
+            'success': True,
+            'logs': log_entries[-lines:],
+            'total_lines': len(log_entries)
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting system logs: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取系统日志失败: {str(e)}'
+        }), 500

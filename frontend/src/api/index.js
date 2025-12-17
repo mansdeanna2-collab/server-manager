@@ -141,7 +141,17 @@ export const preferencesAPI = {
   listBackups: () => api.get('/preferences/backup/list'),
   deleteBackup: (backupId) => api.delete(`/preferences/backup/delete/${backupId}`),
   // 下载备份使用特殊方法，因为需要处理文件流
-  getBackupDownloadUrl: (backupId) => `${API_BASE_URL}/preferences/backup/download/${backupId}`
+  getBackupDownloadUrl: (backupId) => `${API_BASE_URL}/preferences/backup/download/${backupId}`,
+
+  // 数据库结构查看
+  getDatabaseSchema: () => api.get('/preferences/database/schema'),
+
+  // 系统设置
+  getSystemSettings: () => api.get('/preferences/system-settings'),
+  updateSystemSettings: (settings) => api.post('/preferences/system-settings', { settings }),
+
+  // 系统日志
+  getSystemLogs: (lines = 500) => api.get(`/preferences/system-logs?lines=${lines}`)
 }
 
 export default api
