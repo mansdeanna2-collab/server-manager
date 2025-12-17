@@ -155,9 +155,9 @@ def register_fetch_server_events(socketio):
                 with open(mm_py_file, 'r', encoding='utf-8') as f:
                     content = f.read()
                 
-                # 使用正则表达式替换target_ids的值
+                # 使用正则表达式替换target_ids的值，支持任意数组格式
                 new_content = re.sub(
-                    r'target_ids\s*=\s*\[\d+\]',
+                    r'target_ids\s*=\s*\[.*?\]',
                     f'target_ids = [{ipid_int}]',
                     content
                 )
