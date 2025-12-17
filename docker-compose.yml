@@ -9,8 +9,16 @@ services:
       - "5000:5000"
     environment:
       - FLASK_ENV=production
+      - DEBUG=False
       - DATABASE_URI=sqlite:///server_manager.db
       - SERVER_FILES_DIR=/app/server_files
+      # SECURITY: For production, set secure SECRET_KEY and ENCRYPTION_KEY
+      # Generate ENCRYPTION_KEY with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+      # Generate SECRET_KEY with: python -c "import secrets; print(secrets.token_hex(32))"
+      # Uncomment and set secure values for production:
+      # - SECRET_KEY=your-generated-secret-key-here
+      # - ENCRYPTION_KEY=your-generated-encryption-key-here
+      # - JWT_SECRET_KEY=your-generated-jwt-secret-key-here
     volumes:
       - ./backend:/app
       - backend_data:/app/instance

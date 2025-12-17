@@ -48,8 +48,10 @@ class Config:
     # On host: set SERVER_FILES_DIR to actual path (e.g., /home/Python/服务器)
     SERVER_FILES_DIR = os.getenv('SERVER_FILES_DIR', '/app/server_files')
 
-    # Warn if using default keys
-    if ENCRYPTION_KEY == default_key and not TESTING:
+    # Warn if using default keys in production (not DEBUG and not TESTING)
+    # In development mode (DEBUG=True), warnings are suppressed since it's expected
+    # to use default keys for local development
+    if ENCRYPTION_KEY == default_key and not TESTING and not DEBUG:
         import warnings
         warnings.warn(
             "Using default ENCRYPTION_KEY! "
@@ -57,7 +59,7 @@ class Config:
             stacklevel=2
         )
 
-    if SECRET_KEY == 'your-secret-key-change-in-production' and not TESTING:
+    if SECRET_KEY == 'your-secret-key-change-in-production' and not TESTING and not DEBUG:
         import warnings
         warnings.warn(
             "Using default SECRET_KEY! "
