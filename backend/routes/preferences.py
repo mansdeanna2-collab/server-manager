@@ -6,6 +6,8 @@ from models.user_preference import (
 from routes.auth import token_required
 from utils import china_now
 import logging
+import subprocess
+import os
 
 preferences_bp = Blueprint('preferences', __name__, url_prefix='/api/preferences')
 logger = logging.getLogger(__name__)
@@ -319,3 +321,82 @@ def toggle_server_favorite(current_user):
         db.session.rollback()
         logger.error(f"Error toggling server favorite: {str(e)}")
         return jsonify({'message': '操作失败'}), 500
+
+
+# ============ Update Cookie API ============
+
+@preferences_bp.route('/update-cookie', methods=['POST'])
+@token_required
+def update_cookie(_current_user):
+    """执行更新Cookie脚本
+    
+    调用 update_cookie.sh 脚本来:
+    1. 发送登录请求到 user.jtti.cc
+    2. 从响应中提取 XSRF-TOKEN 和 jtti_session
+    3. 更新 mm.py 和 id.py 中的 cookie 值
+    
+    Returns:
+        success: 是否成功
+        message: 结果信息
+        output: 脚本输出
+    """
+    # 获取 Python 目录路径（相对于当前文件的路径）
+    backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    python_dir = os.path.join(backend_dir, 'Python')
+    
+    # 验证 Python 目录在 backend 目录下（防止目录遍历）
+    python_dir = os.path.realpath(python_dir)
+    backend_dir = os.path.realpath(backend_dir)
+    if not python_dir.startswith(backend_dir):
+        return jsonify({
+            'success': False,
+            'message': '无效的目录路径'
+        }), 400
+    
+    script_path = os.path.join(python_dir, 'update_cookie.sh')
+    
+    # 检查脚本是否存在
+    if not os.path.exists(script_path):
+        return jsonify({
+            'success': False,
+            'message': 'update_cookie.sh 脚本不存在'
+        }), 404
+    
+    try:
+        # 运行脚本
+        result = subprocess.run(
+            ['bash', script_path],
+            capture_output=True,
+            text=True,
+            timeout=60,  # 60 seconds timeout
+            cwd=python_dir
+        )
+        
+        output = result.stdout
+        if result.stderr:
+            output += '\n' + result.stderr
+        
+        if result.returncode == 0:
+            return jsonify({
+                'success': True,
+                'message': 'Cookie更新成功',
+                'output': output
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Cookie更新失败',
+                'output': output
+            }), 400
+            
+    except subprocess.TimeoutExpired:
+        return jsonify({
+            'success': False,
+            'message': '脚本执行超时'
+        }), 408
+    except Exception as e:
+        logger.error(f"Error running update_cookie.sh: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'执行失败: {str(e)}'
+        }), 500
