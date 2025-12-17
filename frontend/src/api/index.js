@@ -134,7 +134,14 @@ export const preferencesAPI = {
   getFetchServerTask: (ipAddress) => api.get(`/preferences/fetch-server-tasks/${ipAddress}`),
   getRunningFetchServerTasks: () => api.get('/preferences/fetch-server-tasks/running'),
   saveFetchServerTask: (data) => api.post('/preferences/fetch-server-tasks', data),
-  deleteFetchServerTask: (ipAddress) => api.delete(`/preferences/fetch-server-tasks/${ipAddress}`)
+  deleteFetchServerTask: (ipAddress) => api.delete(`/preferences/fetch-server-tasks/${ipAddress}`),
+
+  // 系统备份
+  createBackup: () => api.post('/preferences/backup/create', {}, { timeout: 300000 }),  // 5 minutes timeout
+  listBackups: () => api.get('/preferences/backup/list'),
+  deleteBackup: (backupId) => api.delete(`/preferences/backup/delete/${backupId}`),
+  // 下载备份使用特殊方法，因为需要处理文件流
+  getBackupDownloadUrl: (backupId) => `${API_BASE_URL}/preferences/backup/download/${backupId}`
 }
 
 export default api

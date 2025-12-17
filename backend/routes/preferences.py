@@ -10,9 +10,13 @@ import logging
 import subprocess
 import os
 import json
+import re
 
 preferences_bp = Blueprint('preferences', __name__, url_prefix='/api/preferences')
 logger = logging.getLogger(__name__)
+
+# Regex pattern for backup_id validation: YYYYMMDD_HHMMSS format
+BACKUP_ID_PATTERN = re.compile(r'^\d{8}_\d{6}$')
 
 
 # ============ IP Check Status APIs ============
@@ -523,3 +527,286 @@ def delete_fetch_server_task(current_user, ip_address):
         db.session.rollback()
         logger.error(f"Error deleting fetch server task: {str(e)}")
         return jsonify({'message': '删除失败'}), 500
+
+
+# ============ System Backup APIs ============
+
+def format_file_size(size_bytes):
+    """格式化文件大小为可读格式"""
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.2f} KB"
+    elif size_bytes < 1024 * 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.2f} MB"
+    else:
+        return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
+
+
+@preferences_bp.route('/backup/create', methods=['POST'])
+@token_required
+def create_system_backup(_current_user):
+    """创建系统备份
+    
+    创建一个包含所有文件和数据库的zip备份文件
+    
+    Returns:
+        success: 是否成功
+        backup_id: 备份文件标识符
+        filename: 备份文件名
+        size: 备份文件大小（字节）
+        size_formatted: 格式化的文件大小
+        message: 结果信息
+    """
+    import zipfile
+    import tempfile
+    import shutil
+    from datetime import datetime
+    from config import Config
+    
+    try:
+        # 获取当前时间作为备份文件名
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_filename = f"system_backup_{timestamp}.zip"
+        
+        # 获取后端目录路径
+        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        
+        # 创建临时目录存放备份文件
+        backup_dir = os.path.join(backend_dir, 'backups')
+        os.makedirs(backup_dir, exist_ok=True)
+        
+        backup_path = os.path.join(backup_dir, backup_filename)
+        
+        # 创建zip文件
+        with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            # 备份数据库文件
+            db_uri = Config.SQLALCHEMY_DATABASE_URI
+            if db_uri.startswith('sqlite:///'):
+                # SQLite数据库
+                db_filename = db_uri.replace('sqlite:///', '')
+                # 处理相对路径
+                if not os.path.isabs(db_filename):
+                    # 尝试instance目录
+                    instance_db = os.path.join(backend_dir, 'instance', db_filename)
+                    if os.path.exists(instance_db):
+                        db_path = instance_db
+                    else:
+                        db_path = os.path.join(backend_dir, db_filename)
+                else:
+                    db_path = db_filename
+                    
+                if os.path.exists(db_path):
+                    zipf.write(db_path, f"database/{os.path.basename(db_path)}")
+                    logger.info(f"Added database to backup: {db_path}")
+            
+            # 备份Python脚本目录
+            python_dir = os.path.join(backend_dir, 'Python')
+            if os.path.exists(python_dir):
+                for root, _dirs, files in os.walk(python_dir):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.join('Python', os.path.relpath(file_path, python_dir))
+                        zipf.write(file_path, arcname)
+                logger.info(f"Added Python directory to backup")
+            
+            # 备份服务器文件目录
+            server_files_dir = Config.SERVER_FILES_DIR
+            if os.path.exists(server_files_dir):
+                for root, _dirs, files in os.walk(server_files_dir):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.join('server_files', os.path.relpath(file_path, server_files_dir))
+                        zipf.write(file_path, arcname)
+                logger.info(f"Added server_files directory to backup")
+        
+        # 获取文件大小
+        file_size = os.path.getsize(backup_path)
+        
+        return jsonify({
+            'success': True,
+            'backup_id': timestamp,
+            'filename': backup_filename,
+            'size': file_size,
+            'size_formatted': format_file_size(file_size),
+            'message': '系统备份创建成功'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error creating system backup: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'创建备份失败: {str(e)}'
+        }), 500
+
+
+@preferences_bp.route('/backup/download/<backup_id>', methods=['GET'])
+@token_required
+def download_system_backup(_current_user, backup_id):
+    """下载系统备份文件
+    
+    Args:
+        backup_id: 备份文件标识符（时间戳）
+        
+    Returns:
+        备份zip文件流
+    """
+    from flask import send_file
+    
+    try:
+        # 验证backup_id格式（防止目录遍历攻击）
+        if not backup_id or not BACKUP_ID_PATTERN.match(backup_id):
+            return jsonify({
+                'success': False,
+                'message': '无效的备份标识符'
+            }), 400
+        
+        # 获取备份目录路径
+        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        backup_dir = os.path.join(backend_dir, 'backups')
+        backup_filename = f"system_backup_{backup_id}.zip"
+        backup_path = os.path.join(backup_dir, backup_filename)
+        
+        # 验证路径安全性（防止目录遍历）
+        backup_path = os.path.realpath(backup_path)
+        backup_dir = os.path.realpath(backup_dir)
+        if not backup_path.startswith(backup_dir):
+            return jsonify({
+                'success': False,
+                'message': '无效的备份路径'
+            }), 400
+        
+        # 检查文件是否存在
+        if not os.path.exists(backup_path):
+            return jsonify({
+                'success': False,
+                'message': '备份文件不存在'
+            }), 404
+        
+        return send_file(
+            backup_path,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=backup_filename
+        )
+        
+    except Exception as e:
+        logger.error(f"Error downloading backup: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'下载备份失败: {str(e)}'
+        }), 500
+
+
+@preferences_bp.route('/backup/list', methods=['GET'])
+@token_required
+def list_system_backups(_current_user):
+    """列出所有可用的系统备份
+    
+    Returns:
+        backups: 备份文件列表，每个包含:
+            - backup_id: 备份标识符
+            - filename: 文件名
+            - size: 文件大小（字节）
+            - size_formatted: 格式化的文件大小
+            - created_at: 创建时间
+    """
+    from datetime import datetime
+    
+    try:
+        # 获取备份目录路径
+        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        backup_dir = os.path.join(backend_dir, 'backups')
+        
+        backups = []
+        
+        if os.path.exists(backup_dir):
+            for filename in os.listdir(backup_dir):
+                if filename.startswith('system_backup_') and filename.endswith('.zip'):
+                    backup_path = os.path.join(backup_dir, filename)
+                    file_size = os.path.getsize(backup_path)
+                    
+                    # 从文件名提取时间戳
+                    try:
+                        timestamp_str = filename.replace('system_backup_', '').replace('.zip', '')
+                        created_at = datetime.strptime(timestamp_str, '%Y%m%d_%H%M%S')
+                        created_at_str = created_at.strftime('%Y-%m-%d %H:%M:%S')
+                    except ValueError:
+                        created_at_str = None
+                    
+                    backups.append({
+                        'backup_id': timestamp_str,
+                        'filename': filename,
+                        'size': file_size,
+                        'size_formatted': format_file_size(file_size),
+                        'created_at': created_at_str
+                    })
+        
+        # 按创建时间倒序排列
+        backups.sort(key=lambda x: x['backup_id'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'backups': backups
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error listing backups: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取备份列表失败: {str(e)}'
+        }), 500
+
+
+@preferences_bp.route('/backup/delete/<backup_id>', methods=['DELETE'])
+@token_required
+def delete_system_backup(_current_user, backup_id):
+    """删除系统备份文件
+    
+    Args:
+        backup_id: 备份文件标识符（时间戳）
+    """
+    try:
+        # 验证backup_id格式（防止目录遍历攻击）
+        if not backup_id or not BACKUP_ID_PATTERN.match(backup_id):
+            return jsonify({
+                'success': False,
+                'message': '无效的备份标识符'
+            }), 400
+        
+        # 获取备份目录路径
+        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        backup_dir = os.path.join(backend_dir, 'backups')
+        backup_filename = f"system_backup_{backup_id}.zip"
+        backup_path = os.path.join(backup_dir, backup_filename)
+        
+        # 验证路径安全性（防止目录遍历）
+        backup_path = os.path.realpath(backup_path)
+        backup_dir = os.path.realpath(backup_dir)
+        if not backup_path.startswith(backup_dir):
+            return jsonify({
+                'success': False,
+                'message': '无效的备份路径'
+            }), 400
+        
+        # 检查文件是否存在
+        if not os.path.exists(backup_path):
+            return jsonify({
+                'success': False,
+                'message': '备份文件不存在'
+            }), 404
+        
+        # 删除文件
+        os.remove(backup_path)
+        
+        return jsonify({
+            'success': True,
+            'message': '备份文件已删除'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error deleting backup: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'删除备份失败: {str(e)}'
+        }), 500

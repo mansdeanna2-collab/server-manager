@@ -1218,6 +1218,12 @@ const fetchServerForIp = (item) => {
   const targetIp = item.ip
   const targetIpId = item.idResult  // 获取该IP对应的ID结果
   
+  // 检查是否已获取ID，如果没有则提示用户先获取ID
+  if (!targetIpId) {
+    ElMessage.warning('请先获取id')
+    return
+  }
+  
   const token = localStorage.getItem('token')
   if (!token) {
     ElMessage.error('请先登录')

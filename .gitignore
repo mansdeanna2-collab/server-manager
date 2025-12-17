@@ -73,3 +73,6 @@ server_files/*.txt
 server_files/*.json
 !server_files/.gitkeep
 !server_files/README.md
+
+# Backup files
+backend/backups/

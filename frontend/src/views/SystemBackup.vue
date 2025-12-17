@@ -73,18 +73,138 @@
                   </el-icon>
                   <span>系统备份</span>
                 </div>
-                <el-button
-                  type="default"
-                  @click="goBack"
-                >
-                  <el-icon><Back /></el-icon>
-                  返回仪表盘
-                </el-button>
+                <div class="card-header-buttons">
+                  <el-button
+                    type="success"
+                    :loading="creatingBackup"
+                    @click="handleCreateBackup"
+                  >
+                    <el-icon><Upload /></el-icon>
+                    备份系统
+                  </el-button>
+                  <el-button
+                    type="primary"
+                    :loading="loadingBackups"
+                    @click="loadBackupList"
+                  >
+                    <el-icon><Refresh /></el-icon>
+                    刷新列表
+                  </el-button>
+                  <el-button
+                    type="default"
+                    @click="goBack"
+                  >
+                    <el-icon><Back /></el-icon>
+                    返回仪表盘
+                  </el-button>
+                </div>
               </div>
             </template>
             
             <div class="backup-content">
-              <el-empty description="系统备份功能页面" />
+              <!-- Loading State -->
+              <div
+                v-if="loadingBackups"
+                class="loading-container"
+              >
+                <el-icon
+                  class="loading-icon"
+                  :size="40"
+                >
+                  <Loading />
+                </el-icon>
+                <p class="loading-text">
+                  正在加载备份列表...
+                </p>
+              </div>
+
+              <!-- Empty State -->
+              <el-empty
+                v-else-if="backupList.length === 0"
+                description="暂无备份文件，点击【备份系统】按钮创建新的备份"
+              />
+
+              <!-- Backup List -->
+              <div
+                v-else
+                class="backup-list"
+              >
+                <div class="backup-stats">
+                  <el-tag
+                    type="info"
+                    size="large"
+                    effect="dark"
+                  >
+                    共 {{ backupList.length }} 个备份文件
+                  </el-tag>
+                </div>
+
+                <el-table
+                  :data="backupList"
+                  style="width: 100%"
+                  stripe
+                  border
+                >
+                  <el-table-column
+                    label="文件名"
+                    min-width="280"
+                  >
+                    <template #default="scope">
+                      <span class="backup-filename">{{ scope.row.filename }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    label="文件大小"
+                    width="150"
+                    align="center"
+                  >
+                    <template #default="scope">
+                      <el-tag
+                        type="primary"
+                        effect="plain"
+                      >
+                        {{ scope.row.size_formatted }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    label="创建时间"
+                    width="200"
+                    align="center"
+                  >
+                    <template #default="scope">
+                      <span class="backup-time">{{ scope.row.created_at || '-' }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    label="操作"
+                    width="200"
+                    align="center"
+                    fixed="right"
+                  >
+                    <template #default="scope">
+                      <div class="operation-buttons">
+                        <el-button
+                          type="primary"
+                          size="small"
+                          @click="handleDownloadBackup(scope.row)"
+                        >
+                          <el-icon><Download /></el-icon>
+                          下载
+                        </el-button>
+                        <el-button
+                          type="danger"
+                          size="small"
+                          @click="handleDeleteBackup(scope.row)"
+                        >
+                          <el-icon><Delete /></el-icon>
+                          删除
+                        </el-button>
+                      </div>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
             </div>
           </el-card>
         </div>
@@ -156,11 +276,11 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  ArrowDown, Back, FolderOpened, Monitor, Odometer, OfficeBuilding, User, Setting, Search
+  ArrowDown, Back, Delete, Download, FolderOpened, Loading, Monitor, Odometer, OfficeBuilding, Refresh, Search, Setting, Upload, User
 } from '@element-plus/icons-vue'
-import { authAPI } from '@/api'
+import { authAPI, preferencesAPI } from '@/api'
 
 const router = useRouter()
 const route = useRoute()
@@ -168,6 +288,12 @@ const currentUser = ref(null)
 const passwordDialogVisible = ref(false)
 const changingPassword = ref(false)
 const passwordFormRef = ref(null)
+
+// 备份相关状态
+const creatingBackup = ref(false)
+const loadingBackups = ref(false)
+const backupList = ref([])
+
 const passwordForm = reactive({
   old_password: '',
   new_password: '',
@@ -198,11 +324,122 @@ const passwordRules = {
 
 const activeMenu = computed(() => route.path)
 
-onMounted(() => {
+// 加载备份列表
+const loadBackupList = async () => {
+  loadingBackups.value = true
+  try {
+    const response = await preferencesAPI.listBackups()
+    if (response.data.success) {
+      backupList.value = response.data.backups || []
+    } else {
+      ElMessage.error(response.data.message || '获取备份列表失败')
+    }
+  } catch (error) {
+    const message = error.response?.data?.message || error.message || '网络连接失败'
+    ElMessage.error(`获取备份列表失败: ${message}`)
+  } finally {
+    loadingBackups.value = false
+  }
+}
+
+// 创建备份
+const handleCreateBackup = async () => {
+  creatingBackup.value = true
+  try {
+    const response = await preferencesAPI.createBackup()
+    if (response.data.success) {
+      ElMessage.success(`系统备份创建成功，文件大小: ${response.data.size_formatted}`)
+      // 刷新备份列表
+      await loadBackupList()
+    } else {
+      ElMessage.error(response.data.message || '创建备份失败')
+    }
+  } catch (error) {
+    const message = error.response?.data?.message || error.message || '网络连接失败'
+    ElMessage.error(`创建备份失败: ${message}`)
+  } finally {
+    creatingBackup.value = false
+  }
+}
+
+// 下载备份
+const handleDownloadBackup = async (backup) => {
+  const downloadUrl = preferencesAPI.getBackupDownloadUrl(backup.backup_id)
+  const token = localStorage.getItem('token')
+  
+  try {
+    // 使用fetch获取文件并触发下载
+    const response = await fetch(downloadUrl, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+    
+    if (!response.ok) {
+      // 尝试解析错误消息
+      let errorMessage = '下载失败'
+      try {
+        const errorData = await response.json()
+        errorMessage = errorData.message || errorMessage
+      } catch (_e) {
+        // 如果无法解析JSON，使用状态文本
+        errorMessage = response.statusText || errorMessage
+      }
+      throw new Error(errorMessage)
+    }
+    
+    const blob = await response.blob()
+    // 创建下载链接
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = backup.filename
+    document.body.appendChild(a)
+    a.click()
+    window.URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+    ElMessage.success('备份文件下载成功')
+  } catch (error) {
+    ElMessage.error(`下载备份失败: ${error.message}`)
+  }
+}
+
+// 删除备份
+const handleDeleteBackup = async (backup) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除备份文件 "${backup.filename}" 吗？此操作不可恢复。`,
+      '删除确认',
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    
+    const response = await preferencesAPI.deleteBackup(backup.backup_id)
+    if (response.data.success) {
+      ElMessage.success('备份文件已删除')
+      // 刷新备份列表
+      await loadBackupList()
+    } else {
+      ElMessage.error(response.data.message || '删除备份失败')
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      const message = error.response?.data?.message || error.message || '删除失败'
+      ElMessage.error(`删除备份失败: ${message}`)
+    }
+  }
+}
+
+onMounted(async () => {
   const userStr = localStorage.getItem('user')
   if (userStr) {
     currentUser.value = JSON.parse(userStr)
   }
+  // 加载备份列表
+  await loadBackupList()
 })
 
 const goBack = () => {
@@ -389,10 +626,73 @@ const handleChangePassword = async () => {
   color: #67C23A;
 }
 
+.card-header-buttons {
+  display: flex;
+  gap: 10px;
+}
+
 .backup-content {
   min-height: 400px;
+}
+
+/* 加载状态 */
+.loading-container {
   display: flex;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #909399;
+  width: 100%;
+}
+
+.loading-icon {
+  color: #409EFF;
+  animation: rotate 1s linear infinite;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  margin-top: 16px;
+  font-size: 14px;
+  color: #606266;
+}
+
+/* 备份列表 */
+.backup-list {
+  padding: 16px 0;
+}
+
+.backup-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.backup-filename {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 14px;
+  font-weight: 500;
+  color: #409EFF;
+}
+
+.backup-time {
+  color: #606266;
+  font-size: 14px;
+}
+
+/* 操作按钮容器 */
+.operation-buttons {
+  display: flex;
+  gap: 8px;
   justify-content: center;
 }
 </style>
