@@ -1030,7 +1030,7 @@ def get_backup_stats(_current_user):
                     except ValueError:
                         pass
         
-        average_size = total_size // total_count if total_count > 0 else 0
+        average_size = int(total_size / total_count) if total_count > 0 else 0
         
         return jsonify({
             'success': True,

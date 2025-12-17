@@ -157,7 +157,6 @@
                               v-model="whitelistForm.ip_list[index]"
                               placeholder="请输入IP地址，如: 192.168.1.1"
                               :class="{ 'is-valid': isValidIp(ip), 'is-invalid': ip && !isValidIp(ip) }"
-                              @blur="validateIpInput(index)"
                             >
                               <template #suffix>
                                 <el-icon
@@ -716,20 +715,19 @@ const sslForm = reactive({
   key_path: ''
 })
 
-// IP验证正则表达式（IPv4和IPv6）
+// IP验证正则表达式（IPv4）
+// IPv6 validation is handled by the backend using Python's ipaddress module
 const ipv4Pattern = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/
-const ipv6Pattern = /^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^::(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}$|^[0-9a-fA-F]{1,4}::(?:[0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4}$/
 
-// 验证IP地址
+// 验证IP地址（IPv4格式，IPv6由后端验证）
 const isValidIp = (ip) => {
   if (!ip || !ip.trim()) return false
   const trimmedIp = ip.trim()
-  return ipv4Pattern.test(trimmedIp) || ipv6Pattern.test(trimmedIp)
-}
-
-// IP输入验证反馈
-const validateIpInput = (_index) => {
-  // 触发重新计算有效IP数量（通过computed自动更新）
+  // Check IPv4 format
+  if (ipv4Pattern.test(trimmedIp)) return true
+  // Basic IPv6 check (contains colons, let backend do full validation)
+  if (trimmedIp.includes(':') && /^[0-9a-fA-F:]+$/.test(trimmedIp)) return true
+  return false
 }
 
 // 计算有效IP数量
