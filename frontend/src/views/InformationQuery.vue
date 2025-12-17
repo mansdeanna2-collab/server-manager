@@ -145,6 +145,14 @@
                   >
                     共 {{ totalServers }} 台服务器
                   </el-tag>
+                  <el-button
+                    type="warning"
+                    :loading="updatingCookie"
+                    @click="handleUpdateCookie"
+                  >
+                    <el-icon><RefreshRight /></el-icon>
+                    更新Cookie
+                  </el-button>
                 </div>
 
                 <el-table
@@ -586,7 +594,7 @@ import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
-  ArrowDown, Monitor, Odometer, OfficeBuilding, Search, User, Setting, FolderOpened, Refresh, Loading, View, Key, Document, Download
+  ArrowDown, Monitor, Odometer, OfficeBuilding, Search, User, Setting, FolderOpened, Refresh, Loading, View, Key, Document, Download, RefreshRight
 } from '@element-plus/icons-vue'
 import { authAPI, serversAPI, preferencesAPI } from '@/api'
 import { io } from 'socket.io-client'
@@ -610,6 +618,9 @@ const currentIpList = ref([])
 const ipListCurrentPage = ref(1)
 const IP_LIST_PAGE_SIZE = 50
 const checkingIpStatus = ref(false)
+
+// 更新Cookie状态
+const updatingCookie = ref(false)
 
 // IP未存在时的备注文本
 const NOT_EXISTS_NOTE = '未存在'
@@ -1384,6 +1395,28 @@ const checkAllIpStatus = async () => {
   
   checkingIpStatus.value = false
   ElMessage.success('状态检查完成')
+}
+
+// 更新Cookie
+const handleUpdateCookie = async () => {
+  updatingCookie.value = true
+  try {
+    const response = await preferencesAPI.updateCookie()
+    if (response.data.success) {
+      ElMessage.success('Cookie更新成功')
+      if (import.meta.env.DEV && response.data.output) {
+        // eslint-disable-next-line no-console
+        console.log('Cookie更新输出:', response.data.output)
+      }
+    } else {
+      ElMessage.error(`Cookie更新失败: ${response.data.message || '未知错误'}`)
+    }
+  } catch (error) {
+    const message = error.response?.data?.message || error.message || '网络连接失败'
+    ElMessage.error(`Cookie更新失败: ${message}`)
+  } finally {
+    updatingCookie.value = false
+  }
 }
 
 // 加载服务器数据

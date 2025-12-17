@@ -124,7 +124,10 @@ export const preferencesAPI = {
 
   // 服务器收藏
   getServerFavorites: () => api.get('/preferences/server-favorites'),
-  toggleServerFavorite: (serverId) => api.post('/preferences/server-favorites', { server_id: serverId })
+  toggleServerFavorite: (serverId) => api.post('/preferences/server-favorites', { server_id: serverId }),
+
+  // 更新Cookie
+  updateCookie: () => api.post('/preferences/update-cookie', {}, { timeout: 120000 })  // 2 minutes timeout
 }
 
 export default api
