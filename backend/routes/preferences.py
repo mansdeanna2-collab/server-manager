@@ -21,6 +21,10 @@ logger = logging.getLogger(__name__)
 # Regex pattern for backup_id validation: YYYYMMDD_HHMMSS format
 BACKUP_ID_PATTERN = re.compile(r'^\d{8}_\d{6}$')
 
+# Backup exclusion patterns
+BACKUP_EXCLUDE_DIRS = {'node_modules', '.git', '__pycache__', 'backups', 'venv', '.venv', 'dist'}
+BACKUP_EXCLUDE_FILES = {'.DS_Store', 'Thumbs.db'}
+
 
 def is_valid_ip(ip_str):
     """Validate if a string is a valid IPv4 or IPv6 address"""
@@ -596,10 +600,6 @@ def create_system_backup(current_user):
         
         backup_path = os.path.join(backup_dir, backup_filename)
         
-        # 要排除的目录和文件
-        exclude_dirs = {'node_modules', '.git', '__pycache__', 'backups', 'venv', '.venv', 'dist'}
-        exclude_files = {'.DS_Store', 'Thumbs.db'}
-        
         # 创建zip文件
         with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
             # 备份数据库文件
@@ -625,10 +625,10 @@ def create_system_backup(current_user):
             # 备份后端目录（完整备份）
             for root, dirs, files in os.walk(backend_dir):
                 # 排除特定目录
-                dirs[:] = [d for d in dirs if d not in exclude_dirs]
+                dirs[:] = [d for d in dirs if d not in BACKUP_EXCLUDE_DIRS]
                 
                 for file in files:
-                    if file in exclude_files:
+                    if file in BACKUP_EXCLUDE_FILES:
                         continue
                     file_path = os.path.join(root, file)
                     arcname = os.path.join('backend', os.path.relpath(file_path, backend_dir))
@@ -643,10 +643,10 @@ def create_system_backup(current_user):
             if os.path.exists(frontend_dir):
                 for root, dirs, files in os.walk(frontend_dir):
                     # 排除特定目录
-                    dirs[:] = [d for d in dirs if d not in exclude_dirs]
+                    dirs[:] = [d for d in dirs if d not in BACKUP_EXCLUDE_DIRS]
                     
                     for file in files:
-                        if file in exclude_files:
+                        if file in BACKUP_EXCLUDE_FILES:
                             continue
                         file_path = os.path.join(root, file)
                         arcname = os.path.join('frontend', os.path.relpath(file_path, frontend_dir))
@@ -660,9 +660,9 @@ def create_system_backup(current_user):
             server_files_dir = Config.SERVER_FILES_DIR
             if os.path.exists(server_files_dir):
                 for root, dirs, files in os.walk(server_files_dir):
-                    dirs[:] = [d for d in dirs if d not in exclude_dirs]
+                    dirs[:] = [d for d in dirs if d not in BACKUP_EXCLUDE_DIRS]
                     for file in files:
-                        if file in exclude_files:
+                        if file in BACKUP_EXCLUDE_FILES:
                             continue
                         file_path = os.path.join(root, file)
                         arcname = os.path.join('server_files', os.path.relpath(file_path, server_files_dir))
@@ -960,7 +960,8 @@ def get_database_table_data(_current_user, table_name):
         per_page: 每页记录数
         total_pages: 总页数
     """
-    from sqlalchemy import inspect, text
+    from sqlalchemy import inspect, text, table, select, func, column as sa_column
+    from sqlalchemy.sql import literal_column
     
     try:
         # 验证表名（防止SQL注入）
@@ -990,19 +991,20 @@ def get_database_table_data(_current_user, table_name):
             })
         
         # 获取总记录数
-        count_result = db.session.execute(text(f'SELECT COUNT(*) FROM "{table_name}"'))
+        # 使用 SQLAlchemy 的 table() 构造，表名已验证在 valid_tables 列表中
+        tbl = table(table_name)
+        count_query = select(func.count()).select_from(tbl)
+        count_result = db.session.execute(count_query)
         total = count_result.scalar()
         
         # 计算分页
         total_pages = (total + per_page - 1) // per_page if total > 0 else 1
         offset = (page - 1) * per_page
         
-        # 获取数据
+        # 获取数据 - 使用 SQLAlchemy 的 table() 和 select()
         # 注意：table_name 已经过验证，在 valid_tables 列表中
-        result = db.session.execute(
-            text(f'SELECT * FROM "{table_name}" LIMIT :limit OFFSET :offset'),
-            {'limit': per_page, 'offset': offset}
-        )
+        data_query = select(literal_column('*')).select_from(tbl).limit(per_page).offset(offset)
+        result = db.session.execute(data_query)
         
         # 转换为字典列表
         column_names = [col['name'] for col in columns]

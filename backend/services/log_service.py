@@ -55,7 +55,7 @@ def log_action(
         try:
             client_ip = get_client_ip()
         except RuntimeError:
-            # 如果不在请求上下文中
+            # Flask请求上下文不可用时（如在后台任务中调用）
             client_ip = None
         
         # 序列化详细信息
@@ -84,8 +84,8 @@ def log_action(
         # 不抛出异常，避免影响主要业务逻辑
         try:
             db.session.rollback()
-        except Exception:
-            pass
+        except Exception as rollback_error:
+            logger.warning(f"Failed to rollback after log error: {str(rollback_error)}")
 
 
 # 便捷方法
