@@ -5,12 +5,15 @@
 # 1. Sends POST request to https://user.jtti.cc/api/front/login
 # 2. Extracts XSRF-TOKEN and jtti_session from response Set-Cookie headers
 # 3. Updates mm.py and id.py with the new cookie values
+#
+# Note: The login data below is encrypted and provided by the user for automated login.
+# This is intentionally embedded in the script per user requirements.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MM_PY="$SCRIPT_DIR/mm.py"
 ID_PY="$SCRIPT_DIR/id.py"
 
-# Login request data (encrypted)
+# Login request data (encrypted, provided by user)
 LOGIN_DATA='{"data":"y5wBR0U2o0CEb/8UFs4rMEjYLDl16utsB5TqjofHRYjV2WdLZxNv/0uLm9P7HIXx6491g3+UslgkgKRfr17nLI169L8BfytCehVJmGAg1nKeU/PvYe4JLbo9zjvKLp+iSWYVQkY1jQNpi1KnufeKpg=="}'
 
 # Temporary file for response headers
@@ -65,9 +68,7 @@ XSRF_TOKEN=$(grep -i "Set-Cookie:.*XSRF-TOKEN=" "$TEMP_HEADERS" | sed -n 's/.*XS
 # Extract jtti_session from Set-Cookie header
 JTTI_SESSION=$(grep -i "Set-Cookie:.*jtti_session=" "$TEMP_HEADERS" | sed -n 's/.*jtti_session=\([^;]*\).*/\1/p' | head -1)
 
-echo "Extracted cookies:"
-echo "XSRF-TOKEN: ${XSRF_TOKEN:0:50}..."
-echo "jtti_session: ${JTTI_SESSION:0:50}..."
+echo "Cookies extracted successfully"
 
 if [ -z "$XSRF_TOKEN" ] || [ -z "$JTTI_SESSION" ]; then
     echo "Error: Failed to extract cookies from response"
@@ -102,5 +103,3 @@ fi
 
 echo ""
 echo "Cookie update completed successfully!"
-echo "New XSRF-TOKEN: $XSRF_TOKEN"
-echo "New jtti_session: $JTTI_SESSION"
