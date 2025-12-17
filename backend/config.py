@@ -51,7 +51,9 @@ class Config:
     # Warn if using default keys in production (not DEBUG and not TESTING)
     # In development mode (DEBUG=True), warnings are suppressed since it's expected
     # to use default keys for local development
-    if ENCRYPTION_KEY == default_key and not TESTING and not DEBUG:
+    _should_warn_about_defaults = not TESTING and not DEBUG
+
+    if ENCRYPTION_KEY == default_key and _should_warn_about_defaults:
         import warnings
         warnings.warn(
             "Using default ENCRYPTION_KEY! "
@@ -59,7 +61,7 @@ class Config:
             stacklevel=2
         )
 
-    if SECRET_KEY == 'your-secret-key-change-in-production' and not TESTING and not DEBUG:
+    if SECRET_KEY == 'your-secret-key-change-in-production' and _should_warn_about_defaults:
         import warnings
         warnings.warn(
             "Using default SECRET_KEY! "
