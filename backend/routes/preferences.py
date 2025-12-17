@@ -11,12 +11,22 @@ import subprocess
 import os
 import json
 import re
+import ipaddress
 
 preferences_bp = Blueprint('preferences', __name__, url_prefix='/api/preferences')
 logger = logging.getLogger(__name__)
 
 # Regex pattern for backup_id validation: YYYYMMDD_HHMMSS format
 BACKUP_ID_PATTERN = re.compile(r'^\d{8}_\d{6}$')
+
+
+def is_valid_ip(ip_str):
+    """Validate if a string is a valid IPv4 or IPv6 address"""
+    try:
+        ipaddress.ip_address(ip_str.strip())
+        return True
+    except ValueError:
+        return False
 
 
 # ============ IP Check Status APIs ============
@@ -968,7 +978,23 @@ def update_system_settings(_current_user):
                 # Validate IP addresses
                 ip_list = whitelist['ip_list']
                 if isinstance(ip_list, list):
-                    current_settings['login_whitelist']['ip_list'] = [ip.strip() for ip in ip_list if ip.strip()]
+                    valid_ips = []
+                    invalid_ips = []
+                    for ip in ip_list:
+                        ip = ip.strip()
+                        if ip:
+                            if is_valid_ip(ip):
+                                valid_ips.append(ip)
+                            else:
+                                invalid_ips.append(ip)
+                    
+                    if invalid_ips:
+                        return jsonify({
+                            'success': False,
+                            'message': f'无效的IP地址: {", ".join(invalid_ips)}'
+                        }), 400
+                    
+                    current_settings['login_whitelist']['ip_list'] = valid_ips
         
         # Update SSL settings
         if 'ssl' in new_settings:
@@ -1015,6 +1041,46 @@ def get_system_logs(_current_user):
     lines = request.args.get('lines', 500, type=int)
     lines = min(max(1, lines), 5000)  # Limit between 1 and 5000
     
+    def tail_file(filepath, num_lines):
+        """Efficiently read last N lines from a file using seek from end"""
+        try:
+            with open(filepath, 'rb') as f:
+                # Move to end of file
+                f.seek(0, 2)
+                file_size = f.tell()
+                
+                if file_size == 0:
+                    return []
+                
+                # Start with a reasonable buffer size
+                buffer_size = min(8192, file_size)
+                buffer = b''
+                lines_found = []
+                position = file_size
+                
+                while len(lines_found) < num_lines and position > 0:
+                    # Move back by buffer_size
+                    position = max(0, position - buffer_size)
+                    f.seek(position)
+                    
+                    # Read and prepend to buffer
+                    chunk = f.read(min(buffer_size, file_size - position))
+                    buffer = chunk + buffer
+                    
+                    # Split and count lines
+                    lines_found = buffer.split(b'\n')
+                    
+                    # If we have enough lines, break
+                    if len(lines_found) > num_lines:
+                        break
+                
+                # Return last N lines, decoded
+                result_lines = lines_found[-num_lines:] if len(lines_found) >= num_lines else lines_found
+                return [line.decode('utf-8', errors='replace') for line in result_lines if line]
+        except Exception as e:
+            logger.warning(f"Error reading file {filepath}: {str(e)}")
+            return []
+    
     try:
         log_entries = []
         
@@ -1032,22 +1098,19 @@ def get_system_logs(_current_user):
         
         for log_file in log_files:
             if os.path.exists(log_file):
-                try:
-                    with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
-                        # Read last N lines efficiently
-                        all_lines = f.readlines()
-                        log_content.extend(all_lines[-lines:])
-                except Exception as e:
-                    logger.warning(f"Could not read log file {log_file}: {str(e)}")
+                file_lines = tail_file(log_file, lines)
+                if file_lines:
+                    log_content.extend(file_lines)
+                    break  # Use first available log file
         
-        # If no log files found, try to get from Python logging handlers
+        # If no log files found, return a message
         if not log_content:
             # Return a message indicating no log files found
             log_content = [
-                "=== 系统日志 ===\n",
-                f"时间: {china_now().strftime('%Y-%m-%d %H:%M:%S')}\n",
-                "提示: 未找到日志文件。系统日志将在此处显示。\n",
-                "日志文件位置: backend/app.log 或 backend/logs/app.log\n"
+                "=== 系统日志 ===",
+                f"时间: {china_now().strftime('%Y-%m-%d %H:%M:%S')}",
+                "提示: 未找到日志文件。系统日志将在此处显示。",
+                "日志文件位置: backend/app.log 或 backend/logs/app.log"
             ]
         
         # Parse and format log entries
