@@ -10,9 +10,13 @@ import logging
 import subprocess
 import os
 import json
+import re
 
 preferences_bp = Blueprint('preferences', __name__, url_prefix='/api/preferences')
 logger = logging.getLogger(__name__)
+
+# Regex pattern for backup_id validation: YYYYMMDD_HHMMSS format
+BACKUP_ID_PATTERN = re.compile(r'^\d{8}_\d{6}$')
 
 
 # ============ IP Check Status APIs ============
@@ -651,7 +655,7 @@ def download_system_backup(_current_user, backup_id):
     
     try:
         # 验证backup_id格式（防止目录遍历攻击）
-        if not backup_id or not backup_id.replace('_', '').isdigit():
+        if not backup_id or not BACKUP_ID_PATTERN.match(backup_id):
             return jsonify({
                 'success': False,
                 'message': '无效的备份标识符'
@@ -764,7 +768,7 @@ def delete_system_backup(_current_user, backup_id):
     """
     try:
         # 验证backup_id格式（防止目录遍历攻击）
-        if not backup_id or not backup_id.replace('_', '').isdigit():
+        if not backup_id or not BACKUP_ID_PATTERN.match(backup_id):
             return jsonify({
                 'success': False,
                 'message': '无效的备份标识符'

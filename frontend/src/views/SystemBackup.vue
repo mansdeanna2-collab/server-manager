@@ -363,37 +363,45 @@ const handleCreateBackup = async () => {
 }
 
 // 下载备份
-const handleDownloadBackup = (backup) => {
+const handleDownloadBackup = async (backup) => {
   const downloadUrl = preferencesAPI.getBackupDownloadUrl(backup.backup_id)
   const token = localStorage.getItem('token')
   
-  // 使用fetch获取文件并触发下载
-  fetch(downloadUrl, {
-    headers: {
-      'Authorization': `Bearer ${token}`
-    }
-  })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('下载失败')
+  try {
+    // 使用fetch获取文件并触发下载
+    const response = await fetch(downloadUrl, {
+      headers: {
+        'Authorization': `Bearer ${token}`
       }
-      return response.blob()
     })
-    .then(blob => {
-      // 创建下载链接
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = backup.filename
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-      ElMessage.success('备份文件下载成功')
-    })
-    .catch(error => {
-      ElMessage.error(`下载备份失败: ${error.message}`)
-    })
+    
+    if (!response.ok) {
+      // 尝试解析错误消息
+      let errorMessage = '下载失败'
+      try {
+        const errorData = await response.json()
+        errorMessage = errorData.message || errorMessage
+      } catch (_e) {
+        // 如果无法解析JSON，使用状态文本
+        errorMessage = response.statusText || errorMessage
+      }
+      throw new Error(errorMessage)
+    }
+    
+    const blob = await response.blob()
+    // 创建下载链接
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = backup.filename
+    document.body.appendChild(a)
+    a.click()
+    window.URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+    ElMessage.success('备份文件下载成功')
+  } catch (error) {
+    ElMessage.error(`下载备份失败: ${error.message}`)
+  }
 }
 
 // 删除备份
