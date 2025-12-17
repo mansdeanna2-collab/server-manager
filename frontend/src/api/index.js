@@ -140,6 +140,8 @@ export const preferencesAPI = {
   createBackup: () => api.post('/preferences/backup/create', {}, { timeout: 300000 }),  // 5 minutes timeout
   listBackups: () => api.get('/preferences/backup/list'),
   deleteBackup: (backupId) => api.delete(`/preferences/backup/delete/${backupId}`),
+  verifyBackup: (backupId) => api.get(`/preferences/backup/verify/${backupId}`),
+  getBackupStats: () => api.get('/preferences/backup/stats'),
   // 下载备份使用特殊方法，因为需要处理文件流
   getBackupDownloadUrl: (backupId) => `${API_BASE_URL}/preferences/backup/download/${backupId}`,
 
