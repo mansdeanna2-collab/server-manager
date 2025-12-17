@@ -960,8 +960,7 @@ def get_database_table_data(_current_user, table_name):
         per_page: 每页记录数
         total_pages: 总页数
     """
-    from sqlalchemy import inspect, text, table, select, func, column as sa_column
-    from sqlalchemy.sql import literal_column
+    from sqlalchemy import inspect, table, select, func, column as sa_column
     
     try:
         # 验证表名（防止SQL注入）
@@ -1002,12 +1001,14 @@ def get_database_table_data(_current_user, table_name):
         offset = (page - 1) * per_page
         
         # 获取数据 - 使用 SQLAlchemy 的 table() 和 select()
-        # 注意：table_name 已经过验证，在 valid_tables 列表中
-        data_query = select(literal_column('*')).select_from(tbl).limit(per_page).offset(offset)
+        # 显式选择所有已验证的列名，而不是使用 *
+        # 注意：table_name 和 column_names 都经过验证
+        column_names = [col['name'] for col in columns]
+        col_objects = [sa_column(name) for name in column_names]
+        data_query = select(*col_objects).select_from(tbl).limit(per_page).offset(offset)
         result = db.session.execute(data_query)
         
         # 转换为字典列表
-        column_names = [col['name'] for col in columns]
         data = []
         for row in result:
             row_dict = {}
