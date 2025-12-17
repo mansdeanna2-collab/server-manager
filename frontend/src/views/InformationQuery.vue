@@ -73,14 +73,24 @@
                   </el-icon>
                   <span>信息查询 - IP段配置</span>
                 </div>
-                <el-button
-                  type="primary"
-                  :loading="loading"
-                  @click="loadServers"
-                >
-                  <el-icon><Refresh /></el-icon>
-                  刷新数据
-                </el-button>
+                <div class="card-header-buttons">
+                  <el-button
+                    type="primary"
+                    :loading="loading"
+                    @click="loadServers"
+                  >
+                    <el-icon><Refresh /></el-icon>
+                    刷新数据
+                  </el-button>
+                  <el-button
+                    type="warning"
+                    :loading="updatingCookie"
+                    @click="handleUpdateCookie"
+                  >
+                    <el-icon><RefreshRight /></el-icon>
+                    更新Cookie
+                  </el-button>
+                </div>
               </div>
             </template>
             
@@ -145,14 +155,6 @@
                   >
                     共 {{ totalServers }} 台服务器
                   </el-tag>
-                  <el-button
-                    type="warning"
-                    :loading="updatingCookie"
-                    @click="handleUpdateCookie"
-                  >
-                    <el-icon><RefreshRight /></el-icon>
-                    更新Cookie
-                  </el-button>
                 </div>
 
                 <el-table
@@ -1186,8 +1188,9 @@ const fetchServerForIp = (item) => {
   item.fetchingServer = true
   item.logOutput = ''  // 清空之前的日志
   
-  // 保存IP地址，避免闭包中使用可能过期的item引用
+  // 保存IP地址和idResult，避免闭包中使用可能过期的item引用
   const targetIp = item.ip
+  const targetIpId = item.idResult  // 获取该IP对应的ID结果
   
   const token = localStorage.getItem('token')
   if (!token) {
@@ -1225,11 +1228,16 @@ const fetchServerForIp = (item) => {
   })
 
   fetchServerSocket.on('connect', () => {
-    // 发送启动获取服务器请求
-    fetchServerSocket.emit('start_fetch_server', {
+    // 发送启动获取服务器请求，包含ipid参数
+    const requestData = {
       ip_address: targetIp,
       token: token
-    })
+    }
+    // 如果有ID结果，传递给后端用于更新mm.py的target_ids
+    if (targetIpId) {
+      requestData.ipid = targetIpId
+    }
+    fetchServerSocket.emit('start_fetch_server', requestData)
   })
 
   fetchServerSocket.on('fetch_server_started', (data) => {
@@ -1689,6 +1697,11 @@ const handleChangePassword = async () => {
 
 .card-header-icon {
   color: #409EFF;
+}
+
+.card-header-buttons {
+  display: flex;
+  gap: 10px;
 }
 
 .info-content {

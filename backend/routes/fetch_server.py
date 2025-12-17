@@ -123,6 +123,9 @@ def register_fetch_server_events(socketio):
         # 获取可选的IP地址（用于标识任务）
         ip_address = data.get('ip_address', '')
         task_id = ip_address or f"task_{sid}"
+        
+        # 获取ipid参数（用于更新mm.py中的target_ids）
+        ipid = data.get('ipid', '')
 
         # 获取Python目录路径
         backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -141,6 +144,36 @@ def register_fetch_server_events(socketio):
         if not os.path.exists(mm_py_file):
             emit('fetch_server_error', {'message': 'mm.py 脚本不存在'})
             return
+
+        # 如果提供了ipid，先更新mm.py中的target_ids
+        if ipid:
+            try:
+                # 验证ipid是否为有效数字
+                ipid_int = int(ipid)
+                
+                # 读取mm.py文件内容
+                with open(mm_py_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # 使用正则表达式替换target_ids的值，支持任意数组格式
+                new_content = re.sub(
+                    r'target_ids\s*=\s*\[.*?\]',
+                    f'target_ids = [{ipid_int}]',
+                    content
+                )
+                
+                # 写回文件
+                with open(mm_py_file, 'w', encoding='utf-8') as f:
+                    f.write(new_content)
+                
+                logger.info(f"Updated mm.py target_ids to [{ipid_int}]")
+            except ValueError:
+                emit('fetch_server_error', {'message': '无效的ID格式，ID必须是数字'})
+                return
+            except Exception as e:
+                logger.error(f"Error updating mm.py target_ids: {str(e)}")
+                emit('fetch_server_error', {'message': f'更新target_ids失败: {str(e)}'})
+                return
 
         # 初始化任务状态
         with fetch_server_tasks_lock:
