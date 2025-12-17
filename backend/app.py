@@ -73,10 +73,15 @@ def create_app():
 
     # Initialize SocketIO with CORS settings
     # Use threading mode for better compatibility
+    # Configure longer ping timeout for long-running tasks like fetch-server
+    # (which runs for ~15 minutes). Default ping_timeout is 60s and ping_interval is 25s,
+    # which causes "transport close" errors during long operations.
     socketio.init_app(
         app,
         cors_allowed_origins=cors_origins if cors_origins != ['*'] else "*",
-        async_mode='threading'
+        async_mode='threading',
+        ping_timeout=1200,  # 20 minutes - to accommodate fetch-server's ~15 min runtime
+        ping_interval=60    # Send ping every 60 seconds to keep connection alive
     )
 
     # Configure rate limiting
