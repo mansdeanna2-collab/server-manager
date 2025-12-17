@@ -1238,10 +1238,14 @@ const fetchServerForIp = (item) => {
   }
 
   // 创建WebSocket连接
+  // Configure ping settings to match server for long-running tasks
+  // Server has ping_timeout=1200s and ping_interval=60s
   fetchServerSocket = io(`${wsUrl}/fetch-server`, {
     transports: ['polling', 'websocket'],
     reconnection: false,
-    timeout: 1200000  // 20 minutes timeout (script runs ~15 minutes)
+    timeout: 1200000,     // 20 minutes timeout (script runs ~15 minutes)
+    pingTimeout: 1200000, // 20 minutes - match server's ping_timeout
+    pingInterval: 60000   // 60 seconds - match server's ping_interval
   })
 
   fetchServerSocket.on('connect', () => {
