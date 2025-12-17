@@ -168,5 +168,6 @@ if __name__ == '__main__':
 
     logger.info(f"Starting Server Manager API on {host}:{port}")
     # allow_unsafe_werkzeug is needed when running with Werkzeug development server
-    # Only enable in debug mode for development; production should use a proper WSGI server
-    socketio.run(app, host=host, port=port, debug=debug, allow_unsafe_werkzeug=debug)
+    # Use Config.ALLOW_UNSAFE_WERKZEUG to control this; defaults to True for Docker/dev usage
+    # For high-traffic production, use a proper WSGI server like Gunicorn with eventlet/gevent
+    socketio.run(app, host=host, port=port, debug=debug, allow_unsafe_werkzeug=Config.ALLOW_UNSAFE_WERKZEUG)

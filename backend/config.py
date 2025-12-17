@@ -43,6 +43,11 @@ class Config:
     # Maximum number of concurrent workers for checking servers
     CHECK_MAX_WORKERS = int(os.getenv('CHECK_MAX_WORKERS', 10))
 
+    # Werkzeug development server configuration
+    # Set to True to allow running Werkzeug in production mode (e.g., Docker containers)
+    # For high-traffic production, use a proper WSGI server like Gunicorn
+    ALLOW_UNSAFE_WERKZEUG = os.getenv('ALLOW_UNSAFE_WERKZEUG', 'True').lower() == 'true'
+
     # Server Import Configuration
     # In Docker: mount host directory to /app/server_files and set SERVER_FILES_DIR=/app/server_files
     # On host: set SERVER_FILES_DIR to actual path (e.g., /home/Python/服务器)
