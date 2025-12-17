@@ -483,7 +483,11 @@ def save_fetch_server_task(current_user):
         if 'log_output' in data:
             task.log_output = data['log_output']
         if 'servers_added' in data:
-            task.servers_added = json.dumps(data['servers_added']) if data['servers_added'] else None
+            try:
+                task.servers_added = json.dumps(data['servers_added']) if data['servers_added'] else None
+            except (TypeError, ValueError) as e:
+                logger.warning(f"Error serializing servers_added: {str(e)}")
+                task.servers_added = None
         if data.get('status') == 'running' and not task.started_at:
             task.started_at = china_now()
         if data.get('status') in ['completed', 'failed', 'timeout', 'error']:

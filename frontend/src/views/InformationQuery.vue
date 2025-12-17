@@ -1214,27 +1214,26 @@ const queryIdForIp = (item) => {
 
 // 获取服务器（运行mm.py脚本，使用WebSocket实时流式输出）
 const fetchServerForIp = (item) => {
-  item.fetchingServer = true
-  item.logOutput = ''  // 清空之前的日志
-  
   // 保存IP地址和idResult，避免闭包中使用可能过期的item引用
   const targetIp = item.ip
   const targetIpId = item.idResult  // 获取该IP对应的ID结果
   
-  // 立即标记任务为运行中（前端状态）
+  const token = localStorage.getItem('token')
+  if (!token) {
+    ElMessage.error('请先登录')
+    return
+  }
+  
+  // 验证成功后设置状态
+  item.fetchingServer = true
+  item.logOutput = ''  // 清空之前的日志
+  
+  // 标记任务为运行中（前端状态）
   savedFetchServerTasks.value[targetIp] = {
     ip_address: targetIp,
     status: 'running',
     log_output: '',
     servers_added: []
-  }
-  
-  const token = localStorage.getItem('token')
-  if (!token) {
-    ElMessage.error('请先登录')
-    item.fetchingServer = false
-    savedFetchServerTasks.value[targetIp] = { ...savedFetchServerTasks.value[targetIp], status: 'error' }
-    return
   }
 
   // 获取WebSocket URL
@@ -1422,6 +1421,9 @@ const fetchServerForIp = (item) => {
 }
 
 // 订阅正在运行的任务（用于对话框重新打开时恢复进度）
+// Uses a single shared WebSocket connection for all running tasks to avoid resource exhaustion
+let subscribeSocket = null
+
 const subscribeToRunningTasks = (segment) => {
   // Find all running tasks for this segment from saved state
   const runningTasks = []
@@ -1458,101 +1460,127 @@ const subscribeToRunningTasks = (segment) => {
     }
   }
   
-  // Subscribe to each running task
-  for (const taskIp of runningTasks) {
-    // Create a socket to subscribe to this task's updates
-    const subscribeSocket = io(`${wsUrl}/fetch-server`, {
-      transports: ['polling', 'websocket'],
-      reconnection: true,
-      timeout: 1200000,
-      pingTimeout: 1200000,
-      pingInterval: 60000
-    })
-    
-    subscribeSocket.on('connect', () => {
-      // Subscribe to task updates
+  // Use a single shared socket connection for all running tasks
+  // Disconnect previous subscription socket if exists
+  if (subscribeSocket) {
+    subscribeSocket.disconnect()
+  }
+  
+  subscribeSocket = io(`${wsUrl}/fetch-server`, {
+    transports: ['polling', 'websocket'],
+    reconnection: true,
+    timeout: 1200000,
+    pingTimeout: 1200000,
+    pingInterval: 60000
+  })
+  
+  // Track active subscriptions
+  const activeSubscriptions = new Set(runningTasks)
+  
+  subscribeSocket.on('connect', () => {
+    // Subscribe to all running tasks
+    for (const taskIp of runningTasks) {
       subscribeSocket.emit('subscribe_task', {
         task_id: taskIp,
         token: token
       })
-    })
-    
-    subscribeSocket.on('task_subscribed', (data) => {
-      if (data.task_id === taskIp) {
-        const currentItem = findItemByIp(taskIp)
-        if (currentItem) {
-          if (data.status === 'running') {
-            currentItem.fetchingServer = true
-            currentItem.logOutput = data.output || currentItem.logOutput
-          } else if (data.status === 'not_in_memory') {
-            // Task not in memory but was marked running, might have completed
-            currentItem.fetchingServer = false
-          }
-          // Update log dialog if open
-          if (logDialogVisible.value && logDialogTitle.value.includes(taskIp)) {
-            logDialogContent.value = currentItem.logOutput
-          }
-        }
-      }
-    })
-    
-    subscribeSocket.on('fetch_server_output', (data) => {
-      if (data.task_id === taskIp) {
-        const currentItem = findItemByIp(taskIp)
-        if (currentItem) {
-          currentItem.logOutput = (currentItem.logOutput || '') + data.data
-          if (logDialogVisible.value && logDialogTitle.value.includes(taskIp)) {
-            logDialogContent.value = currentItem.logOutput
-          }
-        }
-      }
-    })
-    
-    subscribeSocket.on('fetch_server_completed', async (data) => {
-      if (data.task_id === taskIp) {
-        const currentItem = findItemByIp(taskIp)
-        if (currentItem) {
-          currentItem.logOutput = data.output || ''
+    }
+  })
+  
+  subscribeSocket.on('task_subscribed', (data) => {
+    const taskIp = data.task_id
+    if (activeSubscriptions.has(taskIp)) {
+      const currentItem = findItemByIp(taskIp)
+      if (currentItem) {
+        if (data.status === 'running') {
+          currentItem.fetchingServer = true
+          currentItem.logOutput = data.output || currentItem.logOutput
+        } else if (data.status === 'not_in_memory') {
+          // Task not in memory but was marked running, might have completed
           currentItem.fetchingServer = false
-          if (logDialogVisible.value && logDialogTitle.value.includes(taskIp)) {
-            logDialogContent.value = currentItem.logOutput
-          }
+          activeSubscriptions.delete(taskIp)
         }
-        
-        // Update saved state
-        savedFetchServerTasks.value[taskIp] = {
-          ...savedFetchServerTasks.value[taskIp],
-          status: data.success ? 'completed' : 'failed',
-          log_output: data.output
+        // Update log dialog if open
+        if (logDialogVisible.value && logDialogTitle.value.includes(taskIp)) {
+          logDialogContent.value = currentItem.logOutput
         }
-        
-        if (data.success && data.servers?.length > 0) {
-          ElMessage.success(`${taskIp} 获取服务器完成，新增 ${data.servers.length} 台服务器`)
+      }
+    }
+  })
+  
+  subscribeSocket.on('fetch_server_output', (data) => {
+    const taskIp = data.task_id
+    if (activeSubscriptions.has(taskIp)) {
+      const currentItem = findItemByIp(taskIp)
+      if (currentItem) {
+        currentItem.logOutput = (currentItem.logOutput || '') + data.data
+        if (logDialogVisible.value && logDialogTitle.value.includes(taskIp)) {
+          logDialogContent.value = currentItem.logOutput
+        }
+      }
+    }
+  })
+  
+  subscribeSocket.on('fetch_server_completed', async (data) => {
+    const taskIp = data.task_id
+    if (activeSubscriptions.has(taskIp)) {
+      const currentItem = findItemByIp(taskIp)
+      if (currentItem) {
+        currentItem.logOutput = data.output || ''
+        currentItem.fetchingServer = false
+        if (logDialogVisible.value && logDialogTitle.value.includes(taskIp)) {
+          logDialogContent.value = currentItem.logOutput
+        }
+      }
+      
+      // Update saved state
+      savedFetchServerTasks.value[taskIp] = {
+        ...savedFetchServerTasks.value[taskIp],
+        status: data.success ? 'completed' : 'failed',
+        log_output: data.output
+      }
+      
+      if (data.success && data.servers?.length > 0) {
+        ElMessage.success(`${taskIp} 获取服务器完成，新增 ${data.servers.length} 台服务器`)
+        // Only reload servers once when all subscriptions complete
+        activeSubscriptions.delete(taskIp)
+        if (activeSubscriptions.size === 0) {
           await loadServers()
+          subscribeSocket.disconnect()
+          subscribeSocket = null
         }
-        
-        subscribeSocket.disconnect()
+      } else {
+        activeSubscriptions.delete(taskIp)
+        if (activeSubscriptions.size === 0 && subscribeSocket) {
+          subscribeSocket.disconnect()
+          subscribeSocket = null
+        }
       }
-    })
-    
-    subscribeSocket.on('fetch_server_error', (data) => {
-      if (data.task_id === taskIp) {
-        const currentItem = findItemByIp(taskIp)
-        if (currentItem) {
-          currentItem.fetchingServer = false
-          currentItem.logOutput = (currentItem.logOutput || '') + '\n' + (data.message || '获取失败')
-        }
-        
-        // Update saved state
-        savedFetchServerTasks.value[taskIp] = {
-          ...savedFetchServerTasks.value[taskIp],
-          status: 'error'
-        }
-        
-        subscribeSocket.disconnect()
+    }
+  })
+  
+  subscribeSocket.on('fetch_server_error', (data) => {
+    const taskIp = data.task_id
+    if (activeSubscriptions.has(taskIp)) {
+      const currentItem = findItemByIp(taskIp)
+      if (currentItem) {
+        currentItem.fetchingServer = false
+        currentItem.logOutput = (currentItem.logOutput || '') + '\n' + (data.message || '获取失败')
       }
-    })
-  }
+      
+      // Update saved state
+      savedFetchServerTasks.value[taskIp] = {
+        ...savedFetchServerTasks.value[taskIp],
+        status: 'error'
+      }
+      
+      activeSubscriptions.delete(taskIp)
+      if (activeSubscriptions.size === 0 && subscribeSocket) {
+        subscribeSocket.disconnect()
+        subscribeSocket = null
+      }
+    }
+  })
 }
 
 // 检查所有IP的状态
@@ -1735,6 +1763,10 @@ onUnmounted(() => {
   if (fetchServerSocket) {
     fetchServerSocket.disconnect()
     fetchServerSocket = null
+  }
+  if (subscribeSocket) {
+    subscribeSocket.disconnect()
+    subscribeSocket = null
   }
 })
 

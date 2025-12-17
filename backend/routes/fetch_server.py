@@ -83,21 +83,6 @@ def _save_task_to_db(app, user_id, ip_address, status, log_output=None, servers_
         logger.error(f"Error saving task to database: {str(e)}")
 
 
-def verify_token(token):
-    """验证JWT token并返回用户信息"""
-    if not token:
-        return None
-    try:
-        data = jwt.decode(token, Config.JWT_SECRET_KEY, algorithms=['HS256'])
-        return data
-    except jwt.ExpiredSignatureError:
-        logger.warning("Token expired")
-        return None
-    except jwt.InvalidTokenError:
-        logger.warning("Invalid token")
-        return None
-
-
 def _parse_server_info(output):
     """从脚本输出中解析服务器信息
     
