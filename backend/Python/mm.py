@@ -41,6 +41,10 @@ import time
 import json
 import sys
 
+# target_ids will be updated by the backend before script execution
+# 目标ID列表，后端会在执行脚本前更新此值
+target_ids = [11982]
+
 def main():
     print("mm.py 占位符 - 请上传实际的脚本文件")
     print("Placeholder - Please upload the actual script file")
