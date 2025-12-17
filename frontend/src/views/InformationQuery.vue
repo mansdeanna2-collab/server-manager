@@ -38,6 +38,10 @@
               <el-icon><FolderOpened /></el-icon>
               系统备份
             </el-menu-item>
+            <el-menu-item index="/system-settings">
+              <el-icon><Tools /></el-icon>
+              系统设置
+            </el-menu-item>
           </el-sub-menu>
         </el-menu>
         <el-dropdown @command="handleCommand">
@@ -596,7 +600,7 @@ import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
-  ArrowDown, Monitor, Odometer, OfficeBuilding, Search, User, Setting, FolderOpened, Refresh, Loading, View, Key, Document, Download, RefreshRight
+  ArrowDown, Monitor, Odometer, OfficeBuilding, Search, User, Setting, FolderOpened, Refresh, Loading, View, Key, Document, Download, RefreshRight, Tools
 } from '@element-plus/icons-vue'
 import { authAPI, serversAPI, preferencesAPI } from '@/api'
 import { io } from 'socket.io-client'

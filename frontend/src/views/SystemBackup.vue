@@ -38,6 +38,10 @@
               <el-icon><FolderOpened /></el-icon>
               系统备份
             </el-menu-item>
+            <el-menu-item index="/system-settings">
+              <el-icon><Tools /></el-icon>
+              系统设置
+            </el-menu-item>
           </el-sub-menu>
         </el-menu>
         <el-dropdown @command="handleCommand">
@@ -74,6 +78,14 @@
                   <span>系统备份</span>
                 </div>
                 <div class="card-header-buttons">
+                  <el-button
+                    type="info"
+                    :loading="loadingSchema"
+                    @click="handleViewDatabase"
+                  >
+                    <el-icon><Grid /></el-icon>
+                    查看数据库
+                  </el-button>
                   <el-button
                     type="success"
                     :loading="creatingBackup"
@@ -270,6 +282,122 @@
         </el-button>
       </template>
     </el-dialog>
+    
+    <!-- Database Schema Dialog -->
+    <el-dialog
+      v-model="databaseDialogVisible"
+      title="数据库结构查看"
+      width="800px"
+      top="5vh"
+    >
+      <div
+        v-if="loadingSchema"
+        class="loading-container"
+      >
+        <el-icon
+          class="loading-icon"
+          :size="40"
+        >
+          <Loading />
+        </el-icon>
+        <p class="loading-text">
+          正在加载数据库结构...
+        </p>
+      </div>
+      <div
+        v-else
+        class="database-schema-content"
+      >
+        <el-alert
+          type="info"
+          :closable="false"
+          style="margin-bottom: 16px;"
+        >
+          <template #title>
+            <el-icon><InfoFilled /></el-icon>
+            仅供查看，不可修改数据库内容
+          </template>
+        </el-alert>
+        <el-collapse v-model="activeTableNames">
+          <el-collapse-item
+            v-for="table in databaseSchema"
+            :key="table.name"
+            :name="table.name"
+          >
+            <template #title>
+              <div class="table-header">
+                <el-icon><Grid /></el-icon>
+                <span class="table-name">{{ table.name }}</span>
+                <el-tag
+                  size="small"
+                  type="info"
+                >
+                  {{ table.columns.length }} 列
+                </el-tag>
+              </div>
+            </template>
+            <el-table
+              :data="table.columns"
+              stripe
+              border
+              size="small"
+            >
+              <el-table-column
+                prop="name"
+                label="列名"
+                width="180"
+              >
+                <template #default="scope">
+                  <span :class="{ 'primary-key': scope.row.primary_key }">
+                    {{ scope.row.name }}
+                    <el-tag
+                      v-if="scope.row.primary_key"
+                      size="small"
+                      type="warning"
+                    >
+                      主键
+                    </el-tag>
+                  </span>
+                </template>
+              </el-table-column>
+              <el-table-column
+                prop="type"
+                label="数据类型"
+                width="150"
+              />
+              <el-table-column
+                prop="nullable"
+                label="可为空"
+                width="100"
+                align="center"
+              >
+                <template #default="scope">
+                  <el-tag
+                    :type="scope.row.nullable ? 'success' : 'danger'"
+                    size="small"
+                  >
+                    {{ scope.row.nullable ? '是' : '否' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column
+                prop="default"
+                label="默认值"
+              >
+                <template #default="scope">
+                  <span class="default-value">{{ scope.row.default || '-' }}</span>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-collapse-item>
+        </el-collapse>
+      </div>
+      <template #footer>
+        <el-button @click="databaseDialogVisible = false">
+          关闭
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -278,7 +406,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  ArrowDown, Back, Delete, Download, FolderOpened, Loading, Monitor, Odometer, OfficeBuilding, Refresh, Search, Setting, Upload, User
+  ArrowDown, Back, Delete, Download, FolderOpened, Grid, InfoFilled, Loading, Monitor, Odometer, OfficeBuilding, Refresh, Search, Setting, Tools, Upload, User
 } from '@element-plus/icons-vue'
 import { authAPI, preferencesAPI } from '@/api'
 
@@ -293,6 +421,12 @@ const passwordFormRef = ref(null)
 const creatingBackup = ref(false)
 const loadingBackups = ref(false)
 const backupList = ref([])
+
+// 数据库结构相关状态
+const databaseDialogVisible = ref(false)
+const loadingSchema = ref(false)
+const databaseSchema = ref([])
+const activeTableNames = ref([])
 
 const passwordForm = reactive({
   old_password: '',
@@ -489,6 +623,30 @@ const handleChangePassword = async () => {
       }
     }
   })
+}
+
+// 查看数据库结构
+const handleViewDatabase = async () => {
+  databaseDialogVisible.value = true
+  loadingSchema.value = true
+  
+  try {
+    const response = await preferencesAPI.getDatabaseSchema()
+    if (response.data.success) {
+      databaseSchema.value = response.data.tables || []
+      // 默认展开第一个表
+      if (databaseSchema.value.length > 0) {
+        activeTableNames.value = [databaseSchema.value[0].name]
+      }
+    } else {
+      ElMessage.error(response.data.message || '获取数据库结构失败')
+    }
+  } catch (error) {
+    const message = error.response?.data?.message || error.message || '网络连接失败'
+    ElMessage.error(`获取数据库结构失败: ${message}`)
+  } finally {
+    loadingSchema.value = false
+  }
 }
 </script>
 
@@ -694,5 +852,36 @@ const handleChangePassword = async () => {
   display: flex;
   gap: 8px;
   justify-content: center;
+}
+
+/* 数据库结构对话框样式 */
+.database-schema-content {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.table-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.table-name {
+  font-weight: 600;
+  color: #303133;
+}
+
+.primary-key {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: #E6A23C;
+}
+
+.default-value {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 12px;
+  color: #909399;
 }
 </style>

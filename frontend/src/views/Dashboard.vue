@@ -38,6 +38,10 @@
               <el-icon><FolderOpened /></el-icon>
               系统备份
             </el-menu-item>
+            <el-menu-item index="/system-settings">
+              <el-icon><Tools /></el-icon>
+              系统设置
+            </el-menu-item>
           </el-sub-menu>
         </el-menu>
         <el-dropdown @command="handleCommand">
@@ -415,7 +419,7 @@ import { ElMessage } from 'element-plus'
 import {
   ArrowDown, CircleCheck, CircleClose, DataAnalysis, FolderOpened, InfoFilled, List,
   Loading, Monitor, Odometer, OfficeBuilding, QuestionFilled, Refresh,
-  Search, Setting, Timer, TrendCharts, User, Warning
+  Search, Setting, Timer, Tools, TrendCharts, User, Warning
 } from '@element-plus/icons-vue'
 import { serversAPI, authAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
