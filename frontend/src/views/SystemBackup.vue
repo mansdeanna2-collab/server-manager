@@ -283,12 +283,13 @@
       </template>
     </el-dialog>
     
-    <!-- Database Schema Dialog -->
+    <!-- Database Dialog -->
     <el-dialog
       v-model="databaseDialogVisible"
-      title="数据库结构查看"
-      width="800px"
-      top="5vh"
+      title="数据库查看"
+      width="1100px"
+      top="3vh"
+      :close-on-click-modal="false"
     >
       <div
         v-if="loadingSchema"
@@ -301,12 +302,12 @@
           <Loading />
         </el-icon>
         <p class="loading-text">
-          正在加载数据库结构...
+          正在加载数据库...
         </p>
       </div>
       <div
         v-else
-        class="database-schema-content"
+        class="database-content"
       >
         <el-alert
           type="info"
@@ -318,79 +319,183 @@
             仅供查看，不可修改数据库内容
           </template>
         </el-alert>
-        <el-collapse v-model="activeTableNames">
-          <el-collapse-item
-            v-for="table in databaseSchema"
-            :key="table.name"
-            :name="table.name"
+        
+        <!-- 表选择和视图切换 -->
+        <div class="database-toolbar">
+          <el-select
+            v-model="selectedTable"
+            placeholder="选择表"
+            style="width: 200px;"
+            @change="handleTableSelect"
           >
-            <template #title>
-              <div class="table-header">
-                <el-icon><Grid /></el-icon>
-                <span class="table-name">{{ table.name }}</span>
-                <el-tag
-                  size="small"
-                  type="info"
-                >
-                  {{ table.columns.length }} 列
-                </el-tag>
-              </div>
-            </template>
-            <el-table
-              :data="table.columns"
-              stripe
-              border
-              size="small"
+            <el-option
+              v-for="table in databaseSchema"
+              :key="table.name"
+              :label="`${table.name} (${table.columns.length}列)`"
+              :value="table.name"
+            />
+          </el-select>
+          <el-radio-group
+            v-model="viewMode"
+            size="small"
+            style="margin-left: 16px;"
+          >
+            <el-radio-button value="data">
+              <el-icon><List /></el-icon>
+              数据
+            </el-radio-button>
+            <el-radio-button value="structure">
+              <el-icon><Grid /></el-icon>
+              结构
+            </el-radio-button>
+          </el-radio-group>
+          <el-button
+            v-if="viewMode === 'data' && selectedTable"
+            size="small"
+            type="primary"
+            :loading="loadingTableData"
+            style="margin-left: auto;"
+            @click="loadTableData"
+          >
+            <el-icon><Refresh /></el-icon>
+            刷新数据
+          </el-button>
+        </div>
+        
+        <!-- 表结构视图 -->
+        <div
+          v-if="viewMode === 'structure' && selectedTable"
+          class="table-structure"
+        >
+          <h4 class="section-title">
+            表结构: {{ selectedTable }}
+          </h4>
+          <el-table
+            :data="selectedTableColumns"
+            stripe
+            border
+            size="small"
+          >
+            <el-table-column
+              prop="name"
+              label="列名"
+              width="200"
             >
-              <el-table-column
-                prop="name"
-                label="列名"
-                width="180"
-              >
-                <template #default="scope">
-                  <span :class="{ 'primary-key': scope.row.primary_key }">
-                    {{ scope.row.name }}
-                    <el-tag
-                      v-if="scope.row.primary_key"
-                      size="small"
-                      type="warning"
-                    >
-                      主键
-                    </el-tag>
-                  </span>
-                </template>
-              </el-table-column>
-              <el-table-column
-                prop="type"
-                label="数据类型"
-                width="150"
-              />
-              <el-table-column
-                prop="nullable"
-                label="可为空"
-                width="100"
-                align="center"
-              >
-                <template #default="scope">
+              <template #default="scope">
+                <span :class="{ 'primary-key': scope.row.primary_key }">
+                  {{ scope.row.name }}
                   <el-tag
-                    :type="scope.row.nullable ? 'success' : 'danger'"
+                    v-if="scope.row.primary_key"
                     size="small"
+                    type="warning"
                   >
-                    {{ scope.row.nullable ? '是' : '否' }}
+                    主键
                   </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column
-                prop="default"
-                label="默认值"
-              >
-                <template #default="scope">
-                  <span class="default-value">{{ scope.row.default || '-' }}</span>
-                </template>
-              </el-table-column>
-            </el-table>
-          </el-collapse-item>
-        </el-collapse>
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="type"
+              label="数据类型"
+              width="150"
+            />
+            <el-table-column
+              prop="nullable"
+              label="可为空"
+              width="100"
+              align="center"
+            >
+              <template #default="scope">
+                <el-tag
+                  :type="scope.row.nullable ? 'success' : 'danger'"
+                  size="small"
+                >
+                  {{ scope.row.nullable ? '是' : '否' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="default"
+              label="默认值"
+            >
+              <template #default="scope">
+                <span class="default-value">{{ scope.row.default || '-' }}</span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+        
+        <!-- 表数据视图 -->
+        <div
+          v-if="viewMode === 'data' && selectedTable"
+          class="table-data"
+        >
+          <div class="data-header">
+            <h4 class="section-title">
+              表数据: {{ selectedTable }}
+            </h4>
+            <el-tag type="info">
+              共 {{ tableDataTotal }} 条记录
+            </el-tag>
+          </div>
+          
+          <div
+            v-if="loadingTableData"
+            class="loading-container small"
+          >
+            <el-icon class="loading-icon">
+              <Loading />
+            </el-icon>
+            <span>加载中...</span>
+          </div>
+          
+          <el-table
+            v-else
+            :data="tableData"
+            stripe
+            border
+            size="small"
+            max-height="400"
+            style="width: 100%;"
+          >
+            <el-table-column
+              v-for="col in selectedTableColumns"
+              :key="col.name"
+              :prop="col.name"
+              :label="col.name"
+              :min-width="getColumnWidth(col)"
+              show-overflow-tooltip
+            >
+              <template #default="scope">
+                <span :class="{ 'primary-key-value': col.primary_key }">
+                  {{ formatCellValue(scope.row[col.name]) }}
+                </span>
+              </template>
+            </el-table-column>
+          </el-table>
+          
+          <!-- 分页 -->
+          <div
+            v-if="tableDataTotal > 0"
+            class="pagination-container"
+          >
+            <el-pagination
+              v-model:current-page="tableDataPage"
+              v-model:page-size="tableDataPageSize"
+              :page-sizes="[20, 50, 100, 200]"
+              :total="tableDataTotal"
+              layout="total, sizes, prev, pager, next, jumper"
+              @size-change="loadTableData"
+              @current-change="loadTableData"
+            />
+          </div>
+        </div>
+        
+        <!-- 未选择表时的提示 -->
+        <el-empty
+          v-if="!selectedTable"
+          description="请从上方选择一个表来查看"
+        />
       </div>
       <template #footer>
         <el-button @click="databaseDialogVisible = false">
@@ -406,7 +511,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  ArrowDown, Back, Delete, Download, FolderOpened, Grid, InfoFilled, Loading, Monitor, Odometer, OfficeBuilding, Refresh, Search, Setting, Tools, Upload, User
+  ArrowDown, Back, Delete, Download, FolderOpened, Grid, InfoFilled, List, Loading, Monitor, Odometer, OfficeBuilding, Refresh, Search, Setting, Tools, Upload, User
 } from '@element-plus/icons-vue'
 import { authAPI, preferencesAPI } from '@/api'
 
@@ -422,11 +527,24 @@ const creatingBackup = ref(false)
 const loadingBackups = ref(false)
 const backupList = ref([])
 
-// 数据库结构相关状态
+// 数据库相关状态
 const databaseDialogVisible = ref(false)
 const loadingSchema = ref(false)
 const databaseSchema = ref([])
-const activeTableNames = ref([])
+const selectedTable = ref('')
+const viewMode = ref('data')
+const loadingTableData = ref(false)
+const tableData = ref([])
+const tableDataTotal = ref(0)
+const tableDataPage = ref(1)
+const tableDataPageSize = ref(50)
+
+// 计算属性：获取选中表的列信息
+const selectedTableColumns = computed(() => {
+  if (!selectedTable.value || !databaseSchema.value.length) return []
+  const table = databaseSchema.value.find(t => t.name === selectedTable.value)
+  return table ? table.columns : []
+})
 
 const passwordForm = reactive({
   old_password: '',
@@ -625,18 +743,22 @@ const handleChangePassword = async () => {
   })
 }
 
-// 查看数据库结构
+// 查看数据库
 const handleViewDatabase = async () => {
   databaseDialogVisible.value = true
   loadingSchema.value = true
+  selectedTable.value = ''
+  tableData.value = []
+  tableDataTotal.value = 0
   
   try {
     const response = await preferencesAPI.getDatabaseSchema()
     if (response.data.success) {
       databaseSchema.value = response.data.tables || []
-      // 默认展开第一个表
+      // 默认选中第一个表
       if (databaseSchema.value.length > 0) {
-        activeTableNames.value = [databaseSchema.value[0].name]
+        selectedTable.value = databaseSchema.value[0].name
+        await loadTableData()
       }
     } else {
       ElMessage.error(response.data.message || '获取数据库结构失败')
@@ -647,6 +769,61 @@ const handleViewDatabase = async () => {
   } finally {
     loadingSchema.value = false
   }
+}
+
+// 处理表选择变化
+const handleTableSelect = async () => {
+  tableDataPage.value = 1
+  tableData.value = []
+  tableDataTotal.value = 0
+  if (viewMode.value === 'data') {
+    await loadTableData()
+  }
+}
+
+// 加载表数据
+const loadTableData = async () => {
+  if (!selectedTable.value) return
+  
+  loadingTableData.value = true
+  try {
+    const response = await preferencesAPI.getDatabaseTableData(
+      selectedTable.value,
+      tableDataPage.value,
+      tableDataPageSize.value
+    )
+    if (response.data.success) {
+      tableData.value = response.data.data || []
+      tableDataTotal.value = response.data.total || 0
+    } else {
+      ElMessage.error(response.data.message || '获取表数据失败')
+    }
+  } catch (error) {
+    const message = error.response?.data?.message || error.message || '网络连接失败'
+    ElMessage.error(`获取表数据失败: ${message}`)
+  } finally {
+    loadingTableData.value = false
+  }
+}
+
+// 获取列宽度
+const getColumnWidth = (col) => {
+  const type = col.type.toLowerCase()
+  if (type.includes('text') || type.includes('varchar(255)')) return 200
+  if (type.includes('datetime')) return 180
+  if (type.includes('integer') || type.includes('int')) return 100
+  if (type.includes('boolean')) return 80
+  return 150
+}
+
+// 格式化单元格值
+const formatCellValue = (value) => {
+  if (value === null || value === undefined) return '-'
+  if (typeof value === 'boolean') return value ? '是' : '否'
+  if (typeof value === 'string' && value.length > 100) {
+    return value.substring(0, 100) + '...'
+  }
+  return String(value)
 }
 </script>
 
@@ -854,10 +1031,38 @@ const handleViewDatabase = async () => {
   justify-content: center;
 }
 
-/* 数据库结构对话框样式 */
-.database-schema-content {
-  max-height: 60vh;
+/* 数据库对话框样式 */
+.database-content {
+  max-height: 70vh;
   overflow-y: auto;
+}
+
+.database-toolbar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: #f5f7fa;
+  border-radius: 8px;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+  margin: 0 0 12px 0;
+}
+
+.table-structure,
+.table-data {
+  margin-top: 16px;
+}
+
+.data-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
 }
 
 .table-header {
@@ -879,9 +1084,28 @@ const handleViewDatabase = async () => {
   color: #E6A23C;
 }
 
+.primary-key-value {
+  color: #E6A23C;
+  font-weight: 500;
+}
+
 .default-value {
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
   font-size: 12px;
   color: #909399;
+}
+
+.pagination-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #ebeef5;
+}
+
+.loading-container.small {
+  padding: 30px 20px;
+  flex-direction: row;
+  gap: 8px;
 }
 </style>

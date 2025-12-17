@@ -143,15 +143,25 @@ export const preferencesAPI = {
   // 下载备份使用特殊方法，因为需要处理文件流
   getBackupDownloadUrl: (backupId) => `${API_BASE_URL}/preferences/backup/download/${backupId}`,
 
-  // 数据库结构查看
+  // 数据库结构和数据查看
   getDatabaseSchema: () => api.get('/preferences/database/schema'),
+  getDatabaseTableData: (tableName, page = 1, perPage = 50) => 
+    api.get(`/preferences/database/data/${tableName}?page=${page}&per_page=${perPage}`),
 
   // 系统设置
   getSystemSettings: () => api.get('/preferences/system-settings'),
   updateSystemSettings: (settings) => api.post('/preferences/system-settings', { settings }),
 
   // 系统日志
-  getSystemLogs: (lines = 500) => api.get(`/preferences/system-logs?lines=${lines}`)
+  getSystemLogs: (params = {}) => {
+    const { page = 1, perPage = 100, logType, status } = params
+    let url = `/preferences/system-logs?page=${page}&per_page=${perPage}`
+    if (logType) url += `&log_type=${logType}`
+    if (status) url += `&status=${status}`
+    return api.get(url)
+  },
+  getLogTypes: () => api.get('/preferences/system-logs/types'),
+  getLogStats: () => api.get('/preferences/system-logs/stats')
 }
 
 export default api

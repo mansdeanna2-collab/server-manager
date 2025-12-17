@@ -4,7 +4,9 @@ from models.user_preference import (
     IpCheckStatus, IpIdResult, SegmentNote, SegmentFavorite, ServerFavorite,
     FetchServerTask
 )
+from models.system_log import SystemLog
 from routes.auth import token_required
+from services.log_service import log_backup, log_settings_change
 from utils import china_now
 import logging
 import subprocess
@@ -555,10 +557,16 @@ def format_file_size(size_bytes):
 
 @preferences_bp.route('/backup/create', methods=['POST'])
 @token_required
-def create_system_backup(_current_user):
+def create_system_backup(current_user):
     """创建系统备份
     
     创建一个包含所有文件和数据库的zip备份文件
+    备份内容包括:
+    - 数据库文件
+    - Python脚本目录
+    - 服务器文件目录
+    - 配置文件
+    - 后端源代码
     
     Returns:
         success: 是否成功
@@ -569,8 +577,6 @@ def create_system_backup(_current_user):
         message: 结果信息
     """
     import zipfile
-    import tempfile
-    import shutil
     from datetime import datetime
     from config import Config
     
@@ -581,12 +587,18 @@ def create_system_backup(_current_user):
         
         # 获取后端目录路径
         backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        # 获取项目根目录（server-manager）
+        project_root = os.path.dirname(backend_dir)
         
         # 创建临时目录存放备份文件
         backup_dir = os.path.join(backend_dir, 'backups')
         os.makedirs(backup_dir, exist_ok=True)
         
         backup_path = os.path.join(backup_dir, backup_filename)
+        
+        # 要排除的目录和文件
+        exclude_dirs = {'node_modules', '.git', '__pycache__', 'backups', 'venv', '.venv', 'dist'}
+        exclude_files = {'.DS_Store', 'Thumbs.db'}
         
         # 创建zip文件
         with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
@@ -610,28 +622,73 @@ def create_system_backup(_current_user):
                     zipf.write(db_path, f"database/{os.path.basename(db_path)}")
                     logger.info(f"Added database to backup: {db_path}")
             
-            # 备份Python脚本目录
-            python_dir = os.path.join(backend_dir, 'Python')
-            if os.path.exists(python_dir):
-                for root, _dirs, files in os.walk(python_dir):
-                    for file in files:
-                        file_path = os.path.join(root, file)
-                        arcname = os.path.join('Python', os.path.relpath(file_path, python_dir))
+            # 备份后端目录（完整备份）
+            for root, dirs, files in os.walk(backend_dir):
+                # 排除特定目录
+                dirs[:] = [d for d in dirs if d not in exclude_dirs]
+                
+                for file in files:
+                    if file in exclude_files:
+                        continue
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.join('backend', os.path.relpath(file_path, backend_dir))
+                    try:
                         zipf.write(file_path, arcname)
-                logger.info(f"Added Python directory to backup")
+                    except Exception as e:
+                        logger.warning(f"Could not add file to backup: {file_path} - {str(e)}")
+            logger.info("Added backend directory to backup")
+            
+            # 备份前端目录
+            frontend_dir = os.path.join(project_root, 'frontend')
+            if os.path.exists(frontend_dir):
+                for root, dirs, files in os.walk(frontend_dir):
+                    # 排除特定目录
+                    dirs[:] = [d for d in dirs if d not in exclude_dirs]
+                    
+                    for file in files:
+                        if file in exclude_files:
+                            continue
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.join('frontend', os.path.relpath(file_path, frontend_dir))
+                        try:
+                            zipf.write(file_path, arcname)
+                        except Exception as e:
+                            logger.warning(f"Could not add file to backup: {file_path} - {str(e)}")
+                logger.info("Added frontend directory to backup")
             
             # 备份服务器文件目录
             server_files_dir = Config.SERVER_FILES_DIR
             if os.path.exists(server_files_dir):
-                for root, _dirs, files in os.walk(server_files_dir):
+                for root, dirs, files in os.walk(server_files_dir):
+                    dirs[:] = [d for d in dirs if d not in exclude_dirs]
                     for file in files:
+                        if file in exclude_files:
+                            continue
                         file_path = os.path.join(root, file)
                         arcname = os.path.join('server_files', os.path.relpath(file_path, server_files_dir))
-                        zipf.write(file_path, arcname)
-                logger.info(f"Added server_files directory to backup")
+                        try:
+                            zipf.write(file_path, arcname)
+                        except Exception as e:
+                            logger.warning(f"Could not add file to backup: {file_path} - {str(e)}")
+                logger.info("Added server_files directory to backup")
+            
+            # 备份根目录下的配置文件
+            root_files = ['docker-compose.yml', 'deploy-docker.sh', 'deploy-ubuntu.sh', 
+                         'README.md', 'DEPLOYMENT_OPTIONS.md', 'DEPLOYMENT_UBUNTU.md',
+                         'DOCUMENTATION_INDEX.md', 'QUICK_REFERENCE.md', '.gitignore']
+            for filename in root_files:
+                file_path = os.path.join(project_root, filename)
+                if os.path.exists(file_path):
+                    try:
+                        zipf.write(file_path, filename)
+                    except Exception as e:
+                        logger.warning(f"Could not add file to backup: {file_path} - {str(e)}")
         
         # 获取文件大小
         file_size = os.path.getsize(backup_path)
+        
+        # 记录备份日志
+        log_backup(current_user, backup_filename, success=True)
         
         return jsonify({
             'success': True,
@@ -644,6 +701,8 @@ def create_system_backup(_current_user):
         
     except Exception as e:
         logger.error(f"Error creating system backup: {str(e)}")
+        log_backup(current_user, backup_filename if 'backup_filename' in locals() else 'unknown', 
+                   success=False, error_msg=str(e))
         return jsonify({
             'success': False,
             'message': f'创建备份失败: {str(e)}'
@@ -879,6 +938,110 @@ def get_database_schema(_current_user):
         }), 500
 
 
+@preferences_bp.route('/database/data/<table_name>', methods=['GET'])
+@token_required
+def get_database_table_data(_current_user, table_name):
+    """获取数据库表的数据
+    
+    Args:
+        table_name: 表名
+        
+    Query params:
+        page: 页码（默认1）
+        per_page: 每页记录数（默认50，最大200）
+        
+    Returns:
+        success: 是否成功
+        table_name: 表名
+        data: 数据列表
+        columns: 列信息
+        total: 总记录数
+        page: 当前页码
+        per_page: 每页记录数
+        total_pages: 总页数
+    """
+    from sqlalchemy import inspect, text
+    
+    try:
+        # 验证表名（防止SQL注入）
+        inspector = inspect(db.engine)
+        valid_tables = inspector.get_table_names()
+        
+        if table_name not in valid_tables:
+            return jsonify({
+                'success': False,
+                'message': f'表 {table_name} 不存在'
+            }), 404
+        
+        # 获取分页参数
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        page = max(1, page)
+        per_page = min(max(1, per_page), 200)
+        
+        # 获取列信息
+        columns = []
+        pk_columns = {col for col in inspector.get_pk_constraint(table_name).get('constrained_columns', [])}
+        for column in inspector.get_columns(table_name):
+            columns.append({
+                'name': column['name'],
+                'type': str(column['type']),
+                'primary_key': column['name'] in pk_columns
+            })
+        
+        # 获取总记录数
+        count_result = db.session.execute(text(f'SELECT COUNT(*) FROM "{table_name}"'))
+        total = count_result.scalar()
+        
+        # 计算分页
+        total_pages = (total + per_page - 1) // per_page if total > 0 else 1
+        offset = (page - 1) * per_page
+        
+        # 获取数据
+        # 注意：table_name 已经过验证，在 valid_tables 列表中
+        result = db.session.execute(
+            text(f'SELECT * FROM "{table_name}" LIMIT :limit OFFSET :offset'),
+            {'limit': per_page, 'offset': offset}
+        )
+        
+        # 转换为字典列表
+        column_names = [col['name'] for col in columns]
+        data = []
+        for row in result:
+            row_dict = {}
+            for i, col_name in enumerate(column_names):
+                value = row[i]
+                # 处理日期时间类型
+                if hasattr(value, 'isoformat'):
+                    value = value.isoformat()
+                # 处理bytes类型
+                elif isinstance(value, bytes):
+                    try:
+                        value = value.decode('utf-8')
+                    except Exception:
+                        value = '<binary data>'
+                row_dict[col_name] = value
+            data.append(row_dict)
+        
+        return jsonify({
+            'success': True,
+            'table_name': table_name,
+            'data': data,
+            'columns': columns,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': total_pages
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting table data: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取表数据失败: {str(e)}'
+        }), 500
+
+
 # ============ System Settings APIs ============
 
 # System settings file path
@@ -1028,101 +1191,58 @@ def update_system_settings(_current_user):
 @preferences_bp.route('/system-logs', methods=['GET'])
 @token_required
 def get_system_logs(_current_user):
-    """获取系统日志
+    """获取系统日志（从数据库）
     
     Query params:
-        lines: 返回的行数（默认500，最大5000）
+        page: 页码（默认1）
+        per_page: 每页记录数（默认100，最大500）
+        log_type: 日志类型过滤（可选）
+        status: 状态过滤（可选）
         
     Returns:
         success: 是否成功
-        logs: 日志内容列表
-        total_lines: 总行数
+        logs: 日志列表
+        total: 总记录数
+        page: 当前页码
+        per_page: 每页记录数
+        total_pages: 总页数
     """
-    lines = request.args.get('lines', 500, type=int)
-    lines = min(max(1, lines), 5000)  # Limit between 1 and 5000
-    
-    def tail_file(filepath, num_lines):
-        """Efficiently read last N lines from a file using seek from end"""
-        try:
-            with open(filepath, 'rb') as f:
-                # Move to end of file
-                f.seek(0, 2)
-                file_size = f.tell()
-                
-                if file_size == 0:
-                    return []
-                
-                # Start with a reasonable buffer size
-                buffer_size = min(8192, file_size)
-                buffer = b''
-                lines_found = []
-                position = file_size
-                
-                while len(lines_found) < num_lines and position > 0:
-                    # Move back by buffer_size
-                    position = max(0, position - buffer_size)
-                    f.seek(position)
-                    
-                    # Read and prepend to buffer
-                    chunk = f.read(min(buffer_size, file_size - position))
-                    buffer = chunk + buffer
-                    
-                    # Split and count lines
-                    lines_found = buffer.split(b'\n')
-                    
-                    # If we have enough lines, break
-                    if len(lines_found) > num_lines:
-                        break
-                
-                # Return last N lines, decoded
-                result_lines = lines_found[-num_lines:] if len(lines_found) >= num_lines else lines_found
-                return [line.decode('utf-8', errors='replace') for line in result_lines if line]
-        except Exception as e:
-            logger.warning(f"Error reading file {filepath}: {str(e)}")
-            return []
-    
     try:
-        log_entries = []
+        # 获取分页参数
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 100, type=int)
+        log_type = request.args.get('log_type', None, type=str)
+        status = request.args.get('status', None, type=str)
         
-        # Get Flask application log
-        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        page = max(1, page)
+        per_page = min(max(1, per_page), 500)
         
-        # Check common log file locations
-        log_files = [
-            os.path.join(backend_dir, 'app.log'),
-            os.path.join(backend_dir, 'logs', 'app.log'),
-            '/var/log/server-manager/app.log'
-        ]
+        # 构建查询
+        query = SystemLog.query
         
-        log_content = []
+        # 应用过滤器
+        if log_type:
+            query = query.filter(SystemLog.log_type == log_type)
+        if status:
+            query = query.filter(SystemLog.status == status)
         
-        for log_file in log_files:
-            if os.path.exists(log_file):
-                file_lines = tail_file(log_file, lines)
-                if file_lines:
-                    log_content.extend(file_lines)
-                    break  # Use first available log file
+        # 按时间倒序排列
+        query = query.order_by(SystemLog.created_at.desc())
         
-        # If no log files found, return a message
-        if not log_content:
-            # Return a message indicating no log files found
-            log_content = [
-                "=== 系统日志 ===",
-                f"时间: {china_now().strftime('%Y-%m-%d %H:%M:%S')}",
-                "提示: 未找到日志文件。系统日志将在此处显示。",
-                "日志文件位置: backend/app.log 或 backend/logs/app.log"
-            ]
+        # 获取总记录数
+        total = query.count()
         
-        # Parse and format log entries
-        for line in log_content:
-            line = line.strip()
-            if line:
-                log_entries.append(line)
+        # 分页
+        total_pages = (total + per_page - 1) // per_page if total > 0 else 1
+        logs = query.offset((page - 1) * per_page).limit(per_page).all()
         
         return jsonify({
             'success': True,
-            'logs': log_entries[-lines:],
-            'total_lines': len(log_entries)
+            'logs': [log.to_dict() for log in logs],
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': total_pages
         }), 200
         
     except Exception as e:
@@ -1130,4 +1250,86 @@ def get_system_logs(_current_user):
         return jsonify({
             'success': False,
             'message': f'获取系统日志失败: {str(e)}'
+        }), 500
+
+
+@preferences_bp.route('/system-logs/types', methods=['GET'])
+@token_required
+def get_log_types(_current_user):
+    """获取所有日志类型及其描述
+    
+    Returns:
+        success: 是否成功
+        types: 日志类型列表
+    """
+    from models.system_log import (
+        LOG_TYPE_LOGIN, LOG_TYPE_LOGOUT, LOG_TYPE_LOGIN_FAILED,
+        LOG_TYPE_PASSWORD_CHANGE, LOG_TYPE_SERVER_CONNECT,
+        LOG_TYPE_SERVER_CREATE, LOG_TYPE_SERVER_UPDATE,
+        LOG_TYPE_SERVER_DELETE, LOG_TYPE_SERVER_CHECK,
+        LOG_TYPE_BACKUP, LOG_TYPE_SETTINGS, LOG_TYPE_IMPORT
+    )
+    
+    log_types = [
+        {'value': LOG_TYPE_LOGIN, 'label': '登录成功', 'color': 'success'},
+        {'value': LOG_TYPE_LOGIN_FAILED, 'label': '登录失败', 'color': 'danger'},
+        {'value': LOG_TYPE_LOGOUT, 'label': '用户登出', 'color': 'info'},
+        {'value': LOG_TYPE_PASSWORD_CHANGE, 'label': '密码修改', 'color': 'warning'},
+        {'value': LOG_TYPE_SERVER_CONNECT, 'label': '服务器连接', 'color': 'primary'},
+        {'value': LOG_TYPE_SERVER_CREATE, 'label': '创建服务器', 'color': 'success'},
+        {'value': LOG_TYPE_SERVER_UPDATE, 'label': '更新服务器', 'color': 'warning'},
+        {'value': LOG_TYPE_SERVER_DELETE, 'label': '删除服务器', 'color': 'danger'},
+        {'value': LOG_TYPE_SERVER_CHECK, 'label': '检测服务器', 'color': 'info'},
+        {'value': LOG_TYPE_BACKUP, 'label': '系统备份', 'color': 'primary'},
+        {'value': LOG_TYPE_SETTINGS, 'label': '设置修改', 'color': 'warning'},
+        {'value': LOG_TYPE_IMPORT, 'label': '服务器导入', 'color': 'success'},
+    ]
+    
+    return jsonify({
+        'success': True,
+        'types': log_types
+    }), 200
+
+
+@preferences_bp.route('/system-logs/stats', methods=['GET'])
+@token_required
+def get_log_stats(_current_user):
+    """获取日志统计信息
+    
+    Returns:
+        success: 是否成功
+        stats: 统计信息
+    """
+    from sqlalchemy import func
+    
+    try:
+        # 按类型统计
+        type_stats = db.session.query(
+            SystemLog.log_type,
+            func.count(SystemLog.id).label('count')
+        ).group_by(SystemLog.log_type).all()
+        
+        # 按状态统计
+        status_stats = db.session.query(
+            SystemLog.status,
+            func.count(SystemLog.id).label('count')
+        ).group_by(SystemLog.status).all()
+        
+        # 总数
+        total = SystemLog.query.count()
+        
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total': total,
+                'by_type': {t: c for t, c in type_stats},
+                'by_status': {s: c for s, c in status_stats}
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting log stats: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取日志统计失败: {str(e)}'
         }), 500

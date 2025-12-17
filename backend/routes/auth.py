@@ -4,6 +4,9 @@ from datetime import datetime
 from functools import wraps
 from models.user import User
 from config import Config
+from services.log_service import (
+    log_login_success, log_login_failed, log_logout, log_password_change
+)
 import logging
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
@@ -57,6 +60,7 @@ def login():
 
         if not user or not user.check_password(data['password']):
             logger.warning(f"Failed login attempt for username: {data.get('username')}")
+            log_login_failed(data.get('username'))
             return jsonify({'message': 'Invalid credentials'}), 401
 
         # Generate JWT token
@@ -66,6 +70,7 @@ def login():
         }, Config.JWT_SECRET_KEY, algorithm='HS256')
 
         logger.info(f"User {user.username} logged in successfully")
+        log_login_success(user)
 
         return jsonify({
             'token': token,
@@ -81,6 +86,7 @@ def login():
 def logout(current_user):
     """用户登出接口"""
     logger.info(f"User {current_user.username} logged out")
+    log_logout(current_user)
     # In a stateless JWT system, logout is handled client-side
     return jsonify({'message': 'Logged out successfully'}), 200
 
@@ -128,6 +134,7 @@ def change_password(current_user):
         # Verify old password
         if not current_user.check_password(old_password):
             logger.warning(f"Failed password change attempt for user: {current_user.username}")
+            log_password_change(current_user, success=False)
             return jsonify({'message': '旧密码错误'}), 401
 
         # Validate new password length
@@ -139,6 +146,7 @@ def change_password(current_user):
         db.session.commit()
 
         logger.info(f"User {current_user.username} changed password successfully")
+        log_password_change(current_user, success=True)
         return jsonify({'message': '密码修改成功'}), 200
     except Exception as e:
         logger.error(f"Password change error: {str(e)}")
