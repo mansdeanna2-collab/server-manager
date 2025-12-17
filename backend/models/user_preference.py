@@ -64,6 +64,52 @@ class IpIdResult(db.Model):
         }
 
 
+class FetchServerTask(db.Model):
+    """获取服务器任务模型 - 存储获取服务器任务的状态和日志
+    
+    This model persists the fetch server task state so that:
+    - Users can see progress after closing/reopening the dialog
+    - Users can see progress after refreshing the page
+    - Other devices can see the running task progress
+    """
+    __tablename__ = 'fetch_server_tasks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    ip_address = db.Column(db.String(45), nullable=False)  # Task ID (IP address)
+    status = db.Column(db.String(20), default='pending')  # pending, running, completed, failed, timeout, error
+    log_output = db.Column(db.Text)  # Real-time log output
+    servers_added = db.Column(db.Text)  # JSON string of added servers
+    started_at = db.Column(db.DateTime, default=china_now)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=china_now)
+    updated_at = db.Column(db.DateTime, default=china_now, onupdate=china_now)
+
+    # 添加复合唯一约束
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'ip_address', name='uq_user_fetch_task'),
+    )
+
+    def to_dict(self):
+        import json
+        servers = []
+        if self.servers_added:
+            try:
+                servers = json.loads(self.servers_added)
+            except (json.JSONDecodeError, TypeError):
+                servers = []
+        return {
+            'id': self.id,
+            'ip_address': self.ip_address,
+            'status': self.status,
+            'log_output': self.log_output,
+            'servers_added': servers,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
 class SegmentNote(db.Model):
     """IP段备注模型 - 存储IP段的备注信息"""
     __tablename__ = 'segment_notes'

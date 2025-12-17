@@ -1,13 +1,15 @@
 from flask import Blueprint, request, jsonify
 from models import db
 from models.user_preference import (
-    IpCheckStatus, IpIdResult, SegmentNote, SegmentFavorite, ServerFavorite
+    IpCheckStatus, IpIdResult, SegmentNote, SegmentFavorite, ServerFavorite,
+    FetchServerTask
 )
 from routes.auth import token_required
 from utils import china_now
 import logging
 import subprocess
 import os
+import json
 
 preferences_bp = Blueprint('preferences', __name__, url_prefix='/api/preferences')
 logger = logging.getLogger(__name__)
@@ -400,3 +402,120 @@ def update_cookie(_current_user):
             'success': False,
             'message': f'执行失败: {str(e)}'
         }), 500
+
+
+# ============ Fetch Server Task APIs ============
+
+@preferences_bp.route('/fetch-server-tasks', methods=['GET'])
+@token_required
+def get_all_fetch_server_tasks(current_user):
+    """获取当前用户的所有获取服务器任务状态
+    
+    Returns a dict mapping IP addresses to task info
+    """
+    tasks = FetchServerTask.query.filter_by(user_id=current_user.id).all()
+    result = {}
+    for task in tasks:
+        result[task.ip_address] = task.to_dict()
+    return jsonify(result), 200
+
+
+@preferences_bp.route('/fetch-server-tasks/<ip_address>', methods=['GET'])
+@token_required
+def get_fetch_server_task(current_user, ip_address):
+    """获取指定IP的获取服务器任务状态"""
+    task = FetchServerTask.query.filter_by(
+        user_id=current_user.id,
+        ip_address=ip_address
+    ).first()
+    
+    if task:
+        return jsonify(task.to_dict()), 200
+    else:
+        return jsonify({'status': 'not_found'}), 404
+
+
+@preferences_bp.route('/fetch-server-tasks/running', methods=['GET'])
+@token_required
+def get_running_fetch_server_tasks(current_user):
+    """获取当前用户所有正在运行的获取服务器任务
+    
+    Returns tasks with status 'running'
+    """
+    tasks = FetchServerTask.query.filter_by(
+        user_id=current_user.id,
+        status='running'
+    ).all()
+    result = {}
+    for task in tasks:
+        result[task.ip_address] = task.to_dict()
+    return jsonify(result), 200
+
+
+@preferences_bp.route('/fetch-server-tasks', methods=['POST'])
+@token_required
+def save_fetch_server_task(current_user):
+    """保存获取服务器任务状态"""
+    data = request.get_json()
+
+    if not data or not data.get('ip_address'):
+        return jsonify({'message': '请提供IP地址'}), 400
+
+    ip_address = data['ip_address']
+
+    try:
+        # 查找或创建记录
+        task = FetchServerTask.query.filter_by(
+            user_id=current_user.id,
+            ip_address=ip_address
+        ).first()
+
+        if not task:
+            task = FetchServerTask(
+                user_id=current_user.id,
+                ip_address=ip_address
+            )
+            db.session.add(task)
+
+        # 更新状态
+        if 'status' in data:
+            task.status = data['status']
+        if 'log_output' in data:
+            task.log_output = data['log_output']
+        if 'servers_added' in data:
+            task.servers_added = json.dumps(data['servers_added']) if data['servers_added'] else None
+        if data.get('status') == 'running' and not task.started_at:
+            task.started_at = china_now()
+        if data.get('status') in ['completed', 'failed', 'timeout', 'error']:
+            task.completed_at = china_now()
+        task.updated_at = china_now()
+
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error saving fetch server task: {str(e)}")
+        return jsonify({'message': '保存失败'}), 500
+
+    return jsonify(task.to_dict()), 200
+
+
+@preferences_bp.route('/fetch-server-tasks/<ip_address>', methods=['DELETE'])
+@token_required
+def delete_fetch_server_task(current_user, ip_address):
+    """删除获取服务器任务记录"""
+    try:
+        task = FetchServerTask.query.filter_by(
+            user_id=current_user.id,
+            ip_address=ip_address
+        ).first()
+
+        if task:
+            db.session.delete(task)
+            db.session.commit()
+            return jsonify({'message': '删除成功'}), 200
+        else:
+            return jsonify({'message': '任务不存在'}), 404
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error deleting fetch server task: {str(e)}")
+        return jsonify({'message': '删除失败'}), 500

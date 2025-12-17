@@ -8,16 +8,79 @@ import json
 import sys
 import logging
 from flask import request, current_app
-from flask_socketio import emit, disconnect
+from flask_socketio import emit, disconnect, join_room
 from config import Config
 import jwt
 
 logger = logging.getLogger(__name__)
 
-# Store active fetch-server tasks: {task_id: {output, status, server_info}}
+# Store active fetch-server tasks: {task_id: {output, status, server_info, user_id}}
 # Thread-safe access using a lock
 fetch_server_tasks = {}
 fetch_server_tasks_lock = threading.Lock()
+
+# Track log update interval for database saves (save every N lines to reduce DB load)
+LOG_SAVE_INTERVAL = 10
+
+
+def verify_token(token):
+    """验证JWT token并返回用户信息"""
+    if not token:
+        return None
+    try:
+        data = jwt.decode(token, Config.JWT_SECRET_KEY, algorithms=['HS256'])
+        return data
+    except jwt.ExpiredSignatureError:
+        logger.warning("Token expired")
+        return None
+    except jwt.InvalidTokenError:
+        logger.warning("Invalid token")
+        return None
+
+
+def _save_task_to_db(app, user_id, ip_address, status, log_output=None, servers_added=None):
+    """Save task state to database for persistence
+    
+    Args:
+        app: Flask app instance for context
+        user_id: User ID
+        ip_address: IP address (task ID)
+        status: Task status (running, completed, failed, timeout, error)
+        log_output: Current log output
+        servers_added: List of added servers
+    """
+    try:
+        with app.app_context():
+            from models import db
+            from models.user_preference import FetchServerTask
+            from utils import china_now
+            
+            task = FetchServerTask.query.filter_by(
+                user_id=user_id,
+                ip_address=ip_address
+            ).first()
+            
+            if not task:
+                task = FetchServerTask(
+                    user_id=user_id,
+                    ip_address=ip_address
+                )
+                db.session.add(task)
+            
+            task.status = status
+            if log_output is not None:
+                task.log_output = log_output
+            if servers_added is not None:
+                task.servers_added = json.dumps(servers_added)
+            if status == 'running' and not task.started_at:
+                task.started_at = china_now()
+            if status in ['completed', 'failed', 'timeout', 'error']:
+                task.completed_at = china_now()
+            task.updated_at = china_now()
+            
+            db.session.commit()
+    except Exception as e:
+        logger.error(f"Error saving task to database: {str(e)}")
 
 
 def verify_token(token):
@@ -177,12 +240,15 @@ def register_fetch_server_events(socketio):
                 return
 
         # 初始化任务状态
+        user_id = user_data.get('user_id')
         with fetch_server_tasks_lock:
             fetch_server_tasks[task_id] = {
                 'status': 'running',
                 'output': '',
                 'servers': [],
-                'sid': sid
+                'sid': sid,
+                'user_id': user_id,
+                'line_count': 0  # Track line count for periodic DB saves
             }
 
         # 通知客户端任务已开始
@@ -194,6 +260,12 @@ def register_fetch_server_events(socketio):
         # 获取Flask app实例，用于在后台线程中创建应用上下文
         # Get Flask app instance for creating app context in background thread
         app = current_app._get_current_object()
+        
+        # Save initial task state to database
+        _save_task_to_db(app, user_id, task_id, 'running', '', None)
+        
+        # Join a room for this task so multiple clients can receive updates
+        join_room(f'task_{task_id}')
 
         # 在后台线程中运行脚本
         def run_script():
@@ -210,23 +282,31 @@ def register_fetch_server_events(socketio):
                 )
 
                 full_output = ''
+                line_count = 0
                 
                 # 读取输出并实时发送
                 try:
                     for line in iter(process.stdout.readline, ''):
                         if line:
                             full_output += line
+                            line_count += 1
                             # 更新任务状态（线程安全）
                             with fetch_server_tasks_lock:
                                 if task_id in fetch_server_tasks:
                                     fetch_server_tasks[task_id]['output'] = full_output
-                            # 实时发送输出到客户端
+                                    fetch_server_tasks[task_id]['line_count'] = line_count
+                            
+                            # 实时发送输出到客户端（发送到任务房间，所有订阅的客户端都能收到）
                             socketio.emit(
                                 'fetch_server_output',
                                 {'data': line, 'task_id': task_id},
                                 namespace='/fetch-server',
-                                room=sid
+                                room=f'task_{task_id}'
                             )
+                            
+                            # Periodically save to database (every LOG_SAVE_INTERVAL lines)
+                            if line_count % LOG_SAVE_INTERVAL == 0:
+                                _save_task_to_db(app, user_id, task_id, 'running', full_output, None)
                 except Exception as e:
                     logger.warning(f"Error reading output: {str(e)}")
 
@@ -239,11 +319,13 @@ def register_fetch_server_events(socketio):
                     with fetch_server_tasks_lock:
                         if task_id in fetch_server_tasks:
                             fetch_server_tasks[task_id]['status'] = 'timeout'
+                    # Save timeout status to database
+                    _save_task_to_db(app, user_id, task_id, 'timeout', full_output, None)
                     socketio.emit(
                         'fetch_server_error',
                         {'message': '脚本执行超时（超过20分钟）', 'task_id': task_id},
                         namespace='/fetch-server',
-                        room=sid
+                        room=f'task_{task_id}'
                     )
                     return
 
@@ -309,13 +391,17 @@ def register_fetch_server_events(socketio):
                             db.session.commit()
 
                 # 更新任务状态（线程安全）
+                final_status = 'completed' if process.returncode == 0 else 'failed'
                 with fetch_server_tasks_lock:
                     if task_id in fetch_server_tasks:
-                        fetch_server_tasks[task_id]['status'] = 'completed' if process.returncode == 0 else 'failed'
+                        fetch_server_tasks[task_id]['status'] = final_status
                         fetch_server_tasks[task_id]['servers'] = added_servers
                         fetch_server_tasks[task_id]['output'] = full_output
+                
+                # Save final state to database
+                _save_task_to_db(app, user_id, task_id, final_status, full_output, added_servers)
 
-                # 发送完成消息
+                # 发送完成消息到任务房间
                 socketio.emit(
                     'fetch_server_completed',
                     {
@@ -326,7 +412,7 @@ def register_fetch_server_events(socketio):
                         'message': f'获取服务器完成，新增 {len(added_servers)} 台服务器' if process.returncode == 0 else '脚本执行失败'
                     },
                     namespace='/fetch-server',
-                    room=sid
+                    room=f'task_{task_id}'
                 )
 
             except Exception as e:
@@ -334,11 +420,13 @@ def register_fetch_server_events(socketio):
                 with fetch_server_tasks_lock:
                     if task_id in fetch_server_tasks:
                         fetch_server_tasks[task_id]['status'] = 'error'
+                # Save error state to database
+                _save_task_to_db(app, user_id, task_id, 'error', str(e), None)
                 socketio.emit(
                     'fetch_server_error',
                     {'message': f'执行失败: {str(e)}', 'task_id': task_id},
                     namespace='/fetch-server',
-                    room=sid
+                    room=f'task_{task_id}'
                 )
 
         # 启动后台线程
@@ -348,6 +436,51 @@ def register_fetch_server_events(socketio):
             name=f'fetch-server-{task_id}'
         )
         thread.start()
+
+    @socketio.on('subscribe_task', namespace='/fetch-server')
+    def handle_subscribe_task(data):
+        """订阅任务更新（用于重新连接到正在运行的任务）
+        
+        当用户关闭对话框后重新打开，或者在其他设备打开时，
+        可以通过此事件订阅正在运行的任务，接收实时更新。
+        """
+        sid = request.sid
+        
+        # 验证token
+        token = data.get('token')
+        user_data = verify_token(token)
+        if not user_data:
+            emit('fetch_server_error', {'message': '认证失败，请重新登录'})
+            disconnect()
+            return
+        
+        task_id = data.get('task_id', '')
+        if not task_id:
+            emit('subscribe_error', {'message': '请提供任务ID'})
+            return
+        
+        # Join the task room to receive updates
+        join_room(f'task_{task_id}')
+        
+        # Check if task is still running in memory
+        with fetch_server_tasks_lock:
+            task = fetch_server_tasks.get(task_id)
+        
+        if task:
+            # Task is still running, send current state
+            emit('task_subscribed', {
+                'task_id': task_id,
+                'status': task['status'],
+                'output': task['output'],
+                'servers': task.get('servers', [])
+            })
+        else:
+            # Task not in memory, it might have completed or not started
+            emit('task_subscribed', {
+                'task_id': task_id,
+                'status': 'not_in_memory',
+                'message': '任务不在内存中，请从数据库获取状态'
+            })
 
     @socketio.on('get_task_status', namespace='/fetch-server')
     def handle_get_task_status(data):
@@ -360,7 +493,7 @@ def register_fetch_server_events(socketio):
                 'task_id': task_id,
                 'status': task['status'],
                 'output': task['output'],
-                'servers': task['servers']
+                'servers': task.get('servers', [])
             })
         else:
             emit('task_status', {
