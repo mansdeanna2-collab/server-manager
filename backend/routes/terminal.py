@@ -3,8 +3,10 @@ import logging
 from flask import request
 from flask_socketio import emit, disconnect
 from models.server import Server
+from models.user import User
 from utils.crypto import PasswordEncryption
 from services.terminal_service import TerminalService
+from services.log_service import log_server_connect
 from config import Config
 import jwt
 
@@ -95,10 +97,17 @@ def register_terminal_events(socketio):
         if not connect_result.get('success'):
             error_msg = connect_result.get('message', '无法连接到服务器')
             emit('terminal_error', {'message': error_msg})
+            # 记录连接失败日志
+            user = User.query.get(user_data.get('user_id'))
+            log_server_connect(user, server.ip_address, success=False, error_msg=error_msg)
             return
 
         # 存储会话
         terminal_sessions[sid] = terminal
+
+        # 记录连接成功日志
+        user = User.query.get(user_data.get('user_id'))
+        log_server_connect(user, server.ip_address, success=True)
 
         # 通知客户端连接成功
         emit('terminal_connected', {

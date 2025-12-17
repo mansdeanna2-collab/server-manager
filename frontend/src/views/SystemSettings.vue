@@ -221,6 +221,9 @@
                       <el-icon><Document /></el-icon>
                       系统日志
                     </h3>
+                    <div class="log-description">
+                      <p>系统日志记录了用户登录、服务器操作、系统设置等重要操作。</p>
+                    </div>
                     <div class="log-actions">
                       <el-button
                         type="primary"
@@ -228,31 +231,87 @@
                         @click="viewSystemLogs"
                       >
                         <el-icon><View /></el-icon>
-                        查看日志
+                        查看完整日志
                       </el-button>
-                      <el-select
-                        v-model="logLines"
-                        placeholder="选择行数"
-                        style="width: 150px; margin-left: 10px;"
-                      >
-                        <el-option
-                          label="最近100行"
-                          :value="100"
-                        />
-                        <el-option
-                          label="最近500行"
-                          :value="500"
-                        />
-                        <el-option
-                          label="最近1000行"
-                          :value="1000"
-                        />
-                        <el-option
-                          label="最近2000行"
-                          :value="2000"
-                        />
-                      </el-select>
                     </div>
+                    
+                    <!-- 日志统计 -->
+                    <div
+                      v-if="logStats.total > 0"
+                      class="log-stats"
+                    >
+                      <h4>日志统计</h4>
+                      <div class="stats-grid">
+                        <div class="stat-item">
+                          <span class="stat-label">总日志数</span>
+                          <span class="stat-value">{{ logStats.total }}</span>
+                        </div>
+                        <div
+                          v-for="(count, type) in logStats.by_type"
+                          :key="type"
+                          class="stat-item"
+                        >
+                          <span class="stat-label">{{ getLogTypeLabel(type) }}</span>
+                          <span class="stat-value">{{ count }}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <!-- 最近日志预览 -->
+                    <div
+                      v-if="recentLogs.length > 0"
+                      class="recent-logs"
+                    >
+                      <h4>最近操作</h4>
+                      <div class="log-list">
+                        <div
+                          v-for="log in recentLogs"
+                          :key="log.id"
+                          class="log-item"
+                          :class="['log-' + log.status]"
+                        >
+                          <div class="log-item-header">
+                            <el-tag
+                              :type="getLogStatusType(log.status)"
+                              size="small"
+                            >
+                              {{ getLogTypeLabel(log.log_type) }}
+                            </el-tag>
+                            <span class="log-time">{{ formatDateTime(log.created_at) }}</span>
+                          </div>
+                          <div class="log-item-body">
+                            <span class="log-action">{{ log.action }}</span>
+                            <span
+                              v-if="log.target"
+                              class="log-target"
+                            >
+                              → {{ log.target }}
+                            </span>
+                          </div>
+                          <div class="log-item-footer">
+                            <span
+                              v-if="log.username"
+                              class="log-user"
+                            >
+                              <el-icon><User /></el-icon>
+                              {{ log.username }}
+                            </span>
+                            <span
+                              v-if="log.ip_address"
+                              class="log-ip"
+                            >
+                              <el-icon><Monitor /></el-icon>
+                              {{ log.ip_address }}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <el-empty
+                      v-else-if="!loadingLogs"
+                      description="暂无日志记录"
+                    />
                   </div>
                 </el-col>
               </el-row>
@@ -325,42 +384,174 @@
     <!-- System Logs Dialog -->
     <el-dialog
       v-model="logsDialogVisible"
-      title="系统日志"
-      width="900px"
-      top="5vh"
+      title="系统操作日志"
+      width="1100px"
+      top="3vh"
+      :close-on-click-modal="false"
     >
-      <div
-        v-if="loadingLogs"
-        class="loading-container"
-      >
-        <el-icon
-          class="loading-icon"
-          :size="40"
-        >
-          <Loading />
-        </el-icon>
-        <p class="loading-text">
-          正在加载系统日志...
-        </p>
-      </div>
-      <div
-        v-else
-        class="logs-content"
-      >
-        <div class="logs-header">
-          <el-tag type="info">
-            共 {{ systemLogs.length }} 条日志
-          </el-tag>
+      <div class="logs-dialog-content">
+        <!-- 筛选工具栏 -->
+        <div class="logs-toolbar">
+          <el-select
+            v-model="logTypeFilter"
+            placeholder="日志类型"
+            clearable
+            style="width: 150px;"
+            @change="filterLogs"
+          >
+            <el-option
+              v-for="type in logTypes"
+              :key="type.value"
+              :label="type.label"
+              :value="type.value"
+            />
+          </el-select>
+          <el-select
+            v-model="logStatusFilter"
+            placeholder="状态"
+            clearable
+            style="width: 120px; margin-left: 10px;"
+            @change="filterLogs"
+          >
+            <el-option
+              label="成功"
+              value="success"
+            />
+            <el-option
+              label="失败"
+              value="failed"
+            />
+            <el-option
+              label="警告"
+              value="warning"
+            />
+          </el-select>
           <el-button
-            size="small"
+            type="primary"
+            :loading="loadingLogs"
+            style="margin-left: auto;"
             @click="refreshLogs"
           >
             <el-icon><Refresh /></el-icon>
             刷新
           </el-button>
         </div>
-        <div class="logs-container">
-          <pre class="logs-text">{{ systemLogs.join('\n') }}</pre>
+        
+        <!-- 日志列表 -->
+        <div
+          v-if="loadingLogs"
+          class="loading-container"
+        >
+          <el-icon
+            class="loading-icon"
+            :size="40"
+          >
+            <Loading />
+          </el-icon>
+          <p class="loading-text">
+            正在加载日志...
+          </p>
+        </div>
+        
+        <el-table
+          v-else
+          :data="systemLogs"
+          stripe
+          border
+          size="small"
+          max-height="500"
+          style="width: 100%;"
+        >
+          <el-table-column
+            prop="created_at"
+            label="时间"
+            width="180"
+          >
+            <template #default="scope">
+              <span class="log-time-cell">{{ formatDateTime(scope.row.created_at) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="log_type"
+            label="类型"
+            width="120"
+            align="center"
+          >
+            <template #default="scope">
+              <el-tag
+                :type="getLogTypeColor(scope.row.log_type)"
+                size="small"
+              >
+                {{ getLogTypeLabel(scope.row.log_type) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="action"
+            label="操作"
+            min-width="200"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            prop="target"
+            label="目标"
+            width="150"
+            show-overflow-tooltip
+          >
+            <template #default="scope">
+              <span class="log-target-cell">{{ scope.row.target || '-' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="username"
+            label="用户"
+            width="100"
+            align="center"
+          >
+            <template #default="scope">
+              <span>{{ scope.row.username || '-' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="ip_address"
+            label="IP地址"
+            width="140"
+          >
+            <template #default="scope">
+              <span class="log-ip-cell">{{ scope.row.ip_address || '-' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="status"
+            label="状态"
+            width="80"
+            align="center"
+          >
+            <template #default="scope">
+              <el-tag
+                :type="getLogStatusType(scope.row.status)"
+                size="small"
+              >
+                {{ getStatusLabel(scope.row.status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+        
+        <!-- 分页 -->
+        <div
+          v-if="logTotal > 0"
+          class="pagination-container"
+        >
+          <el-pagination
+            v-model:current-page="logPage"
+            v-model:page-size="logPageSize"
+            :page-sizes="[50, 100, 200, 500]"
+            :total="logTotal"
+            layout="total, sizes, prev, pager, next, jumper"
+            @size-change="refreshLogs"
+            @current-change="refreshLogs"
+          />
         </div>
       </div>
       <template #footer>
@@ -409,7 +600,46 @@ const sslForm = reactive({
 const logsDialogVisible = ref(false)
 const loadingLogs = ref(false)
 const systemLogs = ref([])
-const logLines = ref(500)
+const recentLogs = ref([])
+const logTypes = ref([])
+const logStats = ref({ total: 0, by_type: {}, by_status: {} })
+const logPage = ref(1)
+const logPageSize = ref(100)
+const logTotal = ref(0)
+const logTypeFilter = ref('')
+const logStatusFilter = ref('')
+
+// 日志类型标签映射
+const logTypeLabels = {
+  'login': '登录成功',
+  'login_failed': '登录失败',
+  'logout': '用户登出',
+  'password_change': '密码修改',
+  'server_connect': '服务器连接',
+  'server_create': '创建服务器',
+  'server_update': '更新服务器',
+  'server_delete': '删除服务器',
+  'server_check': '检测服务器',
+  'backup': '系统备份',
+  'settings': '设置修改',
+  'import': '服务器导入'
+}
+
+// 日志类型颜色映射
+const logTypeColors = {
+  'login': 'success',
+  'login_failed': 'danger',
+  'logout': 'info',
+  'password_change': 'warning',
+  'server_connect': 'primary',
+  'server_create': 'success',
+  'server_update': 'warning',
+  'server_delete': 'danger',
+  'server_check': 'info',
+  'backup': 'primary',
+  'settings': 'warning',
+  'import': 'success'
+}
 
 const passwordForm = reactive({
   old_password: '',
@@ -524,9 +754,54 @@ const removeWhitelistIp = (index) => {
   }
 }
 
+// 获取日志类型标签
+const getLogTypeLabel = (type) => {
+  return logTypeLabels[type] || type
+}
+
+// 获取日志类型颜色
+const getLogTypeColor = (type) => {
+  return logTypeColors[type] || 'info'
+}
+
+// 获取日志状态类型
+const getLogStatusType = (status) => {
+  const statusMap = {
+    'success': 'success',
+    'failed': 'danger',
+    'warning': 'warning'
+  }
+  return statusMap[status] || 'info'
+}
+
+// 获取状态标签
+const getStatusLabel = (status) => {
+  const labels = {
+    'success': '成功',
+    'failed': '失败',
+    'warning': '警告'
+  }
+  return labels[status] || status
+}
+
+// 格式化日期时间
+const formatDateTime = (isoString) => {
+  if (!isoString) return '-'
+  const date = new Date(isoString)
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+}
+
 // 查看系统日志
 const viewSystemLogs = async () => {
   logsDialogVisible.value = true
+  logPage.value = 1
   await refreshLogs()
 }
 
@@ -534,9 +809,15 @@ const viewSystemLogs = async () => {
 const refreshLogs = async () => {
   loadingLogs.value = true
   try {
-    const response = await preferencesAPI.getSystemLogs(logLines.value)
+    const response = await preferencesAPI.getSystemLogs({
+      page: logPage.value,
+      perPage: logPageSize.value,
+      logType: logTypeFilter.value || undefined,
+      status: logStatusFilter.value || undefined
+    })
     if (response.data.success) {
       systemLogs.value = response.data.logs || []
+      logTotal.value = response.data.total || 0
     } else {
       ElMessage.error(response.data.message || '获取日志失败')
     }
@@ -548,11 +829,56 @@ const refreshLogs = async () => {
   }
 }
 
+// 过滤日志
+const filterLogs = async () => {
+  logPage.value = 1
+  await refreshLogs()
+}
+
+// 加载日志类型
+const loadLogTypes = async () => {
+  try {
+    const response = await preferencesAPI.getLogTypes()
+    if (response.data.success) {
+      logTypes.value = response.data.types || []
+    }
+  } catch (_error) {
+    // 忽略错误
+  }
+}
+
+// 加载日志统计
+const loadLogStats = async () => {
+  try {
+    const response = await preferencesAPI.getLogStats()
+    if (response.data.success) {
+      logStats.value = response.data.stats || { total: 0, by_type: {}, by_status: {} }
+    }
+  } catch (_error) {
+    // 忽略错误
+  }
+}
+
+// 加载最近日志
+const loadRecentLogs = async () => {
+  try {
+    const response = await preferencesAPI.getSystemLogs({
+      page: 1,
+      perPage: 10
+    })
+    if (response.data.success) {
+      recentLogs.value = response.data.logs || []
+    }
+  } catch (_error) {
+    // 忽略错误
+  }
+}
+
 // 处理设置菜单选择
-const handleSettingMenuSelect = (index) => {
+const handleSettingMenuSelect = async (index) => {
   activeSettingMenu.value = index
   if (index === 'logs') {
-    viewSystemLogs()
+    await Promise.all([loadLogTypes(), loadLogStats(), loadRecentLogs()])
   }
 }
 
@@ -826,6 +1152,132 @@ const handleChangePassword = async () => {
   margin-bottom: 20px;
 }
 
+.log-description {
+  margin-bottom: 16px;
+  color: #606266;
+  font-size: 14px;
+}
+
+.log-description p {
+  margin: 0;
+}
+
+/* 日志统计 */
+.log-stats {
+  margin-top: 24px;
+  padding: 16px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #ebeef5;
+}
+
+.log-stats h4 {
+  margin: 0 0 16px 0;
+  font-size: 15px;
+  color: #303133;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: #409EFF;
+}
+
+/* 最近日志 */
+.recent-logs {
+  margin-top: 24px;
+}
+
+.recent-logs h4 {
+  margin: 0 0 16px 0;
+  font-size: 15px;
+  color: #303133;
+}
+
+.log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.log-item {
+  padding: 12px 16px;
+  background: #fff;
+  border-radius: 8px;
+  border-left: 4px solid #409EFF;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.log-item.log-failed {
+  border-left-color: #F56C6C;
+}
+
+.log-item.log-warning {
+  border-left-color: #E6A23C;
+}
+
+.log-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.log-time {
+  font-size: 12px;
+  color: #909399;
+}
+
+.log-item-body {
+  margin-bottom: 8px;
+}
+
+.log-action {
+  font-weight: 500;
+  color: #303133;
+}
+
+.log-target {
+  color: #409EFF;
+  margin-left: 8px;
+}
+
+.log-item-footer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.log-user,
+.log-ip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 /* 加载状态 */
 .loading-container {
   display: flex;
@@ -858,32 +1310,41 @@ const handleChangePassword = async () => {
 }
 
 /* 日志对话框样式 */
-.logs-content {
-  max-height: 60vh;
-  overflow: hidden;
+.logs-dialog-content {
+  max-height: 70vh;
+  overflow-y: auto;
 }
 
-.logs-header {
+.logs-toolbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
-}
-
-.logs-container {
-  max-height: 50vh;
-  overflow-y: auto;
-  background: #1e1e1e;
+  padding: 12px 16px;
+  background: #f5f7fa;
   border-radius: 8px;
-  padding: 16px;
 }
 
-.logs-text {
+.log-time-cell {
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
   font-size: 12px;
-  color: #d4d4d4;
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-all;
+  color: #606266;
+}
+
+.log-target-cell {
+  color: #409EFF;
+  font-weight: 500;
+}
+
+.log-ip-cell {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 12px;
+}
+
+.pagination-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #ebeef5;
 }
 </style>

@@ -8,6 +8,7 @@ from models.user import User
 from models.user_preference import (
     IpCheckStatus, IpIdResult, SegmentNote, SegmentFavorite, ServerFavorite
 )
+from models.system_log import SystemLog
 from routes.auth import auth_bp
 from routes.servers import servers_bp
 from routes.preferences import preferences_bp

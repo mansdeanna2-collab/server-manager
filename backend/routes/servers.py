@@ -6,6 +6,10 @@ from utils.crypto import PasswordEncryption
 from utils import china_now
 from services.ssh_service import SSHService
 from services.check_service import CheckService
+from services.log_service import (
+    log_server_create, log_server_update, log_server_delete,
+    log_server_check, log_server_connect, log_import
+)
 from extensions import limiter
 from config import Config
 import logging
@@ -45,7 +49,7 @@ def get_servers(_current_user):
 
 @servers_bp.route('', methods=['POST'])
 @token_required
-def create_server(_current_user):
+def create_server(current_user):
     """创建新服务器"""
     data = request.get_json()
 
@@ -72,6 +76,7 @@ def create_server(_current_user):
     db.session.commit()
 
     logger.info(f"Server created: {server.ip_address}")
+    log_server_create(current_user, server.ip_address, server.port, server.username)
     return jsonify(server.to_dict()), 201
 
 
@@ -104,7 +109,7 @@ def get_server_password(_current_user, server_id):
 
 @servers_bp.route('/<int:server_id>', methods=['PUT'])
 @token_required
-def update_server(_current_user, server_id):
+def update_server(current_user, server_id):
     """更新服务器"""
     server = Server.query.get(server_id)
 
@@ -112,32 +117,42 @@ def update_server(_current_user, server_id):
         return jsonify({'message': 'Server not found'}), 404
 
     data = request.get_json()
+    changes = {}
 
     # Check for duplicate IP address when updating IP
     if 'ip_address' in data and data['ip_address'] != server.ip_address:
         existing_server = Server.query.filter_by(ip_address=data['ip_address']).first()
         if existing_server:
             return jsonify({'message': f'服务器IP {data["ip_address"]} 已存在'}), 400
+        changes['ip_address'] = {'from': server.ip_address, 'to': data['ip_address']}
         server.ip_address = data['ip_address']
     if 'port' in data:
+        if server.port != data['port']:
+            changes['port'] = {'from': server.port, 'to': data['port']}
         server.port = data['port']
     if 'username' in data:
+        if server.username != data['username']:
+            changes['username'] = {'from': server.username, 'to': data['username']}
         server.username = data['username']
     if 'password' in data:
+        changes['password'] = '已修改'
         server.encrypted_password = password_encryptor.encrypt(data['password'])
     if 'notes' in data:
+        if server.notes != data['notes']:
+            changes['notes'] = '已修改'
         server.notes = data['notes']
 
     server.updated_at = china_now()
     db.session.commit()
 
     logger.info(f"Server updated: {server.ip_address}")
+    log_server_update(current_user, server.ip_address, changes)
     return jsonify(server.to_dict()), 200
 
 
 @servers_bp.route('/<int:server_id>', methods=['DELETE'])
 @token_required
-def delete_server(_current_user, server_id):
+def delete_server(current_user, server_id):
     """删除服务器"""
     server = Server.query.get(server_id)
 
@@ -149,12 +164,13 @@ def delete_server(_current_user, server_id):
     db.session.commit()
 
     logger.info(f"Server deleted: {ip_address}")
+    log_server_delete(current_user, ip_address)
     return jsonify({'message': 'Server deleted successfully'}), 200
 
 
 @servers_bp.route('/<int:server_id>/check', methods=['POST'])
 @token_required
-def check_server(_current_user, server_id):
+def check_server(current_user, server_id):
     """检查服务器状态"""
     server = Server.query.get(server_id)
 
@@ -178,6 +194,8 @@ def check_server(_current_user, server_id):
     server.check_detail = status_info.get('detail')
     server.error_type = _normalize_error_type(status_info.get('error_type'))
     db.session.commit()
+
+    log_server_check(current_user, server.ip_address, status_info['overall'])
 
     return jsonify({
         'server_id': server_id,
@@ -432,7 +450,7 @@ def check_ip_status(_current_user):
 
 @servers_bp.route('/import-from-files', methods=['POST'])
 @token_required
-def import_servers_from_files(_current_user):
+def import_servers_from_files(current_user):
     """从服务器文件目录导入服务器"""
     server_files_dir = Config.SERVER_FILES_DIR
     if not os.path.exists(server_files_dir):
@@ -538,6 +556,7 @@ def import_servers_from_files(_current_user):
 
         if imported:
             db.session.commit()
+            log_import(current_user, len(imported), len(skipped), len(errors))
     except Exception as e:
         db.session.rollback()
         logger.error(f"Import failed: {str(e)}")
