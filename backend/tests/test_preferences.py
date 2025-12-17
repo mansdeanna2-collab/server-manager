@@ -5,7 +5,8 @@ from app import create_app
 from models import db
 from models.user import User
 from models.user_preference import (
-    IpCheckStatus, IpIdResult, SegmentNote, SegmentFavorite, ServerFavorite
+    IpCheckStatus, IpIdResult, SegmentNote, SegmentFavorite, ServerFavorite,
+    FetchServerTask
 )
 
 
@@ -193,3 +194,126 @@ class TestServerFavorites:
         assert response.status_code == 200
         data = response.get_json()
         assert data['favorited'] is False
+
+
+class TestFetchServerTasks:
+    """Tests for fetch server task endpoints"""
+
+    def test_get_fetch_server_tasks_empty(self, client, auth_headers):
+        """Test getting empty fetch server tasks"""
+        response = client.get('/api/preferences/fetch-server-tasks', headers=auth_headers)
+        assert response.status_code == 200
+        assert response.get_json() == {}
+
+    def test_save_fetch_server_task(self, client, auth_headers):
+        """Test saving fetch server task"""
+        response = client.post('/api/preferences/fetch-server-tasks',
+            headers=auth_headers,
+            json={
+                'ip_address': '192.168.1.1',
+                'status': 'running',
+                'log_output': 'Starting script...'
+            })
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data['ip_address'] == '192.168.1.1'
+        assert data['status'] == 'running'
+        assert data['log_output'] == 'Starting script...'
+
+    def test_get_fetch_server_task_by_ip(self, client, auth_headers):
+        """Test getting specific fetch server task by IP"""
+        # First save a task
+        client.post('/api/preferences/fetch-server-tasks',
+            headers=auth_headers,
+            json={
+                'ip_address': '192.168.1.2',
+                'status': 'completed',
+                'log_output': 'Done'
+            })
+        
+        # Get by IP
+        response = client.get('/api/preferences/fetch-server-tasks/192.168.1.2',
+            headers=auth_headers)
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data['ip_address'] == '192.168.1.2'
+        assert data['status'] == 'completed'
+
+    def test_get_fetch_server_task_not_found(self, client, auth_headers):
+        """Test getting non-existent fetch server task"""
+        response = client.get('/api/preferences/fetch-server-tasks/10.0.0.1',
+            headers=auth_headers)
+        assert response.status_code == 404
+        data = response.get_json()
+        assert data['status'] == 'not_found'
+
+    def test_get_running_fetch_server_tasks(self, client, auth_headers):
+        """Test getting only running fetch server tasks"""
+        # Save multiple tasks with different statuses
+        client.post('/api/preferences/fetch-server-tasks',
+            headers=auth_headers,
+            json={'ip_address': '192.168.1.1', 'status': 'running'})
+        client.post('/api/preferences/fetch-server-tasks',
+            headers=auth_headers,
+            json={'ip_address': '192.168.1.2', 'status': 'completed'})
+        client.post('/api/preferences/fetch-server-tasks',
+            headers=auth_headers,
+            json={'ip_address': '192.168.1.3', 'status': 'running'})
+        
+        # Get running tasks only
+        response = client.get('/api/preferences/fetch-server-tasks/running',
+            headers=auth_headers)
+        assert response.status_code == 200
+        data = response.get_json()
+        assert '192.168.1.1' in data
+        assert '192.168.1.3' in data
+        assert '192.168.1.2' not in data
+
+    def test_update_fetch_server_task(self, client, auth_headers):
+        """Test updating existing fetch server task"""
+        # Create initial task
+        client.post('/api/preferences/fetch-server-tasks',
+            headers=auth_headers,
+            json={
+                'ip_address': '192.168.1.1',
+                'status': 'running',
+                'log_output': 'Starting...'
+            })
+        
+        # Update the task
+        response = client.post('/api/preferences/fetch-server-tasks',
+            headers=auth_headers,
+            json={
+                'ip_address': '192.168.1.1',
+                'status': 'completed',
+                'log_output': 'Completed successfully',
+                'servers_added': [{'ip': '192.168.1.100'}]
+            })
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data['status'] == 'completed'
+        assert data['log_output'] == 'Completed successfully'
+        assert data['servers_added'] == [{'ip': '192.168.1.100'}]
+
+    def test_delete_fetch_server_task(self, client, auth_headers):
+        """Test deleting fetch server task"""
+        # Create a task
+        client.post('/api/preferences/fetch-server-tasks',
+            headers=auth_headers,
+            json={'ip_address': '192.168.1.1', 'status': 'completed'})
+        
+        # Delete the task
+        response = client.delete('/api/preferences/fetch-server-tasks/192.168.1.1',
+            headers=auth_headers)
+        assert response.status_code == 200
+        
+        # Verify it's deleted
+        response = client.get('/api/preferences/fetch-server-tasks/192.168.1.1',
+            headers=auth_headers)
+        assert response.status_code == 404
+
+    def test_delete_fetch_server_task_not_found(self, client, auth_headers):
+        """Test deleting non-existent fetch server task"""
+        response = client.delete('/api/preferences/fetch-server-tasks/10.0.0.1',
+            headers=auth_headers)
+        assert response.status_code == 404

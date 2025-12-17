@@ -127,7 +127,14 @@ export const preferencesAPI = {
   toggleServerFavorite: (serverId) => api.post('/preferences/server-favorites', { server_id: serverId }),
 
   // 更新Cookie
-  updateCookie: () => api.post('/preferences/update-cookie', {}, { timeout: 120000 })  // 2 minutes timeout
+  updateCookie: () => api.post('/preferences/update-cookie', {}, { timeout: 120000 }),  // 2 minutes timeout
+
+  // 获取服务器任务状态（持久化到数据库）
+  getFetchServerTasks: () => api.get('/preferences/fetch-server-tasks'),
+  getFetchServerTask: (ipAddress) => api.get(`/preferences/fetch-server-tasks/${ipAddress}`),
+  getRunningFetchServerTasks: () => api.get('/preferences/fetch-server-tasks/running'),
+  saveFetchServerTask: (data) => api.post('/preferences/fetch-server-tasks', data),
+  deleteFetchServerTask: (ipAddress) => api.delete(`/preferences/fetch-server-tasks/${ipAddress}`)
 }
 
 export default api
