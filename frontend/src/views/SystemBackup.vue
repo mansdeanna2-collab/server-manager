@@ -114,6 +114,73 @@
             </template>
             
             <div class="backup-content">
+              <!-- Backup Statistics Cards -->
+              <div
+                v-if="backupStats.total_count > 0"
+                class="backup-stats-grid"
+              >
+                <div class="stat-card stat-card-total">
+                  <div class="stat-card-icon">
+                    <el-icon :size="24">
+                      <Files />
+                    </el-icon>
+                  </div>
+                  <div class="stat-card-info">
+                    <div class="stat-card-value">
+                      {{ backupStats.total_count }}
+                    </div>
+                    <div class="stat-card-label">
+                      备份总数
+                    </div>
+                  </div>
+                </div>
+                <div class="stat-card stat-card-size">
+                  <div class="stat-card-icon">
+                    <el-icon :size="24">
+                      <Coin />
+                    </el-icon>
+                  </div>
+                  <div class="stat-card-info">
+                    <div class="stat-card-value">
+                      {{ backupStats.total_size_formatted }}
+                    </div>
+                    <div class="stat-card-label">
+                      总大小
+                    </div>
+                  </div>
+                </div>
+                <div class="stat-card stat-card-avg">
+                  <div class="stat-card-icon">
+                    <el-icon :size="24">
+                      <DataLine />
+                    </el-icon>
+                  </div>
+                  <div class="stat-card-info">
+                    <div class="stat-card-value">
+                      {{ backupStats.average_size_formatted }}
+                    </div>
+                    <div class="stat-card-label">
+                      平均大小
+                    </div>
+                  </div>
+                </div>
+                <div class="stat-card stat-card-time">
+                  <div class="stat-card-icon">
+                    <el-icon :size="24">
+                      <Clock />
+                    </el-icon>
+                  </div>
+                  <div class="stat-card-info">
+                    <div class="stat-card-value stat-card-value-small">
+                      {{ backupStats.newest_backup || '-' }}
+                    </div>
+                    <div class="stat-card-label">
+                      最新备份
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <!-- Loading State -->
               <div
                 v-if="loadingBackups"
@@ -134,21 +201,38 @@
               <el-empty
                 v-else-if="backupList.length === 0"
                 description="暂无备份文件，点击【备份系统】按钮创建新的备份"
-              />
+              >
+                <el-button
+                  type="success"
+                  :loading="creatingBackup"
+                  @click="handleCreateBackup"
+                >
+                  <el-icon><Upload /></el-icon>
+                  立即备份
+                </el-button>
+              </el-empty>
 
               <!-- Backup List -->
               <div
                 v-else
                 class="backup-list"
               >
-                <div class="backup-stats">
+                <div class="backup-list-header">
                   <el-tag
                     type="info"
                     size="large"
                     effect="dark"
                   >
+                    <el-icon><Files /></el-icon>
                     共 {{ backupList.length }} 个备份文件
                   </el-tag>
+                  <el-alert
+                    title="提示: 建议定期备份并下载到本地保存"
+                    type="info"
+                    :closable="false"
+                    show-icon
+                    class="backup-tip"
+                  />
                 </div>
 
                 <el-table
@@ -156,24 +240,34 @@
                   style="width: 100%"
                   stripe
                   border
+                  :row-class-name="getRowClassName"
                 >
                   <el-table-column
                     label="文件名"
-                    min-width="280"
+                    min-width="260"
                   >
                     <template #default="scope">
-                      <span class="backup-filename">{{ scope.row.filename }}</span>
+                      <div class="backup-filename-cell">
+                        <el-icon
+                          class="file-icon"
+                          :size="18"
+                        >
+                          <Document />
+                        </el-icon>
+                        <span class="backup-filename">{{ scope.row.filename }}</span>
+                      </div>
                     </template>
                   </el-table-column>
                   <el-table-column
                     label="文件大小"
-                    width="150"
+                    width="130"
                     align="center"
                   >
                     <template #default="scope">
                       <el-tag
                         type="primary"
                         effect="plain"
+                        size="small"
                       >
                         {{ scope.row.size_formatted }}
                       </el-tag>
@@ -181,21 +275,65 @@
                   </el-table-column>
                   <el-table-column
                     label="创建时间"
-                    width="200"
+                    width="180"
                     align="center"
                   >
                     <template #default="scope">
-                      <span class="backup-time">{{ scope.row.created_at || '-' }}</span>
+                      <span class="backup-time">
+                        <el-icon><Clock /></el-icon>
+                        {{ scope.row.created_at || '-' }}
+                      </span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    label="状态"
+                    width="100"
+                    align="center"
+                  >
+                    <template #default="scope">
+                      <el-tooltip
+                        :content="getVerificationTooltip(scope.row)"
+                        placement="top"
+                      >
+                        <el-tag
+                          :type="getVerificationTagType(scope.row)"
+                          size="small"
+                          effect="light"
+                        >
+                          <el-icon v-if="scope.row.verifying">
+                            <Loading />
+                          </el-icon>
+                          <el-icon v-else-if="scope.row.verified === true">
+                            <CircleCheck />
+                          </el-icon>
+                          <el-icon v-else-if="scope.row.verified === false">
+                            <CircleClose />
+                          </el-icon>
+                          <el-icon v-else>
+                            <QuestionFilled />
+                          </el-icon>
+                          {{ getVerificationLabel(scope.row) }}
+                        </el-tag>
+                      </el-tooltip>
                     </template>
                   </el-table-column>
                   <el-table-column
                     label="操作"
-                    width="200"
+                    width="260"
                     align="center"
                     fixed="right"
                   >
                     <template #default="scope">
                       <div class="operation-buttons">
+                        <el-button
+                          type="info"
+                          size="small"
+                          :loading="scope.row.verifying"
+                          @click="handleVerifyBackup(scope.row)"
+                        >
+                          <el-icon><Check /></el-icon>
+                          验证
+                        </el-button>
                         <el-button
                           type="primary"
                           size="small"
@@ -511,7 +649,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  ArrowDown, Back, Delete, Download, FolderOpened, Grid, InfoFilled, List, Loading, Monitor, Odometer, OfficeBuilding, Refresh, Search, Setting, Tools, Upload, User
+  ArrowDown, Back, Check, CircleCheck, CircleClose, Clock, Coin, DataLine, Delete, Document, Download, Files, FolderOpened, Grid, InfoFilled, List, Loading, Monitor, Odometer, OfficeBuilding, QuestionFilled, Refresh, Search, Setting, Tools, Upload, User
 } from '@element-plus/icons-vue'
 import { authAPI, preferencesAPI } from '@/api'
 
@@ -526,6 +664,14 @@ const passwordFormRef = ref(null)
 const creatingBackup = ref(false)
 const loadingBackups = ref(false)
 const backupList = ref([])
+const backupStats = ref({
+  total_count: 0,
+  total_size: 0,
+  total_size_formatted: '0 B',
+  average_size_formatted: '0 B',
+  oldest_backup: null,
+  newest_backup: null
+})
 
 // 数据库相关状态
 const databaseDialogVisible = ref(false)
@@ -576,13 +722,33 @@ const passwordRules = {
 
 const activeMenu = computed(() => route.path)
 
+// 加载备份统计
+const loadBackupStats = async () => {
+  try {
+    const response = await preferencesAPI.getBackupStats()
+    if (response.data.success) {
+      backupStats.value = response.data.stats
+    }
+  } catch (_error) {
+    // 静默失败，统计信息不是关键功能
+  }
+}
+
 // 加载备份列表
 const loadBackupList = async () => {
   loadingBackups.value = true
   try {
     const response = await preferencesAPI.listBackups()
     if (response.data.success) {
-      backupList.value = response.data.backups || []
+      // 为每个备份添加验证状态字段
+      backupList.value = (response.data.backups || []).map(backup => ({
+        ...backup,
+        verified: null,
+        verifying: false,
+        verificationInfo: null
+      }))
+      // 同时加载统计信息
+      await loadBackupStats()
     } else {
       ElMessage.error(response.data.message || '获取备份列表失败')
     }
@@ -592,6 +758,80 @@ const loadBackupList = async () => {
   } finally {
     loadingBackups.value = false
   }
+}
+
+// 验证备份
+const handleVerifyBackup = async (backup) => {
+  backup.verifying = true
+  try {
+    const response = await preferencesAPI.verifyBackup(backup.backup_id)
+    if (response.data.success) {
+      backup.verified = response.data.valid
+      backup.verificationInfo = {
+        file_count: response.data.file_count,
+        has_database: response.data.has_database,
+        has_backend: response.data.has_backend,
+        has_frontend: response.data.has_frontend,
+        errors: response.data.errors
+      }
+      if (response.data.valid) {
+        ElMessage.success(`备份文件验证通过，包含 ${response.data.file_count} 个文件`)
+      } else {
+        ElMessage.warning('备份文件验证失败: ' + (response.data.errors?.join(', ') || '未知错误'))
+      }
+    } else {
+      backup.verified = false
+      ElMessage.error(response.data.message || '验证失败')
+    }
+  } catch (error) {
+    backup.verified = false
+    const message = error.response?.data?.message || error.message || '验证失败'
+    ElMessage.error(`验证备份失败: ${message}`)
+  } finally {
+    backup.verifying = false
+  }
+}
+
+// 获取验证状态标签
+const getVerificationLabel = (backup) => {
+  if (backup.verifying) return '验证中'
+  if (backup.verified === true) return '有效'
+  if (backup.verified === false) return '无效'
+  return '未验证'
+}
+
+// 获取验证状态标签类型
+const getVerificationTagType = (backup) => {
+  if (backup.verifying) return 'info'
+  if (backup.verified === true) return 'success'
+  if (backup.verified === false) return 'danger'
+  return 'warning'
+}
+
+// 获取验证提示信息
+const getVerificationTooltip = (backup) => {
+  if (backup.verifying) return '正在验证备份文件...'
+  if (backup.verified === null) return '点击验证按钮检查备份完整性'
+  if (backup.verified === false) {
+    const errors = backup.verificationInfo?.errors || []
+    return errors.length > 0 ? `验证失败: ${errors.join(', ')}` : '备份文件无效'
+  }
+  const info = backup.verificationInfo
+  if (info) {
+    const parts = [`共 ${info.file_count} 个文件`]
+    if (info.has_database) parts.push('✓ 数据库')
+    if (info.has_backend) parts.push('✓ 后端')
+    if (info.has_frontend) parts.push('✓ 前端')
+    return parts.join(' | ')
+  }
+  return '备份有效'
+}
+
+// 获取表格行类名
+const getRowClassName = ({ row }) => {
+  if (row.verified === false) return 'row-invalid'
+  if (row.verified === true) return 'row-valid'
+  return ''
 }
 
 // 创建备份
@@ -1006,22 +1246,136 @@ const formatCellValue = (value) => {
   padding: 16px 0;
 }
 
-.backup-stats {
+/* 备份统计卡片网格 */
+.backup-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 1200px) {
+  .backup-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .backup-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.stat-card {
   display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.stat-card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.stat-card-total .stat-card-icon {
+  background: linear-gradient(135deg, #409EFF 0%, #337ecc 100%);
+}
+
+.stat-card-size .stat-card-icon {
+  background: linear-gradient(135deg, #67C23A 0%, #529b2e 100%);
+}
+
+.stat-card-avg .stat-card-icon {
+  background: linear-gradient(135deg, #E6A23C 0%, #cf9236 100%);
+}
+
+.stat-card-time .stat-card-icon {
+  background: linear-gradient(135deg, #909399 0%, #73767a 100%);
+}
+
+.stat-card-info {
+  flex: 1;
+}
+
+.stat-card-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #303133;
+  line-height: 1.3;
+}
+
+.stat-card-value-small {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.stat-card-label {
+  font-size: 13px;
+  color: #909399;
+  margin-top: 2px;
+}
+
+.backup-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 16px;
   margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.backup-tip {
+  flex: 1;
+  min-width: 300px;
+}
+
+.backup-filename-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-icon {
+  color: #67C23A;
 }
 
 .backup-filename {
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: #409EFF;
 }
 
 .backup-time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   color: #606266;
-  font-size: 14px;
+  font-size: 13px;
+}
+
+/* 表格行状态 */
+:deep(.row-valid) {
+  background-color: rgba(103, 194, 58, 0.05) !important;
+}
+
+:deep(.row-invalid) {
+  background-color: rgba(245, 108, 108, 0.05) !important;
 }
 
 /* 操作按钮容器 */

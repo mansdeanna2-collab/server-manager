@@ -124,12 +124,26 @@
                       <el-icon><Lock /></el-icon>
                       登录白名单设置
                     </h3>
+                    <el-alert
+                      type="warning"
+                      :closable="false"
+                      show-icon
+                      class="setting-alert"
+                    >
+                      <template #title>
+                        注意：启用白名单后，不在列表中的IP将无法登录系统。请确保当前IP已添加到白名单中。
+                      </template>
+                    </el-alert>
                     <el-form
                       :model="whitelistForm"
                       label-width="120px"
                     >
                       <el-form-item label="启用白名单">
-                        <el-switch v-model="whitelistForm.enabled" />
+                        <el-switch
+                          v-model="whitelistForm.enabled"
+                          :active-text="whitelistForm.enabled ? '已启用' : ''"
+                          :inactive-text="!whitelistForm.enabled ? '未启用' : ''"
+                        />
                         <span class="form-tip">启用后，只有白名单中的IP地址可以登录系统</span>
                       </el-form-item>
                       <el-form-item label="IP白名单">
@@ -142,7 +156,35 @@
                             <el-input
                               v-model="whitelistForm.ip_list[index]"
                               placeholder="请输入IP地址，如: 192.168.1.1"
-                            />
+                              :class="{ 'is-valid': isValidIp(ip), 'is-invalid': ip && !isValidIp(ip) }"
+                            >
+                              <template #suffix>
+                                <el-icon
+                                  v-if="ip && isValidIp(ip)"
+                                  class="valid-icon"
+                                >
+                                  <CircleCheck />
+                                </el-icon>
+                                <el-icon
+                                  v-else-if="ip && !isValidIp(ip)"
+                                  class="invalid-icon"
+                                >
+                                  <CircleClose />
+                                </el-icon>
+                              </template>
+                            </el-input>
+                            <el-tooltip
+                              v-if="ip && !isValidIp(ip)"
+                              content="无效的IP地址格式"
+                              placement="top"
+                            >
+                              <el-button
+                                type="warning"
+                                :icon="Warning"
+                                circle
+                                size="small"
+                              />
+                            </el-tooltip>
                             <el-button
                               type="danger"
                               :icon="Delete"
@@ -150,23 +192,39 @@
                               @click="removeWhitelistIp(index)"
                             />
                           </div>
-                          <el-button
-                            type="primary"
-                            @click="addWhitelistIp"
-                          >
-                            <el-icon><Plus /></el-icon>
-                            添加IP
-                          </el-button>
+                          <div class="ip-actions">
+                            <el-button
+                              type="primary"
+                              @click="addWhitelistIp"
+                            >
+                              <el-icon><Plus /></el-icon>
+                              添加IP
+                            </el-button>
+                            <span class="ip-count">
+                              共 {{ validIpCount }} 个有效IP
+                            </span>
+                          </div>
                         </div>
                       </el-form-item>
                       <el-form-item>
                         <el-button
                           type="primary"
                           :loading="savingSettings"
+                          :disabled="whitelistForm.enabled && validIpCount === 0"
                           @click="saveWhitelistSettings"
                         >
+                          <el-icon><Check /></el-icon>
                           保存设置
                         </el-button>
+                        <el-tooltip
+                          v-if="whitelistForm.enabled && validIpCount === 0"
+                          content="启用白名单时至少需要一个有效的IP地址"
+                          placement="top"
+                        >
+                          <el-icon class="tip-icon">
+                            <InfoFilled />
+                          </el-icon>
+                        </el-tooltip>
                       </el-form-item>
                     </el-form>
                   </div>
@@ -180,34 +238,95 @@
                       <el-icon><Key /></el-icon>
                       SSL设置
                     </h3>
+                    <el-alert
+                      type="info"
+                      :closable="false"
+                      show-icon
+                      class="setting-alert"
+                    >
+                      <template #title>
+                        SSL证书用于加密HTTPS连接。请确保证书文件路径正确且文件存在。
+                      </template>
+                    </el-alert>
                     <el-form
                       :model="sslForm"
                       label-width="120px"
                     >
                       <el-form-item label="启用SSL">
-                        <el-switch v-model="sslForm.enabled" />
+                        <el-switch
+                          v-model="sslForm.enabled"
+                          :active-text="sslForm.enabled ? '已启用' : ''"
+                          :inactive-text="!sslForm.enabled ? '未启用' : ''"
+                        />
                         <span class="form-tip">启用HTTPS安全连接</span>
                       </el-form-item>
                       <el-form-item label="证书路径">
                         <el-input
                           v-model="sslForm.cert_path"
                           placeholder="SSL证书文件路径，如: /etc/ssl/certs/server.crt"
-                        />
+                          :disabled="!sslForm.enabled"
+                          :class="{ 'path-configured': sslForm.cert_path }"
+                        >
+                          <template #prefix>
+                            <el-icon><Document /></el-icon>
+                          </template>
+                          <template #suffix>
+                            <el-tag
+                              v-if="sslForm.cert_path"
+                              size="small"
+                              type="success"
+                            >
+                              已配置
+                            </el-tag>
+                          </template>
+                        </el-input>
+                        <div class="path-hint">
+                          支持 .crt, .pem, .cer 格式的证书文件
+                        </div>
                       </el-form-item>
                       <el-form-item label="私钥路径">
                         <el-input
                           v-model="sslForm.key_path"
                           placeholder="SSL私钥文件路径，如: /etc/ssl/private/server.key"
-                        />
+                          :disabled="!sslForm.enabled"
+                          :class="{ 'path-configured': sslForm.key_path }"
+                        >
+                          <template #prefix>
+                            <el-icon><Key /></el-icon>
+                          </template>
+                          <template #suffix>
+                            <el-tag
+                              v-if="sslForm.key_path"
+                              size="small"
+                              type="success"
+                            >
+                              已配置
+                            </el-tag>
+                          </template>
+                        </el-input>
+                        <div class="path-hint">
+                          支持 .key, .pem 格式的私钥文件
+                        </div>
                       </el-form-item>
                       <el-form-item>
                         <el-button
                           type="primary"
                           :loading="savingSettings"
+                          :disabled="sslForm.enabled && (!sslForm.cert_path || !sslForm.key_path)"
                           @click="saveSSLSettings"
                         >
+                          <el-icon><Check /></el-icon>
                           保存设置
                         </el-button>
+                        <el-tooltip
+                          v-if="sslForm.enabled && (!sslForm.cert_path || !sslForm.key_path)"
+                          content="启用SSL时需要配置证书和私钥路径"
+                          placement="top"
+                        >
+                          <el-icon class="tip-icon">
+                            <InfoFilled />
+                          </el-icon>
+                        </el-tooltip>
                       </el-form-item>
                     </el-form>
                   </div>
@@ -568,7 +687,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
-  ArrowDown, Back, Delete, Document, FolderOpened, Key, Loading, Lock, Monitor, Odometer, OfficeBuilding, Plus, Refresh, Search, Setting, Tools, User, View
+  ArrowDown, Back, Check, CircleCheck, CircleClose, Delete, Document, FolderOpened, InfoFilled, Key, Loading, Lock, Monitor, Odometer, OfficeBuilding, Plus, Refresh, Search, Setting, Tools, User, View, Warning
 } from '@element-plus/icons-vue'
 import { authAPI, preferencesAPI } from '@/api'
 
@@ -594,6 +713,26 @@ const sslForm = reactive({
   enabled: false,
   cert_path: '',
   key_path: ''
+})
+
+// IP验证正则表达式（IPv4）
+// IPv6 validation is handled by the backend using Python's ipaddress module
+const ipv4Pattern = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/
+
+// 验证IP地址（IPv4格式，IPv6由后端验证）
+const isValidIp = (ip) => {
+  if (!ip || !ip.trim()) return false
+  const trimmedIp = ip.trim()
+  // Check IPv4 format
+  if (ipv4Pattern.test(trimmedIp)) return true
+  // Basic IPv6 check (contains colons, let backend do full validation)
+  if (trimmedIp.includes(':') && /^[0-9a-fA-F:]+$/.test(trimmedIp)) return true
+  return false
+}
+
+// 计算有效IP数量
+const validIpCount = computed(() => {
+  return whitelistForm.ip_list.filter(ip => isValidIp(ip)).length
 })
 
 // 日志相关状态
@@ -1143,6 +1282,56 @@ const handleChangePassword = async () => {
 
 .ip-item .el-input {
   flex: 1;
+}
+
+.ip-item .el-input.is-valid :deep(.el-input__wrapper) {
+  border-color: #67C23A;
+  box-shadow: 0 0 0 1px #67C23A inset;
+}
+
+.ip-item .el-input.is-invalid :deep(.el-input__wrapper) {
+  border-color: #F56C6C;
+  box-shadow: 0 0 0 1px #F56C6C inset;
+}
+
+.valid-icon {
+  color: #67C23A;
+}
+
+.invalid-icon {
+  color: #F56C6C;
+}
+
+.ip-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.ip-count {
+  font-size: 13px;
+  color: #909399;
+}
+
+.tip-icon {
+  margin-left: 8px;
+  color: #909399;
+  cursor: help;
+}
+
+.setting-alert {
+  margin-bottom: 20px;
+}
+
+.path-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.path-configured :deep(.el-input__wrapper) {
+  background-color: rgba(103, 194, 58, 0.05);
 }
 
 /* 日志操作区 */

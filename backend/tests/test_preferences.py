@@ -317,3 +317,39 @@ class TestFetchServerTasks:
         response = client.delete('/api/preferences/fetch-server-tasks/10.0.0.1',
             headers=auth_headers)
         assert response.status_code == 404
+
+
+class TestBackupStats:
+    """Tests for backup statistics endpoint"""
+
+    def test_get_backup_stats_empty(self, client, auth_headers):
+        """Test getting backup stats when no backups exist"""
+        response = client.get('/api/preferences/backup/stats', headers=auth_headers)
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data['success'] is True
+        assert 'stats' in data
+        assert data['stats']['total_count'] == 0
+
+
+class TestBackupVerify:
+    """Tests for backup verification endpoint"""
+
+    def test_verify_backup_invalid_id(self, client, auth_headers):
+        """Test verifying backup with invalid ID format"""
+        response = client.get('/api/preferences/backup/verify/invalid_id',
+            headers=auth_headers)
+        assert response.status_code == 400
+        data = response.get_json()
+        assert data['success'] is False
+        assert '无效的备份标识符' in data['message']
+
+    def test_verify_backup_not_found(self, client, auth_headers):
+        """Test verifying backup that doesn't exist"""
+        # Valid format but non-existent backup
+        response = client.get('/api/preferences/backup/verify/20991231_235959',
+            headers=auth_headers)
+        assert response.status_code == 404
+        data = response.get_json()
+        assert data['success'] is False
+        assert '不存在' in data['message']

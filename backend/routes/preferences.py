@@ -881,6 +881,178 @@ def delete_system_backup(_current_user, backup_id):
         }), 500
 
 
+@preferences_bp.route('/backup/verify/<backup_id>', methods=['GET'])
+@token_required
+def verify_system_backup(_current_user, backup_id):
+    """验证系统备份文件完整性
+    
+    Args:
+        backup_id: 备份文件标识符（时间戳）
+        
+    Returns:
+        success: 是否成功
+        valid: 备份文件是否有效
+        file_count: 文件数量
+        has_database: 是否包含数据库
+        has_backend: 是否包含后端代码
+        has_frontend: 是否包含前端代码
+        errors: 验证错误列表
+    """
+    import zipfile
+    
+    try:
+        # 验证backup_id格式
+        if not backup_id or not BACKUP_ID_PATTERN.match(backup_id):
+            return jsonify({
+                'success': False,
+                'message': '无效的备份标识符'
+            }), 400
+        
+        # 获取备份文件路径
+        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        backup_dir = os.path.join(backend_dir, 'backups')
+        backup_filename = f"system_backup_{backup_id}.zip"
+        backup_path = os.path.join(backup_dir, backup_filename)
+        
+        # 验证路径安全性
+        backup_path = os.path.realpath(backup_path)
+        backup_dir = os.path.realpath(backup_dir)
+        if not backup_path.startswith(backup_dir):
+            return jsonify({
+                'success': False,
+                'message': '无效的备份路径'
+            }), 400
+        
+        # 检查文件是否存在
+        if not os.path.exists(backup_path):
+            return jsonify({
+                'success': False,
+                'message': '备份文件不存在'
+            }), 404
+        
+        errors = []
+        file_count = 0
+        has_database = False
+        has_backend = False
+        has_frontend = False
+        
+        # 验证zip文件完整性
+        try:
+            with zipfile.ZipFile(backup_path, 'r') as zipf:
+                # 测试zip文件完整性
+                bad_files = zipf.testzip()
+                if bad_files:
+                    errors.append(f'损坏的文件: {bad_files}')
+                
+                # 获取文件列表
+                file_list = zipf.namelist()
+                file_count = len(file_list)
+                
+                # 检查关键目录
+                for f in file_list:
+                    if f.startswith('database/'):
+                        has_database = True
+                    elif f.startswith('backend/'):
+                        has_backend = True
+                    elif f.startswith('frontend/'):
+                        has_frontend = True
+                        
+        except zipfile.BadZipFile:
+            errors.append('无效的ZIP文件格式')
+        except Exception as e:
+            errors.append(f'验证错误: {str(e)}')
+        
+        # 判断是否有效
+        valid = len(errors) == 0 and file_count > 0
+        
+        return jsonify({
+            'success': True,
+            'valid': valid,
+            'file_count': file_count,
+            'has_database': has_database,
+            'has_backend': has_backend,
+            'has_frontend': has_frontend,
+            'errors': errors
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error verifying backup: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'验证备份失败: {str(e)}'
+        }), 500
+
+
+@preferences_bp.route('/backup/stats', methods=['GET'])
+@token_required
+def get_backup_stats(_current_user):
+    """获取备份统计信息
+    
+    Returns:
+        success: 是否成功
+        stats: 统计信息
+            - total_count: 备份总数
+            - total_size: 总大小（字节）
+            - total_size_formatted: 格式化的总大小
+            - oldest_backup: 最早的备份时间
+            - newest_backup: 最新的备份时间
+            - average_size: 平均大小（字节）
+            - average_size_formatted: 格式化的平均大小
+    """
+    from datetime import datetime
+    
+    try:
+        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        backup_dir = os.path.join(backend_dir, 'backups')
+        
+        total_count = 0
+        total_size = 0
+        oldest_backup = None
+        newest_backup = None
+        
+        if os.path.exists(backup_dir):
+            for filename in os.listdir(backup_dir):
+                if filename.startswith('system_backup_') and filename.endswith('.zip'):
+                    backup_path = os.path.join(backup_dir, filename)
+                    file_size = os.path.getsize(backup_path)
+                    total_count += 1
+                    total_size += file_size
+                    
+                    # 提取时间戳
+                    try:
+                        timestamp_str = filename.replace('system_backup_', '').replace('.zip', '')
+                        created_at = datetime.strptime(timestamp_str, '%Y%m%d_%H%M%S')
+                        
+                        if oldest_backup is None or created_at < oldest_backup:
+                            oldest_backup = created_at
+                        if newest_backup is None or created_at > newest_backup:
+                            newest_backup = created_at
+                    except ValueError:
+                        pass
+        
+        average_size = int(total_size / total_count) if total_count > 0 else 0
+        
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total_count': total_count,
+                'total_size': total_size,
+                'total_size_formatted': format_file_size(total_size),
+                'oldest_backup': oldest_backup.strftime('%Y-%m-%d %H:%M:%S') if oldest_backup else None,
+                'newest_backup': newest_backup.strftime('%Y-%m-%d %H:%M:%S') if newest_backup else None,
+                'average_size': average_size,
+                'average_size_formatted': format_file_size(average_size)
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting backup stats: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取备份统计失败: {str(e)}'
+        }), 500
+
+
 # ============ Database Schema APIs ============
 
 @preferences_bp.route('/database/schema', methods=['GET'])
