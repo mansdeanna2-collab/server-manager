@@ -16,10 +16,12 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-# Default SSL certificate directory
+# Default SSL certificate directory (used when /etc/ssl is writable, e.g., in Docker)
 DEFAULT_SSL_DIR = '/etc/ssl/server-manager'
 # Fallback to local directory if /etc/ssl is not writable
 LOCAL_SSL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'ssl')
+# Project root ssl directory - preferred for Docker deployments as it can be mounted
+PROJECT_SSL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'ssl')
 
 
 def is_valid_ip(address):
@@ -90,27 +92,41 @@ def detect_address_type(address):
 def get_ssl_directory():
     """Get the SSL directory, creating it if necessary
     
+    For Docker deployments, prioritizes directories that can be mounted between containers.
+    
+    Priority order:
+    1. /etc/ssl/server-manager (Docker volume mount point)
+    2. Project root ssl directory (can be mounted in docker-compose)
+    3. Backend local ssl directory (fallback)
+    
     Returns:
         str: Path to SSL directory
     """
-    # Try system directory first
-    if os.path.exists('/etc/ssl') and os.access('/etc/ssl', os.W_OK):
+    # Try the Docker/system directory first (used when mounted via docker-compose)
+    if os.path.exists('/etc/ssl/server-manager') or (os.path.exists('/etc/ssl') and os.access('/etc/ssl', os.W_OK)):
         ssl_dir = DEFAULT_SSL_DIR
-    else:
-        # Fall back to local directory
-        ssl_dir = LOCAL_SSL_DIR
-    
-    # Create directory if it doesn't exist
-    if not os.path.exists(ssl_dir):
         try:
-            os.makedirs(ssl_dir, mode=0o755)
-            logger.info(f"Created SSL directory: {ssl_dir}")
-        except PermissionError:
-            # If we can't create in /etc/ssl, fall back to local
-            ssl_dir = LOCAL_SSL_DIR
             if not os.path.exists(ssl_dir):
                 os.makedirs(ssl_dir, mode=0o755)
-                logger.info(f"Created local SSL directory: {ssl_dir}")
+                logger.info(f"Created SSL directory: {ssl_dir}")
+            return ssl_dir
+        except PermissionError:
+            pass  # Fall through to next option
+    
+    # Try project root ssl directory (for Docker deployments)
+    try:
+        if not os.path.exists(PROJECT_SSL_DIR):
+            os.makedirs(PROJECT_SSL_DIR, mode=0o755)
+            logger.info(f"Created project SSL directory: {PROJECT_SSL_DIR}")
+        return PROJECT_SSL_DIR
+    except (PermissionError, OSError):
+        pass  # Fall through to local directory
+    
+    # Fall back to backend local directory
+    ssl_dir = LOCAL_SSL_DIR
+    if not os.path.exists(ssl_dir):
+        os.makedirs(ssl_dir, mode=0o755)
+        logger.info(f"Created local SSL directory: {ssl_dir}")
     
     return ssl_dir
 
@@ -133,9 +149,14 @@ def generate_self_signed_certificate(address, address_type='ip'):
     ssl_dir = get_ssl_directory()
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     
-    # File names
-    key_file = os.path.join(ssl_dir, f'server_{timestamp}.key')
-    cert_file = os.path.join(ssl_dir, f'server_{timestamp}.crt')
+    # File names - use fixed names that nginx expects
+    # This makes it easier for Docker to mount and use the certificates
+    key_file = os.path.join(ssl_dir, 'server.key')
+    cert_file = os.path.join(ssl_dir, 'server.crt')
+    
+    # Also create timestamped backup copies
+    key_file_backup = os.path.join(ssl_dir, f'server_{timestamp}.key')
+    cert_file_backup = os.path.join(ssl_dir, f'server_{timestamp}.crt')
     
     # Build Subject Alternative Name (SAN) based on address type
     if address_type == 'ip':
@@ -213,7 +234,14 @@ subjectAltName = @alt_names
         os.chmod(key_file, 0o600)  # Private key: owner read only
         os.chmod(cert_file, 0o644)  # Certificate: readable by all
         
+        # Create backup copies with timestamps
+        import shutil
+        shutil.copy2(key_file, key_file_backup)
+        shutil.copy2(cert_file, cert_file_backup)
+        os.chmod(key_file_backup, 0o600)
+        
         logger.info(f"Generated SSL certificate: {cert_file}")
+        logger.info(f"Backup certificate created: {cert_file_backup}")
         return {
             'success': True,
             'cert_path': cert_file,
@@ -359,13 +387,54 @@ def verify_certificate(cert_path, key_path):
         }
 
 
+def _get_external_ip():
+    """Try to get the external/public IP address using external services.
+    
+    This is useful for Docker environments where the container's internal IP
+    differs from the host's external IP that users actually use to access the service.
+    
+    Returns:
+        str or None: External IP address if successful, None otherwise
+    """
+    import urllib.request
+    import urllib.error
+    
+    # List of services that return the public IP in plain text
+    ip_services = [
+        'https://api.ipify.org',
+        'https://ifconfig.me/ip',
+        'https://icanhazip.com',
+        'https://ipinfo.io/ip',
+    ]
+    
+    for service_url in ip_services:
+        try:
+            # Use a short timeout to avoid long waits
+            req = urllib.request.Request(
+                service_url,
+                headers={'User-Agent': 'curl/7.68.0'}  # Some services require User-Agent
+            )
+            with urllib.request.urlopen(req, timeout=5) as response:
+                ip = response.read().decode('utf-8').strip()
+                # Validate the response is a valid IP
+                if ip and is_valid_ip(ip):
+                    logger.info(f"Detected external IP from {service_url}: {ip}")
+                    return ip
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, Exception) as e:
+            logger.debug(f"Failed to get IP from {service_url}: {str(e)}")
+            continue
+    
+    return None
+
+
 def get_server_address():
     """Try to detect the server's IP address
     
     This function attempts to detect the server's IP address through multiple methods:
-    1. Get hostname and resolve it
-    2. Get outbound IP by checking network routing
-    3. Fall back to localhost if all else fails
+    1. Try to get external/public IP using external services (useful for Docker)
+    2. Get hostname and resolve it
+    3. Get outbound IP by checking network routing
+    4. Fall back to localhost if all else fails
     
     Returns:
         dict: {
@@ -374,16 +443,29 @@ def get_server_address():
             'message': result message
         }
     """
+    # First, try to get the external/public IP address
+    # This is especially important for Docker environments where internal IPs
+    # differ from the external IP users use to access the service
+    external_ip = _get_external_ip()
+    if external_ip:
+        return {
+            'address': external_ip,
+            'type': 'ip',
+            'message': f'检测到服务器外部IP: {external_ip}'
+        }
+    
     # Try to get hostname and resolve it to IP
     try:
         hostname = socket.gethostname()
         try:
             ip = socket.gethostbyname(hostname)
-            return {
-                'address': ip,
-                'type': 'ip',
-                'message': f'检测到服务器IP: {ip}'
-            }
+            # Check if this is not a Docker/container internal IP (172.x.x.x, 10.x.x.x)
+            if not ip.startswith('172.') and not ip.startswith('10.'):
+                return {
+                    'address': ip,
+                    'type': 'ip',
+                    'message': f'检测到服务器IP: {ip}'
+                }
         except socket.gaierror:
             pass
     except Exception:
@@ -401,11 +483,13 @@ def get_server_address():
             s.connect((dns_ip, 53))
             ip = s.getsockname()[0]
             s.close()
-            return {
-                'address': ip,
-                'type': 'ip',
-                'message': f'检测到服务器IP: {ip}'
-            }
+            # Check if this is not a Docker/container internal IP
+            if not ip.startswith('172.') and not ip.startswith('10.'):
+                return {
+                    'address': ip,
+                    'type': 'ip',
+                    'message': f'检测到服务器IP: {ip}'
+                }
         except Exception:
             pass
     

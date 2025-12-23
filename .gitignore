@@ -82,3 +82,4 @@ backend/system_settings.json
 
 # SSL certificates (auto-generated)
 backend/ssl/
+ssl/
