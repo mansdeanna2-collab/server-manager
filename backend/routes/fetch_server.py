@@ -22,6 +22,14 @@ fetch_server_tasks_lock = threading.Lock()
 # Track log update interval for database saves (save every N lines to reduce DB load)
 LOG_SAVE_INTERVAL = 10
 
+# Regex pattern for printable characters (ASCII printable + CJK characters + fullwidth forms)
+# Used to clean corrupted JSON data that may contain unknown/invalid characters
+# - \x20-\x7E: ASCII printable characters (space through tilde)
+# - \u4e00-\u9fff: CJK Unified Ideographs (Chinese characters)
+# - \u3000-\u303f: CJK Symbols and Punctuation
+# - \uff00-\uffef: Halfwidth and Fullwidth Forms
+PRINTABLE_CHARS_PATTERN = re.compile(r'[^\x20-\x7E\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]')
+
 
 def verify_token(token):
     """验证JWT token并返回用户信息"""
@@ -104,16 +112,101 @@ def _parse_server_info(output):
         # 尝试逐行解析JSON
         for line in remaining_text.split('\n'):
             line = line.strip()
-            if line and line.startswith('{') and line.endswith('}'):
+            if line and line.startswith('{') and (line.endswith('}') or '}' in line):
+                # Handle lines that may have extra content after JSON
+                if not line.endswith('}'):
+                    # Find the last '}' and extract the JSON part
+                    last_brace = line.rfind('}')
+                    if last_brace > 0:
+                        line = line[:last_brace + 1]
+                
                 try:
                     server_data = json.loads(line)
                     # 验证必要字段
                     if 'ips' in server_data and 'password' in server_data:
                         servers.append(server_data)
                 except json.JSONDecodeError:
-                    continue
+                    # Try to fix common JSON issues (unknown characters)
+                    # Replace problematic characters with underscores using pre-compiled pattern
+                    cleaned_line = PRINTABLE_CHARS_PATTERN.sub('_', line)
+                    try:
+                        server_data = json.loads(cleaned_line)
+                        if 'ips' in server_data and 'password' in server_data:
+                            servers.append(server_data)
+                            logger.info("Parsed server data after character cleanup")
+                    except json.JSONDecodeError:
+                        # Last resort: try to extract key fields using regex
+                        server_data = _extract_server_data_regex(line)
+                        if server_data:
+                            servers.append(server_data)
+                            logger.info(f"Extracted server data using regex fallback")
+                        else:
+                            logger.warning(f"Failed to parse server JSON: {line[:100]}...")
+                            continue
+    
+    # Also check for "未知字符数量(未做二次验证)" which indicates incomplete parsing
+    # but the data should still be usable
+    if not servers and '未知字符数量' in output:
+        logger.info("Detected '未知字符数量' marker, attempting alternative extraction")
+        # Try to find and extract JSON from the entire output
+        json_pattern = r'\{[^{}]*"ips"\s*:\s*\[[^\]]+\][^{}]*"password"\s*:\s*"[^"]+\"[^{}]*\}'
+        matches = re.findall(json_pattern, output, re.DOTALL)
+        for json_str in matches:
+            try:
+                server_data = json.loads(json_str)
+                if 'ips' in server_data and 'password' in server_data:
+                    servers.append(server_data)
+                    logger.info(f"Extracted server data using alternative pattern")
+            except json.JSONDecodeError:
+                continue
     
     return servers
+
+
+def _extract_server_data_regex(line):
+    """Extract server data using regex when JSON parsing fails.
+    
+    Args:
+        line: String containing malformed JSON
+    
+    Returns:
+        dict: Extracted server data or None if extraction failed
+    """
+    try:
+        # Extract IPs array
+        ips_match = re.search(r'"ips"\s*:\s*\[([^\]]+)\]', line)
+        if not ips_match:
+            return None
+        
+        # Extract individual IPs from the array
+        ips_str = ips_match.group(1)
+        ips = re.findall(r'"([^"]+)"', ips_str)
+        if not ips:
+            return None
+        
+        # Extract password
+        password_match = re.search(r'"password"\s*:\s*"([^"]+)"', line)
+        if not password_match:
+            return None
+        password = password_match.group(1)
+        
+        # Extract optional fields
+        os_id_match = re.search(r'"os_id"\s*:\s*"([^"]+)"', line)
+        os_name_match = re.search(r'"os_name"\s*:\s*"([^"]+)"', line)
+        instance_id_match = re.search(r'"instance_id"\s*:\s*"([^"]+)"', line)
+        name_match = re.search(r'"name"\s*:\s*"([^"]+)"', line)
+        
+        return {
+            'ips': ips,
+            'password': password,
+            'os_id': os_id_match.group(1) if os_id_match else '',
+            'os_name': os_name_match.group(1) if os_name_match else '',
+            'instance_id': instance_id_match.group(1) if instance_id_match else '',
+            'name': name_match.group(1) if name_match else ''
+        }
+    except Exception as e:
+        logger.warning(f"Regex extraction failed: {str(e)}")
+        return None
 
 
 def _determine_port_and_username(server_data):

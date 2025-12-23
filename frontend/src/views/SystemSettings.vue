@@ -102,6 +102,10 @@
                       <el-icon><Lock /></el-icon>
                       <span>登录白名单</span>
                     </el-menu-item>
+                    <el-menu-item index="totp">
+                      <el-icon><Iphone /></el-icon>
+                      <span>谷歌验证</span>
+                    </el-menu-item>
                     <el-menu-item index="ssl">
                       <el-icon><Key /></el-icon>
                       <span>SSL设置</span>
@@ -227,6 +231,185 @@
                         </el-tooltip>
                       </el-form-item>
                     </el-form>
+                  </div>
+                  
+                  <!-- 谷歌验证设置 -->
+                  <div
+                    v-if="activeSettingMenu === 'totp'"
+                    class="setting-panel"
+                  >
+                    <h3 class="setting-title">
+                      <el-icon><Iphone /></el-icon>
+                      谷歌验证（两步验证）
+                    </h3>
+                    <el-alert
+                      type="info"
+                      :closable="false"
+                      show-icon
+                      class="setting-alert"
+                    >
+                      <template #title>
+                        启用谷歌验证后，登录时除了密码还需要输入Google Authenticator生成的6位验证码，大大增强账户安全性。
+                      </template>
+                    </el-alert>
+                    
+                    <!-- 当前状态 -->
+                    <div class="totp-status-section">
+                      <div class="totp-status">
+                        <span class="status-label">当前状态：</span>
+                        <el-tag
+                          :type="totpForm.enabled ? 'success' : 'info'"
+                          size="large"
+                        >
+                          {{ totpForm.enabled ? '已启用' : '未启用' }}
+                        </el-tag>
+                      </div>
+                    </div>
+                    
+                    <!-- 设置流程 -->
+                    <div
+                      v-if="!totpForm.enabled"
+                      class="totp-setup-section"
+                    >
+                      <el-steps
+                        :active="totpSetupStep"
+                        finish-status="success"
+                        class="totp-steps"
+                      >
+                        <el-step title="生成密钥" />
+                        <el-step title="扫描二维码" />
+                        <el-step title="验证并启用" />
+                      </el-steps>
+                      
+                      <!-- 步骤1: 生成密钥 -->
+                      <div
+                        v-if="totpSetupStep === 0"
+                        class="totp-step-content"
+                      >
+                        <p>点击下方按钮生成谷歌验证密钥：</p>
+                        <el-button
+                          type="primary"
+                          :loading="totpLoading"
+                          @click="handleSetupTotp"
+                        >
+                          <el-icon><Setting /></el-icon>
+                          生成密钥
+                        </el-button>
+                      </div>
+                      
+                      <!-- 步骤2: 显示二维码 -->
+                      <div
+                        v-if="totpSetupStep === 1"
+                        class="totp-step-content"
+                      >
+                        <p>请使用Google Authenticator扫描以下二维码：</p>
+                        <div class="qr-code-container">
+                          <img
+                            v-if="totpQrDataUrl"
+                            :src="totpQrDataUrl"
+                            alt="TOTP QR Code"
+                            class="qr-code-image"
+                          >
+                          <div
+                            v-else
+                            class="qr-code-placeholder"
+                          >
+                            <el-icon :size="60">
+                              <Picture />
+                            </el-icon>
+                            <p>正在生成二维码...</p>
+                          </div>
+                        </div>
+                        <div class="secret-key-section">
+                          <p>或者手动输入以下密钥：</p>
+                          <el-input
+                            v-model="totpForm.secret"
+                            readonly
+                            class="secret-key-input"
+                          >
+                            <template #append>
+                              <el-button @click="copySecretKey">
+                                <el-icon><CopyDocument /></el-icon>
+                                复制
+                              </el-button>
+                            </template>
+                          </el-input>
+                        </div>
+                        <el-button
+                          type="primary"
+                          @click="totpSetupStep = 2"
+                        >
+                          下一步
+                        </el-button>
+                      </div>
+                      
+                      <!-- 步骤3: 验证并启用 -->
+                      <div
+                        v-if="totpSetupStep === 2"
+                        class="totp-step-content"
+                      >
+                        <p>请输入Google Authenticator显示的6位验证码：</p>
+                        <el-input
+                          v-model="totpForm.verificationCode"
+                          placeholder="请输入6位验证码"
+                          maxlength="6"
+                          class="verification-code-input"
+                          @keyup.enter="handleEnableTotp"
+                        />
+                        <div class="totp-actions">
+                          <el-button @click="totpSetupStep = 1">
+                            上一步
+                          </el-button>
+                          <el-button
+                            type="success"
+                            :loading="totpLoading"
+                            @click="handleEnableTotp"
+                          >
+                            <el-icon><CircleCheck /></el-icon>
+                            验证并启用
+                          </el-button>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <!-- 已启用状态 - 禁用选项 -->
+                    <div
+                      v-else
+                      class="totp-enabled-section"
+                    >
+                      <el-alert
+                        type="success"
+                        :closable="false"
+                        show-icon
+                        class="setting-alert"
+                      >
+                        <template #title>
+                          谷歌验证已启用，您的账户受到两步验证保护。
+                        </template>
+                      </el-alert>
+                      
+                      <div class="disable-totp-section">
+                        <h4>禁用谷歌验证</h4>
+                        <p class="warning-text">
+                          <el-icon><Warning /></el-icon>
+                          禁用谷歌验证会降低账户安全性，请谨慎操作。
+                        </p>
+                        <el-input
+                          v-model="totpForm.disableCode"
+                          placeholder="请输入当前的6位验证码以禁用"
+                          maxlength="6"
+                          class="verification-code-input"
+                        />
+                        <el-button
+                          type="danger"
+                          :loading="totpLoading"
+                          @click="handleDisableTotp"
+                        >
+                          <el-icon><CircleClose /></el-icon>
+                          禁用谷歌验证
+                        </el-button>
+                      </div>
+                    </div>
                   </div>
                   
                   <!-- SSL设置 -->
@@ -781,7 +964,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
-  ArrowDown, Back, Check, CircleCheck, CircleClose, Delete, Document, FolderOpened, InfoFilled, Key, Link, Loading, Lock, MagicStick, Monitor, Odometer, OfficeBuilding, Plus, Refresh, Search, Setting, Tools, User, View, Warning
+  ArrowDown, Back, Check, CircleCheck, CircleClose, CopyDocument, Delete, Document, FolderOpened, InfoFilled, Iphone, Key, Link, Loading, Lock, MagicStick, Monitor, Odometer, OfficeBuilding, Picture, Plus, Refresh, Search, Setting, Tools, User, View, Warning
 } from '@element-plus/icons-vue'
 import { authAPI, preferencesAPI } from '@/api'
 
@@ -801,6 +984,17 @@ const whitelistForm = reactive({
   enabled: false,
   ip_list: []
 })
+
+// TOTP (谷歌验证) 设置
+const totpForm = reactive({
+  enabled: false,
+  secret: '',
+  verificationCode: '',
+  disableCode: ''
+})
+const totpSetupStep = ref(0)
+const totpLoading = ref(false)
+const totpQrDataUrl = ref('')
 
 // SSL设置
 const sslForm = reactive({
@@ -1233,6 +1427,131 @@ const handleSettingMenuSelect = async (index) => {
   activeSettingMenu.value = index
   if (index === 'logs') {
     await Promise.all([loadLogTypes(), loadLogStats(), loadRecentLogs()])
+  } else if (index === 'totp') {
+    await loadTotpStatus()
+  }
+}
+
+// 加载TOTP状态
+const loadTotpStatus = async () => {
+  try {
+    const response = await authAPI.getTotpStatus()
+    totpForm.enabled = response.data.totp_enabled
+    // Reset setup step when loading
+    if (!totpForm.enabled) {
+      totpSetupStep.value = 0
+      totpForm.secret = ''
+      totpForm.verificationCode = ''
+      totpQrDataUrl.value = ''
+    }
+  } catch (error) {
+    const message = error.response?.data?.message || error.message || '获取状态失败'
+    ElMessage.error(`获取谷歌验证状态失败: ${message}`)
+  }
+}
+
+// 设置TOTP（生成密钥）
+const handleSetupTotp = async () => {
+  totpLoading.value = true
+  try {
+    const response = await authAPI.setupTotp()
+    if (response.data.success) {
+      totpForm.secret = response.data.secret
+      // Generate QR code data URL
+      await generateQrCode(response.data.uri)
+      totpSetupStep.value = 1
+      ElMessage.success('密钥已生成，请扫描二维码')
+    } else {
+      ElMessage.error(response.data.message || '生成密钥失败')
+    }
+  } catch (error) {
+    const message = error.response?.data?.message || error.message || '设置失败'
+    ElMessage.error(`设置谷歌验证失败: ${message}`)
+  } finally {
+    totpLoading.value = false
+  }
+}
+
+// 生成QR码 (使用本地库，不发送敏感数据到外部服务)
+const generateQrCode = async (uri) => {
+  try {
+    // Import QRCode library dynamically to generate QR codes locally
+    // This keeps the TOTP secret secure by not sending it to external services
+    const QRCode = await import('qrcode')
+    totpQrDataUrl.value = await QRCode.toDataURL(uri, {
+      width: 200,
+      margin: 2,
+      color: {
+        dark: '#000000',
+        light: '#ffffff'
+      }
+    })
+  } catch (_error) {
+    // Fallback: just show the URI for manual entry
+    totpQrDataUrl.value = ''
+  }
+}
+
+// 复制密钥
+const copySecretKey = async () => {
+  try {
+    await navigator.clipboard.writeText(totpForm.secret)
+    ElMessage.success('密钥已复制到剪贴板')
+  } catch (_error) {
+    ElMessage.error('复制失败，请手动复制')
+  }
+}
+
+// 启用TOTP
+const handleEnableTotp = async () => {
+  if (!totpForm.verificationCode || totpForm.verificationCode.length !== 6) {
+    ElMessage.warning('请输入6位验证码')
+    return
+  }
+  
+  totpLoading.value = true
+  try {
+    const response = await authAPI.enableTotp(totpForm.verificationCode)
+    if (response.data.success) {
+      totpForm.enabled = true
+      totpSetupStep.value = 0
+      totpForm.verificationCode = ''
+      ElMessage.success('谷歌验证已成功启用！')
+    } else {
+      ElMessage.error(response.data.message || '启用失败')
+    }
+  } catch (error) {
+    const message = error.response?.data?.message || error.message || '启用失败'
+    ElMessage.error(`启用谷歌验证失败: ${message}`)
+  } finally {
+    totpLoading.value = false
+  }
+}
+
+// 禁用TOTP
+const handleDisableTotp = async () => {
+  if (!totpForm.disableCode || totpForm.disableCode.length !== 6) {
+    ElMessage.warning('请输入6位验证码')
+    return
+  }
+  
+  totpLoading.value = true
+  try {
+    const response = await authAPI.disableTotp(totpForm.disableCode)
+    if (response.data.success) {
+      totpForm.enabled = false
+      totpForm.secret = ''
+      totpForm.disableCode = ''
+      totpSetupStep.value = 0
+      ElMessage.success('谷歌验证已禁用')
+    } else {
+      ElMessage.error(response.data.message || '禁用失败')
+    }
+  } catch (error) {
+    const message = error.response?.data?.message || error.message || '禁用失败'
+    ElMessage.error(`禁用谷歌验证失败: ${message}`)
+  } finally {
+    totpLoading.value = false
   }
 }
 
@@ -1798,5 +2117,144 @@ const handleChangePassword = async () => {
   font-size: 14px;
   color: #E6A23C;
   font-weight: 500;
+}
+
+/* TOTP (谷歌验证) 样式 */
+.totp-status-section {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #f5f7fa;
+  border-radius: 8px;
+}
+
+.totp-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-label {
+  font-size: 14px;
+  color: #606266;
+  font-weight: 500;
+}
+
+.totp-setup-section {
+  margin-top: 24px;
+}
+
+.totp-steps {
+  margin-bottom: 32px;
+}
+
+.totp-step-content {
+  padding: 24px;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #ebeef5;
+}
+
+.totp-step-content p {
+  margin: 0 0 16px 0;
+  color: #606266;
+}
+
+.qr-code-container {
+  display: flex;
+  justify-content: center;
+  margin: 24px 0;
+}
+
+.qr-code-image {
+  width: 200px;
+  height: 200px;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  padding: 8px;
+  background: #fff;
+}
+
+.qr-code-placeholder {
+  width: 200px;
+  height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #f5f7fa;
+  border-radius: 8px;
+  color: #909399;
+}
+
+.qr-code-placeholder p {
+  margin: 8px 0 0 0;
+  font-size: 12px;
+}
+
+.secret-key-section {
+  margin: 24px 0;
+  padding: 16px;
+  background: #f5f7fa;
+  border-radius: 8px;
+}
+
+.secret-key-section p {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  color: #909399;
+}
+
+.secret-key-input {
+  max-width: 400px;
+}
+
+.secret-key-input :deep(.el-input__inner) {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  letter-spacing: 2px;
+  font-weight: 600;
+}
+
+.verification-code-input {
+  max-width: 200px;
+  margin-bottom: 16px;
+}
+
+.verification-code-input :deep(.el-input__inner) {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 18px;
+  letter-spacing: 4px;
+  text-align: center;
+}
+
+.totp-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.totp-enabled-section {
+  margin-top: 24px;
+}
+
+.disable-totp-section {
+  margin-top: 24px;
+  padding: 20px;
+  background: #fef0f0;
+  border-radius: 12px;
+  border: 1px solid #fbc4c4;
+}
+
+.disable-totp-section h4 {
+  margin: 0 0 16px 0;
+  color: #F56C6C;
+}
+
+.warning-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #F56C6C;
+  font-size: 13px;
+  margin-bottom: 16px;
 }
 </style>

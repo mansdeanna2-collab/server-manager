@@ -37,6 +37,7 @@
             size="large"
             :prefix-icon="User"
             class="login-input"
+            :disabled="totpRequired"
           />
         </el-form-item>
         
@@ -49,8 +50,29 @@
             :prefix-icon="Lock"
             show-password
             class="login-input"
+            :disabled="totpRequired"
             @keyup.enter="handleLogin"
           />
+        </el-form-item>
+        
+        <!-- TOTP验证码输入框 -->
+        <el-form-item
+          v-if="totpRequired"
+          prop="totp_code"
+        >
+          <el-input
+            v-model="loginForm.totp_code"
+            placeholder="请输入谷歌验证码"
+            size="large"
+            :prefix-icon="Key"
+            maxlength="6"
+            class="login-input totp-input"
+            @keyup.enter="handleLogin"
+          />
+          <div class="totp-hint">
+            <el-icon><InfoFilled /></el-icon>
+            <span>请打开Google Authenticator输入6位验证码</span>
+          </div>
         </el-form-item>
         
         <el-form-item>
@@ -67,7 +89,20 @@
             >
               <Unlock />
             </el-icon>
-            {{ loading ? '登录中...' : '立即登录' }}
+            {{ loading ? '登录中...' : (totpRequired ? '验证并登录' : '立即登录') }}
+          </el-button>
+        </el-form-item>
+        
+        <!-- 返回按钮（当需要TOTP验证时显示） -->
+        <el-form-item v-if="totpRequired">
+          <el-button
+            type="default"
+            size="large"
+            class="back-btn"
+            @click="resetTotpState"
+          >
+            <el-icon><Back /></el-icon>
+            返回重新登录
           </el-button>
         </el-form-item>
       </el-form>
@@ -99,16 +134,18 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Lock, Monitor, Unlock, User } from '@element-plus/icons-vue'
+import { Back, InfoFilled, Key, Lock, Monitor, Unlock, User } from '@element-plus/icons-vue'
 import { authAPI } from '@/api'
 
 const router = useRouter()
 const formRef = ref(null)
 const loading = ref(false)
+const totpRequired = ref(false)
 
 const loginForm = reactive({
   username: '',
-  password: ''
+  password: '',
+  totp_code: ''
 })
 
 const rules = {
@@ -117,7 +154,16 @@ const rules = {
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' }
+  ],
+  totp_code: [
+    { required: false, message: '请输入验证码', trigger: 'blur' },
+    { len: 6, message: '验证码为6位数字', trigger: 'blur' }
   ]
+}
+
+const resetTotpState = () => {
+  totpRequired.value = false
+  loginForm.totp_code = ''
 }
 
 const handleLogin = async () => {
@@ -125,9 +171,24 @@ const handleLogin = async () => {
   
   await formRef.value.validate(async (valid) => {
     if (valid) {
+      // If TOTP is required but code is empty, don't proceed
+      if (totpRequired.value && !loginForm.totp_code) {
+        ElMessage.warning('请输入谷歌验证码')
+        return
+      }
+      
       loading.value = true
       try {
         const response = await authAPI.login(loginForm)
+        
+        // Check if TOTP verification is required
+        if (response.data.totp_required) {
+          totpRequired.value = true
+          ElMessage.info('请输入谷歌验证码')
+          loading.value = false
+          return
+        }
+        
         localStorage.setItem('token', response.data.token)
         localStorage.setItem('user', JSON.stringify(response.data.user))
         
@@ -289,6 +350,24 @@ const handleLogin = async () => {
   box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.3) inset;
 }
 
+/* TOTP输入框特殊样式 */
+.totp-input :deep(.el-input__wrapper) {
+  border-color: #67C23A;
+}
+
+.totp-input :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 2px rgba(103, 194, 58, 0.3) inset;
+}
+
+.totp-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #67C23A;
+}
+
 .login-btn {
   width: 100%;
   border-radius: 12px;
@@ -312,6 +391,12 @@ const handleLogin = async () => {
 
 .login-btn-icon {
   margin-right: 6px;
+}
+
+.back-btn {
+  width: 100%;
+  border-radius: 12px;
+  height: 40px;
 }
 
 /* 登录页脚 */

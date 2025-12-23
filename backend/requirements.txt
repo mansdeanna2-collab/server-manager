@@ -14,3 +14,5 @@ Werkzeug==3.1.3
 requests==2.32.3
 # tqdm is required for user-uploaded mm.py scripts that display progress bars
 tqdm==4.66.5
+# pyotp is required for Google Authenticator (TOTP) two-factor authentication
+pyotp==2.9.0

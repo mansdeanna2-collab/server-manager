@@ -77,7 +77,12 @@ export const authAPI = {
   logout: () => api.post('/auth/logout'),
   getCurrentUser: () => api.get('/auth/me'),
   refreshToken: () => api.post('/auth/refresh'),
-  changePassword: (passwords) => api.post('/auth/change-password', passwords)
+  changePassword: (passwords) => api.post('/auth/change-password', passwords),
+  // TOTP (Google Authenticator) APIs
+  setupTotp: () => api.post('/auth/totp/setup'),
+  enableTotp: (code) => api.post('/auth/totp/enable', { code }),
+  disableTotp: (code) => api.post('/auth/totp/disable', { code }),
+  getTotpStatus: () => api.get('/auth/totp/status')
 }
 
 // Servers API

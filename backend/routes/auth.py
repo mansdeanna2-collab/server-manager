@@ -3,6 +3,7 @@ import jwt
 from datetime import datetime
 from functools import wraps
 from models.user import User
+from models import db
 from config import Config
 from services.log_service import (
     log_login_success, log_login_failed, log_logout, log_password_change
@@ -63,6 +64,22 @@ def login():
             log_login_failed(data.get('username'))
             return jsonify({'message': 'Invalid credentials'}), 401
 
+        # Check if TOTP is enabled for this user
+        if user.totp_enabled:
+            totp_code = data.get('totp_code')
+            if not totp_code:
+                # Return a special response indicating TOTP is required
+                return jsonify({
+                    'message': 'TOTP verification required',
+                    'totp_required': True
+                }), 200
+            
+            # Verify TOTP code
+            if not user.verify_totp(totp_code):
+                logger.warning(f"Failed TOTP verification for username: {data.get('username')}")
+                log_login_failed(data.get('username'))
+                return jsonify({'message': 'Invalid verification code'}), 401
+
         # Generate JWT token
         token = jwt.encode({
             'user_id': user.id,
@@ -118,7 +135,6 @@ def refresh_token(current_user):
 @token_required
 def change_password(current_user):
     """修改用户密码"""
-    from models import db
     try:
         data = request.get_json()
 
@@ -151,3 +167,97 @@ def change_password(current_user):
     except Exception as e:
         logger.error(f"Password change error: {str(e)}")
         return jsonify({'message': '密码修改失败', 'error': str(e)}), 500
+
+
+# ============ TOTP (Google Authenticator) APIs ============
+
+@auth_bp.route('/totp/setup', methods=['POST'])
+@token_required
+def setup_totp(current_user):
+    """生成TOTP密钥，返回用于二维码的URI"""
+    try:
+        # Generate new secret
+        secret = current_user.generate_totp_secret()
+        db.session.commit()
+        
+        # Get the URI for QR code
+        uri = current_user.get_totp_uri()
+        
+        return jsonify({
+            'success': True,
+            'secret': secret,
+            'uri': uri,
+            'message': '请使用Google Authenticator扫描二维码'
+        }), 200
+    except Exception as e:
+        logger.error(f"TOTP setup error: {str(e)}")
+        return jsonify({'message': f'设置失败: {str(e)}'}), 500
+
+
+@auth_bp.route('/totp/enable', methods=['POST'])
+@token_required
+def enable_totp(current_user):
+    """启用TOTP验证（需要先验证一次验证码）"""
+    try:
+        data = request.get_json()
+        
+        if not data or not data.get('code'):
+            return jsonify({'message': '请提供验证码'}), 400
+        
+        # Verify the code before enabling
+        if not current_user.totp_secret:
+            return jsonify({'message': '请先设置TOTP密钥'}), 400
+        
+        if not current_user.verify_totp(data['code']):
+            return jsonify({'message': '验证码错误，请重试'}), 400
+        
+        current_user.totp_enabled = True
+        db.session.commit()
+        
+        logger.info(f"User {current_user.username} enabled TOTP")
+        return jsonify({
+            'success': True,
+            'message': '谷歌验证已启用'
+        }), 200
+    except Exception as e:
+        logger.error(f"TOTP enable error: {str(e)}")
+        return jsonify({'message': f'启用失败: {str(e)}'}), 500
+
+
+@auth_bp.route('/totp/disable', methods=['POST'])
+@token_required
+def disable_totp(current_user):
+    """禁用TOTP验证"""
+    try:
+        data = request.get_json()
+        
+        # If TOTP is enabled, require verification before disabling
+        if current_user.totp_enabled:
+            if not data or not data.get('code'):
+                return jsonify({'message': '请提供验证码以禁用谷歌验证'}), 400
+            
+            if not current_user.verify_totp(data['code']):
+                return jsonify({'message': '验证码错误'}), 400
+        
+        current_user.totp_enabled = False
+        current_user.totp_secret = None
+        db.session.commit()
+        
+        logger.info(f"User {current_user.username} disabled TOTP")
+        return jsonify({
+            'success': True,
+            'message': '谷歌验证已禁用'
+        }), 200
+    except Exception as e:
+        logger.error(f"TOTP disable error: {str(e)}")
+        return jsonify({'message': f'禁用失败: {str(e)}'}), 500
+
+
+@auth_bp.route('/totp/status', methods=['GET'])
+@token_required
+def get_totp_status(current_user):
+    """获取当前用户的TOTP状态"""
+    return jsonify({
+        'totp_enabled': current_user.totp_enabled,
+        'totp_configured': current_user.totp_secret is not None
+    }), 200
