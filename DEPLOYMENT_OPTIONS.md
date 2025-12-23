@@ -56,6 +56,57 @@ docker compose down
 - [ ] 登录后立即修改默认密码
 - [ ] (可选) 修改 `docker-compose.yml` 端口映射以适配生产环境
 
+## 🔐 SSL/HTTPS 配置 / SSL/HTTPS Configuration
+
+### 启用 SSL / Enable SSL
+
+1. **使用 SSL 专用 docker-compose 文件 / Use the SSL docker-compose file**
+   ```bash
+   # 停止现有服务 / Stop existing services
+   docker compose down
+   
+   # 使用 SSL 配置启动 / Start with SSL configuration
+   docker compose -f docker-compose-ssl.yml up -d --build
+   ```
+
+2. **生成 SSL 证书 / Generate SSL Certificate**
+   - 方式一：通过系统设置页面自动生成 / Method 1: Auto-generate via System Settings
+     1. 访问 `http://your-server-ip:3080` (HTTP 端口)
+     2. 登录后进入 系统设置 -> SSL设置
+     3. 输入服务器的外部 IP 地址（如 `38.190.222.15`）或域名
+     4. 点击"一键自动配置SSL"
+   
+   - 方式二：手动放置证书 / Method 2: Place certificates manually
+     ```bash
+     mkdir -p ./ssl
+     cp your_certificate.crt ./ssl/server.crt
+     cp your_private_key.key ./ssl/server.key
+     ```
+
+3. **重启服务 / Restart services**
+   ```bash
+   docker compose -f docker-compose-ssl.yml restart
+   ```
+
+4. **访问 HTTPS / Access via HTTPS**
+   - HTTPS: `https://your-server-ip:3000`
+   - HTTP (重定向): `http://your-server-ip:3080`
+
+### SSL 相关文件 / SSL Related Files
+- `docker-compose-ssl.yml`: SSL 专用的 Docker Compose 配置
+- `frontend/nginx-ssl.conf`: SSL 版本的 Nginx 配置
+- `./ssl/`: SSL 证书存放目录
+  - `server.crt`: 证书文件
+  - `server.key`: 私钥文件
+
+### 常见 SSL 问题 / Common SSL Issues
+- **证书地址不匹配 / Certificate address mismatch**  
+  确保生成证书时使用的地址与访问时使用的地址一致（外部 IP 或域名）。
+- **Docker 检测到内部 IP / Docker detects internal IP**  
+  在系统设置中手动输入外部 IP 地址，不要依赖自动检测。
+- **自签名证书警告 / Self-signed certificate warning**  
+  首次访问时浏览器会显示证书警告，选择"继续访问"即可。
+
 ## 🆘 常见问题 / Troubleshooting
 - **`docker compose` 找不到 / command not found**  
   安装 Docker Compose 插件，或改用 `docker-compose` 命令。
