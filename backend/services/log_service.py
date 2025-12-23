@@ -205,12 +205,19 @@ def log_backup(user, backup_filename, success=True, error_msg=None):
     )
 
 
-def log_settings_change(user, setting_type):
-    """记录设置修改"""
+def log_settings_change(user, setting_type, details=None):
+    """记录设置修改
+    
+    Args:
+        user: 用户对象
+        setting_type: 设置类型
+        details: 详细信息（可选）
+    """
     log_action(
         LOG_TYPE_SETTINGS,
         f'修改系统设置: {setting_type}',
         user=user,
+        details=details,
         status='success'
     )
 

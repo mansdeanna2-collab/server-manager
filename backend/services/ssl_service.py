@@ -313,6 +313,7 @@ def verify_certificate(cert_path, key_path):
             timeout=30
         )
         
+        # Try RSA key first
         key_modulus = subprocess.run(
             ['openssl', 'rsa', '-noout', '-modulus', '-in', key_path],
             capture_output=True,
@@ -320,19 +321,53 @@ def verify_certificate(cert_path, key_path):
             timeout=30
         )
         
-        if cert_modulus.returncode != 0 or key_modulus.returncode != 0:
-            return {
-                'valid': False,
-                'message': '无法验证证书和私钥的匹配性',
-                'details': details
-            }
-        
-        if cert_modulus.stdout.strip() != key_modulus.stdout.strip():
-            return {
-                'valid': False,
-                'message': '证书和私钥不匹配',
-                'details': details
-            }
+        # If RSA key extraction failed, try with generic pkey command for EC or other key types
+        if key_modulus.returncode != 0:
+            # Try to verify using openssl pkey (works for all key types)
+            key_check = subprocess.run(
+                ['openssl', 'pkey', '-in', key_path, '-pubout', '-outform', 'PEM'],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            cert_pubkey = subprocess.run(
+                ['openssl', 'x509', '-in', cert_path, '-pubkey', '-noout'],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if key_check.returncode != 0 or cert_pubkey.returncode != 0:
+                # If we still can't extract keys, provide more detailed error
+                error_detail = key_check.stderr or key_modulus.stderr or '未知错误'
+                return {
+                    'valid': False,
+                    'message': f'无法验证证书和私钥的匹配性: {error_detail.strip()}',
+                    'details': details
+                }
+            
+            # Compare public keys
+            if key_check.stdout.strip() != cert_pubkey.stdout.strip():
+                return {
+                    'valid': False,
+                    'message': '证书和私钥不匹配',
+                    'details': details
+                }
+        else:
+            # RSA key - compare modulus
+            if cert_modulus.returncode != 0:
+                return {
+                    'valid': False,
+                    'message': '无法验证证书和私钥的匹配性',
+                    'details': details
+                }
+            
+            if cert_modulus.stdout.strip() != key_modulus.stdout.strip():
+                return {
+                    'valid': False,
+                    'message': '证书和私钥不匹配',
+                    'details': details
+                }
         
         return {
             'valid': True,
