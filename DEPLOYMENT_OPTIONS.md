@@ -95,17 +95,39 @@ docker compose down
 ### SSL 相关文件 / SSL Related Files
 - `docker-compose-ssl.yml`: SSL 专用的 Docker Compose 配置
 - `frontend/nginx-ssl.conf`: SSL 版本的 Nginx 配置
+- `frontend/Dockerfile.ssl`: SSL 专用的 Dockerfile，支持自动生成证书
+- `frontend/docker-entrypoint-ssl.sh`: SSL 容器启动脚本
 - `./ssl/`: SSL 证书存放目录
   - `server.crt`: 证书文件
   - `server.key`: 私钥文件
 
+### SSL 自动配置 / SSL Auto Configuration
+使用 `docker-compose-ssl.yml` 启动时，系统会自动：
+1. 检测是否存在 SSL 证书
+2. 如果不存在，自动生成自签名证书
+3. 证书会使用检测到的外部 IP 地址
+
 ### 常见 SSL 问题 / Common SSL Issues
+- **ERR_SSL_PROTOCOL_ERROR 错误**  
+  这通常表示证书配置有问题。尝试以下步骤：
+  1. 删除现有证书: `rm -rf ./ssl/*`
+  2. 重新构建容器: `docker compose -f docker-compose-ssl.yml down && docker compose -f docker-compose-ssl.yml up -d --build`
+  3. 等待容器自动生成新证书
+
 - **证书地址不匹配 / Certificate address mismatch**  
   确保生成证书时使用的地址与访问时使用的地址一致（外部 IP 或域名）。
+  如果需要为特定 IP 生成证书，请使用系统设置页面手动配置。
+
 - **Docker 检测到内部 IP / Docker detects internal IP**  
   在系统设置中手动输入外部 IP 地址，不要依赖自动检测。
+
 - **自签名证书警告 / Self-signed certificate warning**  
-  首次访问时浏览器会显示证书警告，选择"继续访问"即可。
+  首次访问时浏览器会显示证书警告，选择"继续访问"或"高级" -> "继续前往"即可。
+
+- **查看证书生成日志 / View certificate generation logs**  
+  ```bash
+  docker compose -f docker-compose-ssl.yml logs frontend
+  ```
 
 ## 🆘 常见问题 / Troubleshooting
 - **`docker compose` 找不到 / command not found**  
