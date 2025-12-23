@@ -996,8 +996,9 @@ const checkSingleIpStatus = async (item) => {
     
     // 保存到服务器数据库
     await saveIpCheckStatus(item.ip, item)
-    
+
     if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
       console.warn(`检查IP ${item.ip} 失败:`, error.message || error)
     }
     ElMessage.warning(`${item.ip} 检测失败`)
@@ -1633,12 +1634,13 @@ const checkAllIpStatus = async () => {
         item.pingOnline = false
         item.port22 = false
         item.port3389 = false
-        
+
         // 保存到服务器数据库
         await saveIpCheckStatus(item.ip, item)
-        
+
         // 记录错误以便调试（不显示给用户避免过多干扰）
         if (import.meta.env.DEV) {
+          // eslint-disable-next-line no-console
           console.warn(`检查IP ${item.ip} 失败:`, error.message || error)
         }
       } finally {
@@ -1646,7 +1648,7 @@ const checkAllIpStatus = async () => {
       }
     }))
   }
-  
+
   checkingIpStatus.value = false
   ElMessage.success('状态检查完成')
 }

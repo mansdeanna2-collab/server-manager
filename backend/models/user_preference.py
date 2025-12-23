@@ -66,7 +66,7 @@ class IpIdResult(db.Model):
 
 class FetchServerTask(db.Model):
     """获取服务器任务模型 - 存储获取服务器任务的状态和日志
-    
+
     This model persists the fetch server task state so that:
     - Users can see progress after closing/reopening the dialog
     - Users can see progress after refreshing the page

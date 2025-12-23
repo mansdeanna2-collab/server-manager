@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 import jwt
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import wraps
 from models.user import User
 from models import db
@@ -32,7 +32,7 @@ def token_required(f):
 
         try:
             data = jwt.decode(token, Config.JWT_SECRET_KEY, algorithms=['HS256'])
-            current_user = User.query.get(data['user_id'])
+            current_user = db.session.get(User, data['user_id'])
             if not current_user:
                 return jsonify({'message': 'User not found'}), 401
         except jwt.ExpiredSignatureError:
@@ -73,7 +73,7 @@ def login():
                     'message': 'TOTP verification required',
                     'totp_required': True
                 }), 200
-            
+
             # Verify TOTP code
             if not user.verify_totp(totp_code):
                 logger.warning(f"Failed TOTP verification for username: {data.get('username')}")
@@ -83,7 +83,7 @@ def login():
         # Generate JWT token
         token = jwt.encode({
             'user_id': user.id,
-            'exp': datetime.utcnow() + Config.JWT_ACCESS_TOKEN_EXPIRES
+            'exp': datetime.now(timezone.utc) + Config.JWT_ACCESS_TOKEN_EXPIRES
         }, Config.JWT_SECRET_KEY, algorithm='HS256')
 
         logger.info(f"User {user.username} logged in successfully")
@@ -122,7 +122,7 @@ def refresh_token(current_user):
     try:
         token = jwt.encode({
             'user_id': current_user.id,
-            'exp': datetime.utcnow() + Config.JWT_ACCESS_TOKEN_EXPIRES
+            'exp': datetime.now(timezone.utc) + Config.JWT_ACCESS_TOKEN_EXPIRES
         }, Config.JWT_SECRET_KEY, algorithm='HS256')
 
         return jsonify({'token': token}), 200
@@ -179,10 +179,10 @@ def setup_totp(current_user):
         # Generate new secret
         secret = current_user.generate_totp_secret()
         db.session.commit()
-        
+
         # Get the URI for QR code
         uri = current_user.get_totp_uri()
-        
+
         return jsonify({
             'success': True,
             'secret': secret,
@@ -200,20 +200,20 @@ def enable_totp(current_user):
     """启用TOTP验证（需要先验证一次验证码）"""
     try:
         data = request.get_json()
-        
+
         if not data or not data.get('code'):
             return jsonify({'message': '请提供验证码'}), 400
-        
+
         # Verify the code before enabling
         if not current_user.totp_secret:
             return jsonify({'message': '请先设置TOTP密钥'}), 400
-        
+
         if not current_user.verify_totp(data['code']):
             return jsonify({'message': '验证码错误，请重试'}), 400
-        
+
         current_user.totp_enabled = True
         db.session.commit()
-        
+
         logger.info(f"User {current_user.username} enabled TOTP")
         return jsonify({
             'success': True,
@@ -230,19 +230,19 @@ def disable_totp(current_user):
     """禁用TOTP验证"""
     try:
         data = request.get_json()
-        
+
         # If TOTP is enabled, require verification before disabling
         if current_user.totp_enabled:
             if not data or not data.get('code'):
                 return jsonify({'message': '请提供验证码以禁用谷歌验证'}), 400
-            
+
             if not current_user.verify_totp(data['code']):
                 return jsonify({'message': '验证码错误'}), 400
-        
+
         current_user.totp_enabled = False
         current_user.totp_secret = None
         db.session.commit()
-        
+
         logger.info(f"User {current_user.username} disabled TOTP")
         return jsonify({
             'success': True,

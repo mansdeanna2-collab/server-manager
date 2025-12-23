@@ -41,7 +41,7 @@ def log_action(
     status='success'
 ):
     """记录系统操作日志
-    
+
     Args:
         log_type: 日志类型（使用 LOG_TYPE_* 常量）
         action: 操作描述
@@ -57,11 +57,11 @@ def log_action(
         except RuntimeError:
             # Flask请求上下文不可用时（如在后台任务中调用）
             client_ip = None
-        
+
         # 序列化详细信息
         if isinstance(details, dict):
             details = json.dumps(details, ensure_ascii=False)
-        
+
         # 创建日志记录
         log_entry = SystemLog(
             user_id=user.id if user else None,
@@ -73,12 +73,12 @@ def log_action(
             ip_address=client_ip,
             status=status
         )
-        
+
         db.session.add(log_entry)
         db.session.commit()
-        
+
         logger.info(f"System log: [{log_type}] {action} - {target or ''} - {status}")
-        
+
     except Exception as e:
         logger.error(f"Failed to log action: {str(e)}")
         # 不抛出异常，避免影响主要业务逻辑
@@ -103,7 +103,7 @@ def log_login_failed(username):
     """记录登录失败"""
     log_action(
         LOG_TYPE_LOGIN_FAILED,
-        f'用户登录失败',
+        '用户登录失败',
         target=username,
         status='failed'
     )
@@ -207,7 +207,7 @@ def log_backup(user, backup_filename, success=True, error_msg=None):
 
 def log_settings_change(user, setting_type, details=None):
     """记录设置修改
-    
+
     Args:
         user: 用户对象
         setting_type: 设置类型

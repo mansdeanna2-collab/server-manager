@@ -9,7 +9,7 @@ This module helps prevent discovery by automated scanning tools like:
 import re
 import logging
 from functools import wraps
-from flask import request, jsonify, abort
+from flask import request, jsonify
 
 logger = logging.getLogger(__name__)
 
@@ -118,48 +118,48 @@ SUSPICIOUS_PATH_PATTERNS = [re.compile(pattern, re.IGNORECASE) for pattern in SU
 def is_scanner_request():
     """Check if the current request is from a known scanner."""
     user_agent = request.headers.get('User-Agent', '')
-    
+
     # Check User-Agent against known scanner patterns
     for pattern in SCANNER_PATTERNS:
         if pattern.search(user_agent):
             logger.warning(f"Scanner detected: User-Agent '{user_agent}' from {request.remote_addr}")
             return True
-    
+
     # Check for empty or missing User-Agent (common in scanners)
     if not user_agent or len(user_agent) < MIN_USER_AGENT_LENGTH:
         logger.warning(f"Suspicious request: Empty/short User-Agent from {request.remote_addr}")
         return True
-    
+
     return False
 
 
 def is_suspicious_path():
     """Check if the requested path is commonly probed by scanners."""
     path = request.path
-    
+
     for pattern in SUSPICIOUS_PATH_PATTERNS:
         if pattern.search(path):
             logger.warning(f"Suspicious path access: '{path}' from {request.remote_addr}")
             return True
-    
+
     return False
 
 
 def anti_scanner_check():
     """Middleware to check for scanner requests.
-    
+
     Returns:
         tuple: (should_block, response) - If should_block is True, return the response
     """
     # Check for scanner User-Agents
     if is_scanner_request():
         return True, (jsonify({'error': 'Forbidden'}), 403)
-    
+
     # Check for suspicious paths
     if is_suspicious_path():
         # Return a generic 404 to not reveal this is a protected application
         return True, (jsonify({'error': 'Not found'}), 404)
-    
+
     return False, None
 
 
@@ -176,7 +176,7 @@ def block_scanners(f):
 
 def register_anti_scanner_handlers(app):
     """Register anti-scanner handlers for the Flask app.
-    
+
     This adds a before_request handler that checks all incoming requests
     for scanner signatures and blocks them.
     """
@@ -185,15 +185,15 @@ def register_anti_scanner_handlers(app):
         # Skip health check endpoint for monitoring purposes
         if request.path in ['/health', '/']:
             return None
-        
+
         # Check if it's a scanner request
         should_block, response = anti_scanner_check()
         if should_block:
             response_data, status_code = response
             return response_data, status_code
-        
+
         return None
-    
+
     # Add custom headers to hide server information
     @app.after_request
     def add_security_headers(response):

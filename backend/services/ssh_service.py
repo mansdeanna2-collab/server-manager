@@ -9,28 +9,28 @@ logger = logging.getLogger(__name__)
 
 def _validate_remote_path(path, path_type='file'):
     """验证远程路径的安全性
-    
+
     Args:
         path: 要验证的路径
         path_type: 路径类型 ('file' 或 'directory')，用于错误消息
-    
+
     Returns:
         dict: 包含验证结果，成功时返回 {'valid': True}，
               失败时返回 {'valid': False, 'message': str, 'error_type': str}
     """
     type_name = '文件' if path_type == 'file' else '目录'
-    
+
     if not path or not path.startswith('/'):
         return {
             'valid': False,
             'message': f'{type_name}路径必须以 / 开头',
             'error_type': 'invalid_path'
         }
-    
+
     # 规范化路径并检查是否尝试通过 .. 逃逸
     # 使用 os.path.normpath 处理 .. 和 . 序列
     normalized = os.path.normpath(path)
-    
+
     # 检查规范化后的路径是否仍然以 / 开头
     # 并且不包含 .. 在路径开始（表示尝试逃逸根目录）
     if not normalized.startswith('/'):
@@ -39,7 +39,7 @@ def _validate_remote_path(path, path_type='file'):
             'message': f'{type_name}路径无效',
             'error_type': 'invalid_path'
         }
-    
+
     # 检查危险的 shell 特殊字符（不包括 ..，因为已经通过 normpath 处理）
     dangerous_patterns = [';', '|', '&', '$', '`', '\n', '\r']
     for pattern in dangerous_patterns:
@@ -49,7 +49,7 @@ def _validate_remote_path(path, path_type='file'):
                 'message': f'{type_name}路径包含不允许的字符',
                 'error_type': 'invalid_path'
             }
-    
+
     return {'valid': True}
 
 
