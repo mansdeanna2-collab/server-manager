@@ -10,6 +10,12 @@ version: '3.8'
 #   - ./ssl/server.key (private key file)
 # - Or use the System Settings page to generate certificates for a specific IP/domain
 
+# Network configuration to avoid Docker iptables issues
+# See DEPLOYMENT_OPTIONS.md troubleshooting section if you encounter network errors
+networks:
+  server-manager-net:
+    driver: bridge
+
 services:
   backend:
     build:
@@ -17,6 +23,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "5000:5000"
+    networks:
+      - server-manager-net
     environment:
       - FLASK_ENV=production
       - DEBUG=False
@@ -45,6 +53,8 @@ services:
     ports:
       - "3000:443"
       - "3080:80"
+    networks:
+      - server-manager-net
     depends_on:
       - backend
     environment:

@@ -1,5 +1,11 @@
 version: '3.8'
 
+# Network configuration to avoid Docker iptables issues
+# See DEPLOYMENT_OPTIONS.md troubleshooting section if you encounter network errors
+networks:
+  server-manager-net:
+    driver: bridge
+
 services:
   backend:
     build:
@@ -7,6 +13,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "5000:5000"
+    networks:
+      - server-manager-net
     environment:
       - FLASK_ENV=production
       - DEBUG=False
@@ -32,6 +40,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:80"
+    networks:
+      - server-manager-net
     depends_on:
       - backend
     environment:
