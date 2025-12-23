@@ -1162,6 +1162,21 @@ const saveWhitelistSettings = async () => {
   }
 }
 
+// 跳转到HTTPS（如果当前是HTTP且SSL已启用）
+const redirectToHttpsIfNeeded = () => {
+  if (window.location.protocol === 'http:') {
+    // 提示用户即将跳转
+    ElMessage.info('SSL已启用，正在跳转到HTTPS...')
+    // 延迟跳转，让用户看到提示信息
+    setTimeout(() => {
+      const httpsUrl = window.location.href.replace('http://', 'https://')
+      window.location.href = httpsUrl
+    }, 1500)
+    return true
+  }
+  return false
+}
+
 // 保存SSL设置
 const saveSSLSettings = async () => {
   savingSettings.value = true
@@ -1175,6 +1190,10 @@ const saveSSLSettings = async () => {
     })
     if (response.data.success) {
       ElMessage.success('SSL设置已保存')
+      // 如果启用了SSL且当前是HTTP，跳转到HTTPS
+      if (sslForm.enabled) {
+        redirectToHttpsIfNeeded()
+      }
     } else {
       ElMessage.error(response.data.message || '保存失败')
     }
@@ -1262,6 +1281,8 @@ const handleAutoConfigureSSL = async () => {
       sslAutoForm.detectMessage = response.data.message
       
       ElMessage.success('SSL证书已自动生成并配置！')
+      // 跳转到HTTPS
+      redirectToHttpsIfNeeded()
     } else {
       ElMessage.error(response.data.message || '自动配置失败')
     }
