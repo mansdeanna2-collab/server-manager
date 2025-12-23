@@ -146,9 +146,10 @@ def create_app():
 
     @app.route('/')
     def index():
+        from services.version_service import CURRENT_VERSION
         return jsonify({
             'message': 'Server Manager API',
-            'version': '2.1.0',
+            'version': CURRENT_VERSION,
             'status': 'running',
             'endpoints': {
                 'auth': '/api/auth',
