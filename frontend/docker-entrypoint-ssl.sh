@@ -16,11 +16,12 @@ if [ ! -f "$SSL_CERT" ] || [ ! -f "$SSL_KEY" ]; then
     # Try to detect the server's external IP
     EXTERNAL_IP=""
     
-    # Try multiple methods to get external IP using secure connections
+    # Try multiple methods to get external IP using HTTPS connections
     # Note: These are simple IP detection services that return only the client's public IP
+    # BusyBox wget in Alpine doesn't support --secure-protocol, but handles HTTPS natively
     for service in "https://api.ipify.org" "https://ifconfig.me/ip" "https://icanhazip.com"; do
-        # Use wget with TLS and certificate verification
-        EXTERNAL_IP=$(wget -qO- --timeout=5 --secure-protocol=TLSv1_2 "$service" 2>/dev/null | head -1 | tr -d '[:space:]')
+        # Use wget with timeout option (BusyBox compatible)
+        EXTERNAL_IP=$(wget -qO- -T 5 "$service" 2>/dev/null | head -1 | tr -d '[:space:]')
         if [ -n "$EXTERNAL_IP" ] && echo "$EXTERNAL_IP" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
             echo "Detected external IP: $EXTERNAL_IP"
             break
