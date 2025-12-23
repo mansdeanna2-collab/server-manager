@@ -16,9 +16,11 @@ if [ ! -f "$SSL_CERT" ] || [ ! -f "$SSL_KEY" ]; then
     # Try to detect the server's external IP
     EXTERNAL_IP=""
     
-    # Try multiple methods to get external IP
+    # Try multiple methods to get external IP using secure connections
+    # Note: These are simple IP detection services that return only the client's public IP
     for service in "https://api.ipify.org" "https://ifconfig.me/ip" "https://icanhazip.com"; do
-        EXTERNAL_IP=$(wget -qO- --timeout=5 "$service" 2>/dev/null | head -1)
+        # Use wget with TLS and certificate verification
+        EXTERNAL_IP=$(wget -qO- --timeout=5 --secure-protocol=TLSv1_2 "$service" 2>/dev/null | head -1 | tr -d '[:space:]')
         if [ -n "$EXTERNAL_IP" ] && echo "$EXTERNAL_IP" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
             echo "Detected external IP: $EXTERNAL_IP"
             break
@@ -26,17 +28,18 @@ if [ ! -f "$SSL_CERT" ] || [ ! -f "$SSL_KEY" ]; then
         EXTERNAL_IP=""
     done
     
-    # Fallback to hostname if external IP detection fails
+    # If external IP detection fails, use a placeholder that encourages manual configuration
+    # Using hostname -i in Docker often returns internal IPs which aren't useful for SSL
     if [ -z "$EXTERNAL_IP" ]; then
-        EXTERNAL_IP=$(hostname -i 2>/dev/null | awk '{print $1}')
-        if [ -z "$EXTERNAL_IP" ]; then
-            EXTERNAL_IP="localhost"
-        fi
-        echo "Using fallback address: $EXTERNAL_IP"
+        # Use a placeholder IP - users should configure proper certificates via System Settings
+        EXTERNAL_IP="127.0.0.1"
+        echo "Warning: Could not detect external IP. Using $EXTERNAL_IP as placeholder."
+        echo "Please configure SSL certificate with your actual IP/domain via System Settings."
     fi
     
     # Generate self-signed certificate with the detected IP
-    openssl req -x509 -nodes -days 3650 \
+    # Using 365 days validity for better security hygiene
+    openssl req -x509 -nodes -days 365 \
         -newkey rsa:2048 \
         -keyout "$SSL_KEY" \
         -out "$SSL_CERT" \
@@ -46,6 +49,7 @@ if [ ! -f "$SSL_CERT" ] || [ ! -f "$SSL_KEY" ]; then
     
     if [ $? -eq 0 ]; then
         echo "Self-signed SSL certificate generated successfully for $EXTERNAL_IP"
+        echo "Certificate validity: 365 days. Regenerate via System Settings for custom configuration."
         chmod 600 "$SSL_KEY"
         chmod 644 "$SSL_CERT"
     else
