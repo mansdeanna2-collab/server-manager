@@ -136,5 +136,51 @@ docker compose down
   编辑 `docker-compose.yml` 中的 `ports` 映射，选择未占用的主机端口。
 - **需要清理并重新部署 / Need a clean redeploy**  
   执行 `docker compose down -v && docker compose up -d --build`。
+- **Docker 网络创建失败 (iptables 错误) / Docker network creation failed (iptables error)**
+  
+  如果看到类似以下错误：
+  ```
+  failed to create network server-manager_default: Error response from daemon: 
+  add inter-network communication rule: iptables failed: Chain 'DOCKER-ISOLATION-STAGE-2' does not exist
+  ```
+  
+  这是 Docker 的 iptables 规则不同步问题。解决方法：
+  
+  **方法一：重启 Docker 服务 / Method 1: Restart Docker daemon**
+  ```bash
+  sudo systemctl restart docker
+  # 然后重新运行 / Then run again
+  ./deploy-docker.sh
+  ```
+  
+  **方法二：清理并重建网络 / Method 2: Clean and recreate networks**
+  ```bash
+  # 停止所有容器 / Stop all containers
+  docker compose down
+  
+  # 删除所有未使用的网络 / Remove unused networks
+  docker network prune -f
+  
+  # 重新部署 / Redeploy
+  ./deploy-docker.sh
+  ```
+  
+  **方法三：手动重建 iptables 规则 / Method 3: Manually rebuild iptables rules**
+  ```bash
+  # 停止 Docker / Stop Docker
+  sudo systemctl stop docker
+  
+  # 清理 iptables Docker 规则 / Clear Docker iptables rules
+  sudo iptables -t filter -F DOCKER-ISOLATION-STAGE-1 2>/dev/null || true
+  sudo iptables -t filter -X DOCKER-ISOLATION-STAGE-1 2>/dev/null || true
+  sudo iptables -t filter -F DOCKER-ISOLATION-STAGE-2 2>/dev/null || true
+  sudo iptables -t filter -X DOCKER-ISOLATION-STAGE-2 2>/dev/null || true
+  
+  # 启动 Docker / Start Docker
+  sudo systemctl start docker
+  
+  # 重新部署 / Redeploy
+  ./deploy-docker.sh
+  ```
 
 祝你部署顺利！Happy deploying! 🚀

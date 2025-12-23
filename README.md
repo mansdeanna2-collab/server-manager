@@ -437,6 +437,10 @@ This project is licensed under the MIT License.
 
 ## 🐛 Troubleshooting
 
+### Docker Issues
+
+- **Docker network creation failed (iptables error)**: If you see an error about `DOCKER-ISOLATION-STAGE-2` not existing, restart the Docker daemon: `sudo systemctl restart docker` and try again. See DEPLOYMENT_OPTIONS.md for more detailed solutions.
+
 ### Backend Issues
 
 - **Database errors**: Delete `server_manager.db` and restart the application to recreate the database
