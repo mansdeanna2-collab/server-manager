@@ -22,6 +22,14 @@ fetch_server_tasks_lock = threading.Lock()
 # Track log update interval for database saves (save every N lines to reduce DB load)
 LOG_SAVE_INTERVAL = 10
 
+# Regex pattern for printable characters (ASCII printable + CJK characters + fullwidth forms)
+# Used to clean corrupted JSON data that may contain unknown/invalid characters
+# - \x20-\x7E: ASCII printable characters (space through tilde)
+# - \u4e00-\u9fff: CJK Unified Ideographs (Chinese characters)
+# - \u3000-\u303f: CJK Symbols and Punctuation
+# - \uff00-\uffef: Halfwidth and Fullwidth Forms
+PRINTABLE_CHARS_PATTERN = re.compile(r'[^\x20-\x7E\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]')
+
 
 def verify_token(token):
     """验证JWT token并返回用户信息"""
@@ -119,13 +127,13 @@ def _parse_server_info(output):
                         servers.append(server_data)
                 except json.JSONDecodeError:
                     # Try to fix common JSON issues (unknown characters)
-                    # Replace problematic characters with underscores
-                    cleaned_line = re.sub(r'[^\x20-\x7E\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]', '_', line)
+                    # Replace problematic characters with underscores using pre-compiled pattern
+                    cleaned_line = PRINTABLE_CHARS_PATTERN.sub('_', line)
                     try:
                         server_data = json.loads(cleaned_line)
                         if 'ips' in server_data and 'password' in server_data:
                             servers.append(server_data)
-                            logger.info(f"Parsed server data after character cleanup")
+                            logger.info("Parsed server data after character cleanup")
                     except json.JSONDecodeError:
                         # Last resort: try to extract key fields using regex
                         server_data = _extract_server_data_regex(line)

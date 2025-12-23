@@ -13,6 +13,9 @@ from flask import request, jsonify, abort
 
 logger = logging.getLogger(__name__)
 
+# Configuration constants
+MIN_USER_AGENT_LENGTH = 10  # Minimum length for a valid User-Agent
+
 # Known scanner/bot User-Agent patterns
 SCANNER_USER_AGENTS = [
     # Search engine crawlers
@@ -123,7 +126,7 @@ def is_scanner_request():
             return True
     
     # Check for empty or missing User-Agent (common in scanners)
-    if not user_agent or len(user_agent) < 10:
+    if not user_agent or len(user_agent) < MIN_USER_AGENT_LENGTH:
         logger.warning(f"Suspicious request: Empty/short User-Agent from {request.remote_addr}")
         return True
     

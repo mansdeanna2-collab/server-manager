@@ -1472,13 +1472,20 @@ const handleSetupTotp = async () => {
   }
 }
 
-// 生成QR码
+// 生成QR码 (使用本地库，不发送敏感数据到外部服务)
 const generateQrCode = async (uri) => {
   try {
-    // Use a simple QR code generation approach
-    // Create a URL for QR code API (using Google Charts API as fallback)
-    const encodedUri = encodeURIComponent(uri)
-    totpQrDataUrl.value = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodedUri}`
+    // Import QRCode library dynamically to generate QR codes locally
+    // This keeps the TOTP secret secure by not sending it to external services
+    const QRCode = await import('qrcode')
+    totpQrDataUrl.value = await QRCode.toDataURL(uri, {
+      width: 200,
+      margin: 2,
+      color: {
+        dark: '#000000',
+        light: '#ffffff'
+      }
+    })
   } catch (_error) {
     // Fallback: just show the URI for manual entry
     totpQrDataUrl.value = ''
