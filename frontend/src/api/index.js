@@ -175,7 +175,11 @@ export const preferencesAPI = {
     return api.get(url)
   },
   getLogTypes: () => api.get('/preferences/system-logs/types'),
-  getLogStats: () => api.get('/preferences/system-logs/stats')
+  getLogStats: () => api.get('/preferences/system-logs/stats'),
+
+  // 版本检测
+  getVersionInfo: () => api.get('/preferences/version'),
+  checkForUpdates: () => api.get('/preferences/version/check')
 }
 
 export default api

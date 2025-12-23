@@ -114,6 +114,10 @@
                       <el-icon><Document /></el-icon>
                       <span>查看系统日志</span>
                     </el-menu-item>
+                    <el-menu-item index="version">
+                      <el-icon><Upload /></el-icon>
+                      <span>检测代码升级</span>
+                    </el-menu-item>
                   </el-menu>
                 </el-col>
                 
@@ -709,6 +713,133 @@
                       description="暂无日志记录"
                     />
                   </div>
+                  
+                  <!-- 检测代码升级 -->
+                  <div
+                    v-if="activeSettingMenu === 'version'"
+                    class="setting-panel"
+                  >
+                    <h3 class="setting-title">
+                      <el-icon><Upload /></el-icon>
+                      检测代码升级
+                    </h3>
+                    <el-alert
+                      type="info"
+                      :closable="false"
+                      show-icon
+                      class="setting-alert"
+                    >
+                      <template #title>
+                        检测是否有新版本可用。更新日志和新功能将从GitHub仓库获取。
+                      </template>
+                    </el-alert>
+                    
+                    <!-- 当前版本信息 -->
+                    <div class="version-info-section">
+                      <div class="version-current">
+                        <div class="version-label">
+                          当前版本
+                        </div>
+                        <div class="version-value">
+                          <el-tag
+                            type="primary"
+                            size="large"
+                          >
+                            v{{ versionInfo.current_version || '加载中...' }}
+                          </el-tag>
+                        </div>
+                      </div>
+                      
+                      <div
+                        v-if="versionInfo.github_url"
+                        class="version-github"
+                      >
+                        <el-link
+                          :href="versionInfo.github_url"
+                          target="_blank"
+                          type="primary"
+                        >
+                          <el-icon><Link /></el-icon>
+                          GitHub仓库
+                        </el-link>
+                      </div>
+                    </div>
+                    
+                    <!-- 检查更新按钮 -->
+                    <div class="version-check-section">
+                      <el-button
+                        type="primary"
+                        :loading="checkingUpdate"
+                        @click="handleCheckForUpdates"
+                      >
+                        <el-icon><Refresh /></el-icon>
+                        检查更新
+                      </el-button>
+                    </div>
+                    
+                    <!-- 更新检查结果 -->
+                    <div
+                      v-if="updateCheckResult"
+                      class="version-result-section"
+                    >
+                      <el-result
+                        v-if="updateCheckResult.has_update"
+                        icon="warning"
+                        title="发现新版本"
+                        :sub-title="`最新版本: v${updateCheckResult.latest_version}`"
+                      >
+                        <template #extra>
+                          <div class="update-details">
+                            <div
+                              v-if="updateCheckResult.published_at"
+                              class="update-date"
+                            >
+                              <el-icon><Calendar /></el-icon>
+                              发布时间: {{ formatDateTime(updateCheckResult.published_at) }}
+                            </div>
+                            <div
+                              v-if="updateCheckResult.release_notes"
+                              class="update-notes"
+                            >
+                              <h4>更新日志</h4>
+                              <pre class="release-notes-content">{{ updateCheckResult.release_notes }}</pre>
+                            </div>
+                            <el-button
+                              v-if="updateCheckResult.release_url"
+                              type="primary"
+                              @click="openReleaseUrl(updateCheckResult.release_url)"
+                            >
+                              <el-icon><Link /></el-icon>
+                              查看发布页面
+                            </el-button>
+                          </div>
+                        </template>
+                      </el-result>
+                      
+                      <el-result
+                        v-else-if="updateCheckResult.success"
+                        icon="success"
+                        title="已是最新版本"
+                        :sub-title="`当前版本 v${updateCheckResult.current_version} 已是最新版本`"
+                      />
+                      
+                      <el-result
+                        v-else
+                        icon="error"
+                        title="检查更新失败"
+                        :sub-title="updateCheckResult.message"
+                      >
+                        <template #extra>
+                          <el-button
+                            type="primary"
+                            @click="handleCheckForUpdates"
+                          >
+                            重试
+                          </el-button>
+                        </template>
+                      </el-result>
+                    </div>
+                  </div>
                 </el-col>
               </el-row>
             </div>
@@ -964,7 +1095,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
-  ArrowDown, Back, Check, CircleCheck, CircleClose, CopyDocument, Delete, Document, FolderOpened, InfoFilled, Iphone, Key, Link, Loading, Lock, MagicStick, Monitor, Odometer, OfficeBuilding, Picture, Plus, Refresh, Search, Setting, Tools, User, View, Warning
+  ArrowDown, Back, Calendar, Check, CircleCheck, CircleClose, CopyDocument, Delete, Document, FolderOpened, InfoFilled, Iphone, Key, Link, Loading, Lock, MagicStick, Monitor, Odometer, OfficeBuilding, Picture, Plus, Refresh, Search, Setting, Tools, Upload, User, View, Warning
 } from '@element-plus/icons-vue'
 import { authAPI, preferencesAPI } from '@/api'
 
@@ -978,6 +1109,14 @@ const passwordFormRef = ref(null)
 // 设置菜单相关状态
 const activeSettingMenu = ref('whitelist')
 const savingSettings = ref(false)
+
+// 版本检测状态
+const versionInfo = reactive({
+  current_version: '',
+  github_url: ''
+})
+const checkingUpdate = ref(false)
+const updateCheckResult = ref(null)
 
 // 白名单设置
 const whitelistForm = reactive({
@@ -1450,6 +1589,8 @@ const handleSettingMenuSelect = async (index) => {
     await Promise.all([loadLogTypes(), loadLogStats(), loadRecentLogs()])
   } else if (index === 'totp') {
     await loadTotpStatus()
+  } else if (index === 'version') {
+    await loadVersionInfo()
   }
 }
 
@@ -1574,6 +1715,52 @@ const handleDisableTotp = async () => {
   } finally {
     totpLoading.value = false
   }
+}
+
+// ============ 版本检测相关函数 ============
+
+// 加载版本信息
+const loadVersionInfo = async () => {
+  try {
+    const response = await preferencesAPI.getVersionInfo()
+    if (response.data.success) {
+      Object.assign(versionInfo, response.data.version)
+    }
+  } catch (error) {
+    const message = error.response?.data?.message || error.message || '获取版本信息失败'
+    ElMessage.error(message)
+  }
+}
+
+// 检查更新
+const handleCheckForUpdates = async () => {
+  checkingUpdate.value = true
+  updateCheckResult.value = null
+  try {
+    const response = await preferencesAPI.checkForUpdates()
+    updateCheckResult.value = response.data
+    if (response.data.has_update) {
+      ElMessage.warning(`发现新版本 v${response.data.latest_version}`)
+    } else if (response.data.success) {
+      ElMessage.success('当前已是最新版本')
+    } else {
+      ElMessage.error(response.data.message || '检查更新失败')
+    }
+  } catch (error) {
+    const message = error.response?.data?.message || error.message || '检查更新失败'
+    updateCheckResult.value = {
+      success: false,
+      message: message
+    }
+    ElMessage.error(message)
+  } finally {
+    checkingUpdate.value = false
+  }
+}
+
+// 打开发布页面
+const openReleaseUrl = (url) => {
+  window.open(url, '_blank')
 }
 
 onMounted(async () => {
@@ -2277,5 +2464,91 @@ const handleChangePassword = async () => {
   color: #F56C6C;
   font-size: 13px;
   margin-bottom: 16px;
+}
+
+/* 版本检测样式 */
+.version-info-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px;
+  background: linear-gradient(135deg, #ecf5ff 0%, #f0f9ff 100%);
+  border-radius: 12px;
+  margin-bottom: 24px;
+  border: 1px solid #d9ecff;
+}
+
+.version-current {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.version-label {
+  font-size: 14px;
+  color: #909399;
+}
+
+.version-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #409EFF;
+}
+
+.version-github {
+  display: flex;
+  align-items: center;
+}
+
+.version-check-section {
+  margin-bottom: 24px;
+}
+
+.version-result-section {
+  margin-top: 24px;
+  padding: 24px;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #ebeef5;
+}
+
+.update-details {
+  text-align: left;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.update-date {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #909399;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.update-notes {
+  margin-bottom: 20px;
+}
+
+.update-notes h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  color: #303133;
+}
+
+.release-notes-content {
+  padding: 16px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #606266;
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+  font-family: inherit;
 }
 </style>

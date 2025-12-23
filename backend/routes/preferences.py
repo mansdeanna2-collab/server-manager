@@ -1692,3 +1692,67 @@ def get_log_stats(_current_user):
             'success': False,
             'message': f'获取日志统计失败: {str(e)}'
         }), 500
+
+
+# ============ Version Check APIs ============
+
+@preferences_bp.route('/version', methods=['GET'])
+@token_required
+def get_version_info(_current_user):
+    """获取当前版本信息
+    
+    Returns:
+        success: 是否成功
+        version: 版本信息
+            - current_version: 当前版本号
+            - github_owner: GitHub仓库所有者
+            - github_repo: GitHub仓库名称
+            - github_url: GitHub仓库URL
+    """
+    from services.version_service import get_version_info as get_info
+    
+    try:
+        info = get_info()
+        return jsonify({
+            'success': True,
+            'version': info
+        }), 200
+    except Exception as e:
+        logger.error(f"Error getting version info: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取版本信息失败: {str(e)}'
+        }), 500
+
+
+@preferences_bp.route('/version/check', methods=['GET'])
+@token_required
+def check_for_updates(_current_user):
+    """检查是否有新版本可用
+    
+    通过GitHub API检查最新发布版本。
+    
+    Returns:
+        success: 是否成功
+        current_version: 当前版本号
+        latest_version: 最新版本号（如果成功）
+        has_update: 是否有更新可用
+        release_url: 发布页面URL（如果有更新）
+        release_notes: 发布说明（如果有更新）
+        published_at: 发布时间（如果有更新）
+        message: 结果信息
+    """
+    from services.version_service import check_for_updates as check_updates
+    
+    try:
+        result = check_updates()
+        return jsonify(result), 200
+    except Exception as e:
+        logger.error(f"Error checking for updates: {str(e)}")
+        return jsonify({
+            'success': False,
+            'current_version': None,
+            'latest_version': None,
+            'has_update': False,
+            'message': f'检查更新失败: {str(e)}'
+        }), 500
