@@ -139,11 +139,11 @@ def generate_self_signed_certificate(address, address_type='ip'):
     
     # Build Subject Alternative Name (SAN) based on address type
     if address_type == 'ip':
-        san = f'IP:{address}'
         cn = address
+        alt_names_section = f"IP.1 = {address}"
     else:
-        san = f'DNS:{address}'
         cn = address
+        alt_names_section = f"DNS.1 = {address}"
     
     # OpenSSL config for SAN
     openssl_config = f'''[req]
@@ -172,7 +172,7 @@ extendedKeyUsage = serverAuth, clientAuth
 subjectAltName = @alt_names
 
 [alt_names]
-{f"IP.1 = {address}" if address_type == "ip" else f"DNS.1 = {address}"}
+{alt_names_section}
 '''
     
     # Write temporary config file
@@ -355,19 +355,23 @@ def verify_certificate(cert_path, key_path):
 
 
 def get_server_address():
-    """Try to detect the server's public IP or hostname
+    """Try to detect the server's IP address
+    
+    This function attempts to detect the server's IP address through multiple methods:
+    1. Get hostname and resolve it
+    2. Get outbound IP by checking network routing
+    3. Fall back to localhost if all else fails
     
     Returns:
         dict: {
-            'address': detected address,
-            'type': 'ip' or 'hostname',
+            'address': detected IP address,
+            'type': 'ip' (always returns IP type),
             'message': result message
         }
     """
-    # Try to get hostname
+    # Try to get hostname and resolve it to IP
     try:
         hostname = socket.gethostname()
-        # Try to resolve hostname to IP
         try:
             ip = socket.gethostbyname(hostname)
             return {
@@ -380,21 +384,25 @@ def get_server_address():
     except Exception:
         pass
     
-    # Try to get external IP by connecting to a public server
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.settimeout(5)
-        # This doesn't actually send data, just establishes routing
-        s.connect(('8.8.8.8', 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return {
-            'address': ip,
-            'type': 'ip',
-            'message': f'检测到服务器IP: {ip}'
-        }
-    except Exception:
-        pass
+    # Try to get outbound IP by checking network routing
+    # This creates a UDP socket and connects to check the local interface
+    # No actual data is sent; it just determines which local IP would be used
+    # Multiple DNS servers are tried as fallbacks
+    dns_servers = ['8.8.8.8', '1.1.1.1', '114.114.114.114']
+    for dns_ip in dns_servers:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.settimeout(2)
+            s.connect((dns_ip, 53))
+            ip = s.getsockname()[0]
+            s.close()
+            return {
+                'address': ip,
+                'type': 'ip',
+                'message': f'检测到服务器IP: {ip}'
+            }
+        except Exception:
+            pass
     
     # Fall back to localhost
     return {
