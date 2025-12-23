@@ -47,7 +47,9 @@ services:
     depends_on:
       - backend
     environment:
-      - VITE_API_BASE_URL=https://localhost:3000/api
+      # Use relative API path - nginx proxies /api to backend
+      # This works regardless of the host address
+      - VITE_API_BASE_URL=/api
     volumes:
       # Mount SSL certificates
       - ./ssl:/etc/nginx/ssl:ro

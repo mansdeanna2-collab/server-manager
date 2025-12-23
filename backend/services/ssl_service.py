@@ -8,10 +8,13 @@ This module provides functionality for:
 
 import os
 import re
+import shutil
 import socket
 import ipaddress
 import subprocess
 import logging
+import urllib.request
+import urllib.error
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -235,7 +238,6 @@ subjectAltName = @alt_names
         os.chmod(cert_file, 0o644)  # Certificate: readable by all
         
         # Create backup copies with timestamps
-        import shutil
         shutil.copy2(key_file, key_file_backup)
         shutil.copy2(cert_file, cert_file_backup)
         os.chmod(key_file_backup, 0o600)
@@ -387,6 +389,29 @@ def verify_certificate(cert_path, key_path):
         }
 
 
+def _is_private_ip(ip_str):
+    """Check if an IP address is in a private/reserved range.
+    
+    Private IP ranges include:
+    - 10.0.0.0/8 (Class A private)
+    - 172.16.0.0/12 (Class B private, includes 172.16.x.x to 172.31.x.x)
+    - 192.168.0.0/16 (Class C private)
+    - 169.254.0.0/16 (link-local)
+    - 127.0.0.0/8 (loopback)
+    
+    Args:
+        ip_str: IP address string
+        
+    Returns:
+        bool: True if the IP is private/reserved, False otherwise
+    """
+    try:
+        ip = ipaddress.ip_address(ip_str)
+        return ip.is_private or ip.is_loopback or ip.is_link_local
+    except ValueError:
+        return False
+
+
 def _get_external_ip():
     """Try to get the external/public IP address using external services.
     
@@ -396,9 +421,6 @@ def _get_external_ip():
     Returns:
         str or None: External IP address if successful, None otherwise
     """
-    import urllib.request
-    import urllib.error
-    
     # List of services that return the public IP in plain text
     ip_services = [
         'https://api.ipify.org',
@@ -459,8 +481,8 @@ def get_server_address():
         hostname = socket.gethostname()
         try:
             ip = socket.gethostbyname(hostname)
-            # Check if this is not a Docker/container internal IP (172.x.x.x, 10.x.x.x)
-            if not ip.startswith('172.') and not ip.startswith('10.'):
+            # Check if this is not a Docker/container internal IP
+            if not _is_private_ip(ip):
                 return {
                     'address': ip,
                     'type': 'ip',
@@ -484,7 +506,7 @@ def get_server_address():
             ip = s.getsockname()[0]
             s.close()
             # Check if this is not a Docker/container internal IP
-            if not ip.startswith('172.') and not ip.startswith('10.'):
+            if not _is_private_ip(ip):
                 return {
                     'address': ip,
                     'type': 'ip',
