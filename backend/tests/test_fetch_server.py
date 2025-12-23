@@ -1,6 +1,6 @@
 """Tests for fetch_server.py parsing functionality."""
 import pytest
-from routes.fetch_server import _parse_server_info, _determine_port_and_username
+from routes.fetch_server import _parse_server_info, _determine_port_and_username, _extract_server_data_regex
 
 
 class TestParseServerInfo:
@@ -74,6 +74,64 @@ class TestParseServerInfo:
         servers = _parse_server_info(output)
         assert len(servers) == 1
         assert servers[0]['ips'] == ['192.168.1.2']
+
+    def test_parse_with_unknown_characters_marker(self):
+        """Test parsing when output contains '未知字符数量' marker.
+        
+        This tests the fix for the issue where servers weren't added when
+        there were unknown characters (incomplete verification).
+        """
+        output = '''===== 完整获取结果（控制台输出） =====
+{"region":"sgbv3","line":"sgbv3","cpu":4,"memory":4096,"bandwidth":5,"disk":[],"ddos":0,"os_id":"windows-server-2022-datacenter_x86-64_cn","os_name":"Windows server 2022 datacenter 64bit (cn)","instance_id":"CLOUD-SYJSGK-6AHH","password":"Ge5,Eb5_Nv6<","config_id":12,"ips":["45.194.18.18"],"ip":1,"remark":"","name":"CLOUD-SYJSGK-6AHH","oid":50515,"uuid":"85716dda-e837-4547-aa6e-69c452af0a80"}
+===== 完整获取结果结束 =====
+
+结果已保存到 option_json_30088.txt
+未知字符数量(未做二次验证): 2
+'''
+        servers = _parse_server_info(output)
+        
+        # Should still parse the server even with unknown characters marker
+        assert len(servers) == 1
+        assert servers[0]['ips'] == ['45.194.18.18']
+        assert servers[0]['password'] == 'Ge5,Eb5_Nv6<'
+        assert 'windows' in servers[0]['os_id'].lower()
+
+
+class TestExtractServerDataRegex:
+    """Test cases for _extract_server_data_regex fallback function."""
+
+    def test_extract_from_valid_json_string(self):
+        """Test regex extraction from valid JSON string."""
+        line = '{"ips":["192.168.1.1","192.168.1.2"],"password":"TestPass123","os_id":"ubuntu-22.04","os_name":"Ubuntu 22.04"}'
+        result = _extract_server_data_regex(line)
+        
+        assert result is not None
+        assert result['ips'] == ['192.168.1.1', '192.168.1.2']
+        assert result['password'] == 'TestPass123'
+        assert result['os_id'] == 'ubuntu-22.04'
+
+    def test_extract_with_corrupted_characters(self):
+        """Test regex extraction when some characters are corrupted."""
+        # Simulating corrupted JSON where some chars are replaced with ?
+        line = '{"region":"sgbv3","?l?ne":"sgbv3","ips":["45.194.18.18"],"password":"Ge5,Eb5_Nv6<"}'
+        result = _extract_server_data_regex(line)
+        
+        # Should still extract the essential fields
+        assert result is not None
+        assert result['ips'] == ['45.194.18.18']
+        assert result['password'] == 'Ge5,Eb5_Nv6<'
+
+    def test_extract_without_ips_returns_none(self):
+        """Test that extraction returns None without ips field."""
+        line = '{"password":"TestPass123"}'
+        result = _extract_server_data_regex(line)
+        assert result is None
+
+    def test_extract_without_password_returns_none(self):
+        """Test that extraction returns None without password field."""
+        line = '{"ips":["192.168.1.1"]}'
+        result = _extract_server_data_regex(line)
+        assert result is None
 
 
 class TestDeterminePortAndUsername:

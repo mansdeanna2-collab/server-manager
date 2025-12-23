@@ -29,10 +29,10 @@ socketio = SocketIO()
 
 
 def _migrate_add_missing_columns(db_engine):
-    """Add missing columns to the servers table if they don't exist.
+    """Add missing columns to the tables if they don't exist.
     
     This handles the case where the database was created with an older schema
-    and new columns (check_detail, error_type) were added to the model.
+    and new columns were added to the model.
     """
     inspector = inspect(db_engine)
     
@@ -50,6 +50,18 @@ def _migrate_add_missing_columns(db_engine):
             conn.execute(text('ALTER TABLE servers ADD COLUMN error_type VARCHAR(50)'))
             logger.info("Added 'error_type' column to servers table")
         conn.commit()
+    
+    # Add TOTP columns to users table if not exist
+    if 'users' in inspector.get_table_names():
+        user_columns = {col['name'] for col in inspector.get_columns('users')}
+        with db_engine.connect() as conn:
+            if 'totp_secret' not in user_columns:
+                conn.execute(text('ALTER TABLE users ADD COLUMN totp_secret VARCHAR(32)'))
+                logger.info("Added 'totp_secret' column to users table")
+            if 'totp_enabled' not in user_columns:
+                conn.execute(text('ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN DEFAULT 0'))
+                logger.info("Added 'totp_enabled' column to users table")
+            conn.commit()
 
 
 def create_app():
@@ -93,6 +105,11 @@ def create_app():
         logger.info("Rate limiting enabled")
     else:
         logger.info("Rate limiting disabled")
+
+    # Register anti-scanner middleware
+    from utils.anti_scanner import register_anti_scanner_handlers
+    register_anti_scanner_handlers(app)
+    logger.info("Anti-scanner middleware registered")
 
     # Register blueprints
     app.register_blueprint(auth_bp)
