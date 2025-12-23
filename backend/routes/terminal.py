@@ -2,6 +2,7 @@ import threading
 import logging
 from flask import request
 from flask_socketio import emit, disconnect
+from models import db
 from models.server import Server
 from models.user import User
 from utils.crypto import PasswordEncryption
@@ -71,7 +72,7 @@ def register_terminal_events(socketio):
             return
 
         # 获取服务器信息
-        server = Server.query.get(server_id)
+        server = db.session.get(Server, server_id)
         if not server:
             emit('terminal_error', {'message': '服务器不存在'})
             return
@@ -98,7 +99,7 @@ def register_terminal_events(socketio):
             error_msg = connect_result.get('message', '无法连接到服务器')
             emit('terminal_error', {'message': error_msg})
             # 记录连接失败日志
-            user = User.query.get(user_data.get('user_id'))
+            user = db.session.get(User, user_data.get('user_id'))
             log_server_connect(user, server.ip_address, success=False, error_msg=error_msg)
             return
 
@@ -106,7 +107,7 @@ def register_terminal_events(socketio):
         terminal_sessions[sid] = terminal
 
         # 记录连接成功日志
-        user = User.query.get(user_data.get('user_id'))
+        user = db.session.get(User, user_data.get('user_id'))
         log_server_connect(user, server.ip_address, success=True)
 
         # 通知客户端连接成功

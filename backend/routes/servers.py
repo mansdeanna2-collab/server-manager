@@ -8,7 +8,7 @@ from services.ssh_service import SSHService
 from services.check_service import CheckService
 from services.log_service import (
     log_server_create, log_server_update, log_server_delete,
-    log_server_check, log_server_connect, log_import
+    log_server_check, log_import
 )
 from extensions import limiter
 from config import Config
@@ -84,7 +84,7 @@ def create_server(current_user):
 @token_required
 def get_server(_current_user, server_id):
     """获取特定服务器"""
-    server = Server.query.get(server_id)
+    server = db.session.get(Server, server_id)
 
     if not server:
         return jsonify({'message': 'Server not found'}), 404
@@ -96,7 +96,7 @@ def get_server(_current_user, server_id):
 @token_required
 def get_server_password(_current_user, server_id):
     """获取服务器密码（解密后）"""
-    server = Server.query.get(server_id)
+    server = db.session.get(Server, server_id)
 
     if not server:
         return jsonify({'message': 'Server not found'}), 404
@@ -111,7 +111,7 @@ def get_server_password(_current_user, server_id):
 @token_required
 def update_server(current_user, server_id):
     """更新服务器"""
-    server = Server.query.get(server_id)
+    server = db.session.get(Server, server_id)
 
     if not server:
         return jsonify({'message': 'Server not found'}), 404
@@ -154,7 +154,7 @@ def update_server(current_user, server_id):
 @token_required
 def delete_server(current_user, server_id):
     """删除服务器"""
-    server = Server.query.get(server_id)
+    server = db.session.get(Server, server_id)
 
     if not server:
         return jsonify({'message': 'Server not found'}), 404
@@ -172,7 +172,7 @@ def delete_server(current_user, server_id):
 @token_required
 def check_server(current_user, server_id):
     """检查服务器状态"""
-    server = Server.query.get(server_id)
+    server = db.session.get(Server, server_id)
 
     if not server:
         return jsonify({'message': 'Server not found'}), 404
@@ -209,15 +209,15 @@ def check_server(current_user, server_id):
 
 def _check_single_server(server_data):
     """Check a single server status (for use in thread pool).
-    
+
     Args:
         server_data: tuple of (server_id, ip_address, port, username, encrypted_password)
-    
+
     Returns:
         dict with server check results
     """
     server_id, ip_address, port, username, encrypted_password = server_data
-    
+
     try:
         password = password_encryptor.decrypt(encrypted_password)
         status_info = CheckService.check_server_status(
@@ -226,7 +226,7 @@ def _check_single_server(server_data):
             username,
             password
         )
-        
+
         return {
             'server_id': server_id,
             'ip_address': ip_address,
@@ -252,7 +252,7 @@ def _check_single_server(server_data):
 @token_required
 def check_all_servers(_current_user):
     """检查所有服务器状态（并发执行）
-    
+
     This endpoint is exempt from rate limiting because:
     1. It checks all servers in a single request (batched operation)
     2. The actual network checks are done concurrently using ThreadPoolExecutor
@@ -260,42 +260,42 @@ def check_all_servers(_current_user):
     """
     servers = Server.query.all()
     results = []
-    
+
     if not servers:
         return jsonify(results), 200
-    
+
     # Prepare server data for concurrent checking
     server_data_list = [
         (server.id, server.ip_address, server.port, server.username, server.encrypted_password)
         for server in servers
     ]
-    
+
     # Create a mapping for quick lookup
     server_map = {server.id: server for server in servers}
-    
+
     # Use ThreadPoolExecutor for concurrent checking
     max_workers = min(Config.CHECK_MAX_WORKERS, len(servers))
-    
+
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all tasks
         future_to_server = {
             executor.submit(_check_single_server, data): data[0]
             for data in server_data_list
         }
-        
+
         # Collect results as they complete
         for future in as_completed(future_to_server):
             result = future.result()
             server_id = result['server_id']
             server = server_map.get(server_id)
-            
+
             if server:
                 status_info = result['status_info']
                 server.status = status_info['overall']
                 server.last_checked = china_now()
                 server.check_detail = status_info.get('detail')
                 server.error_type = _normalize_error_type(status_info.get('error_type'))
-                
+
                 results.append({
                     'server_id': server_id,
                     'ip_address': result['ip_address'],
@@ -305,9 +305,9 @@ def check_all_servers(_current_user):
                     'check_detail': server.check_detail,
                     'error_type': server.error_type
                 })
-    
+
     db.session.commit()
-    
+
     return jsonify(results), 200
 
 
@@ -315,7 +315,7 @@ def check_all_servers(_current_user):
 @token_required
 def verify_password(_current_user, server_id):
     """验证服务器密码"""
-    server = Server.query.get(server_id)
+    server = db.session.get(Server, server_id)
 
     if not server:
         return jsonify({'message': 'Server not found'}), 404
@@ -335,7 +335,7 @@ def verify_password(_current_user, server_id):
 @token_required
 def check_port(_current_user, server_id):
     """检查服务器端口是否开放"""
-    server = Server.query.get(server_id)
+    server = db.session.get(Server, server_id)
 
     if not server:
         return jsonify({'message': 'Server not found'}), 404
@@ -353,7 +353,7 @@ def check_port(_current_user, server_id):
 @token_required
 def get_system_info(_current_user, server_id):
     """获取服务器系统信息"""
-    server = Server.query.get(server_id)
+    server = db.session.get(Server, server_id)
 
     if not server:
         return jsonify({'message': 'Server not found'}), 404
@@ -413,10 +413,10 @@ def _is_valid_ip(ip):
 @token_required
 def check_ip_status(_current_user):
     """检查IP地址的在线状态和端口状态（22和3389）
-    
+
     Request body:
         ip_address: IP地址
-    
+
     Returns:
         ping: 是否可以ping通
         port_22: 端口22是否开放
@@ -424,22 +424,22 @@ def check_ip_status(_current_user):
     """
     data = request.get_json() or {}
     ip_address = data.get('ip_address', '')
-    
+
     if not ip_address:
         return jsonify({'message': '请提供IP地址'}), 400
-    
+
     if not _is_valid_ip(ip_address):
         return jsonify({'message': '无效的IP地址格式'}), 400
-    
+
     # Check ping status
     ping_status = CheckService.ping_check(ip_address)
-    
+
     # Check port 22 (SSH)
     port_22_status = CheckService.port_check(ip_address, 22)
-    
+
     # Check port 3389 (RDP)
     port_3389_status = CheckService.port_check(ip_address, 3389)
-    
+
     return jsonify({
         'ip_address': ip_address,
         'ping': ping_status,
@@ -579,7 +579,7 @@ def import_servers_from_files(current_user):
 @token_required
 def read_server_file(_current_user, server_id):
     """通过SSH读取远程服务器上的文件内容"""
-    server = Server.query.get(server_id)
+    server = db.session.get(Server, server_id)
 
     if not server:
         return jsonify({'message': 'Server not found'}), 404
@@ -618,7 +618,7 @@ def read_server_file(_current_user, server_id):
 @token_required
 def list_server_directory(_current_user, server_id):
     """通过SSH列出远程服务器上的目录内容"""
-    server = Server.query.get(server_id)
+    server = db.session.get(Server, server_id)
 
     if not server:
         return jsonify({'message': 'Server not found'}), 404
@@ -653,7 +653,7 @@ def list_server_directory(_current_user, server_id):
 @token_required
 def save_server_file(_current_user, server_id):
     """通过SSH保存内容到远程服务器上的文件"""
-    server = Server.query.get(server_id)
+    server = db.session.get(Server, server_id)
 
     if not server:
         return jsonify({'message': 'Server not found'}), 404
@@ -692,35 +692,35 @@ def save_server_file(_current_user, server_id):
 @token_required
 def query_id(_current_user):
     """运行IP查询ID脚本（只运行id.py）
-    
+
     流程：
     1. 生成对应IP的ip.txt文件
     2. 只运行id.py脚本
     3. 返回ID结果
-    
+
     Request body:
         ip_address: IP地址
-    
+
     Returns:
         output: 脚本执行输出
         success: 是否执行成功
         id_result: 从输出中提取的ID（如果有）
     """
     import re as regex_module
-    
+
     data = request.get_json() or {}
     ip_address = data.get('ip_address', '')
-    
+
     if not ip_address:
         return jsonify({'message': '请提供IP地址', 'success': False}), 400
-    
+
     if not _is_valid_ip(ip_address):
         return jsonify({'message': '无效的IP地址格式', 'success': False}), 400
-    
+
     # 获取Python目录路径（相对于当前文件的路径）
     backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     python_dir = os.path.join(backend_dir, 'Python')
-    
+
     # 验证 Python 目录在 backend 目录下（防止目录遍历）
     python_dir = os.path.realpath(python_dir)
     backend_dir = os.path.realpath(backend_dir)
@@ -729,23 +729,23 @@ def query_id(_current_user):
             'message': '无效的目录路径',
             'success': False
         }), 400
-    
+
     ip_file = os.path.join(python_dir, 'ip.txt')
     id_py_file = os.path.join(python_dir, 'id.py')
-    
+
     # 检查id.py脚本文件是否存在
     if not os.path.exists(id_py_file):
         return jsonify({
             'message': 'id.py 脚本不存在',
             'success': False
         }), 404
-    
+
     try:
         # 1. 生成对应IP的ip.txt文件（设置受限权限 600）
         with open(ip_file, 'w', encoding='utf-8') as f:
             f.write(ip_address)
         os.chmod(ip_file, 0o600)
-        
+
         # 2. 只运行id.py脚本
         result = subprocess.run(
             ['python3', id_py_file],
@@ -754,11 +754,11 @@ def query_id(_current_user):
             timeout=300,  # 5 minutes timeout
             cwd=python_dir
         )
-        
+
         output = result.stdout
         if result.stderr:
             output += '\n' + result.stderr
-        
+
         # 3. 从输出中提取ID结果（格式: "前10个最小的id: [7762]" 或类似）
         id_result = None
         # 尝试匹配 "前N个最小的id: [数字]" 或 "[数字]" 模式
@@ -770,7 +770,7 @@ def query_id(_current_user):
             id_match = regex_module.search(r'\[(\d+)\]', output)
             if id_match:
                 id_result = id_match.group(1)
-        
+
         if result.returncode == 0:
             return jsonify({
                 'message': '查询ID完成',
@@ -785,7 +785,7 @@ def query_id(_current_user):
                 'success': False,
                 'id_result': id_result
             }), 400
-            
+
     except subprocess.TimeoutExpired:
         return jsonify({
             'message': '脚本执行超时',

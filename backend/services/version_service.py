@@ -24,32 +24,32 @@ GITHUB_API_TIMEOUT = int(os.getenv('GITHUB_API_TIMEOUT', '10'))
 
 def parse_version(version_str: str) -> tuple:
     """解析版本号字符串为可比较的元组
-    
+
     Args:
         version_str: 版本号字符串，如 'v2.1.0' 或 '2.1.0'
-        
+
     Returns:
         版本号元组，如 (2, 1, 0)
     """
     # 移除 'v' 前缀（如果有）
     version_str = version_str.lstrip('vV')
-    
+
     # 使用正则表达式提取数字部分
     match = re.match(r'^(\d+)\.(\d+)\.(\d+)', version_str)
     if match:
         return tuple(int(x) for x in match.groups())
-    
+
     # 如果无法解析，返回 (0, 0, 0)
     return (0, 0, 0)
 
 
 def compare_versions(version1: str, version2: str) -> int:
     """比较两个版本号
-    
+
     Args:
         version1: 第一个版本号
         version2: 第二个版本号
-        
+
     Returns:
         -1 if version1 < version2
         0 if version1 == version2
@@ -57,7 +57,7 @@ def compare_versions(version1: str, version2: str) -> int:
     """
     v1 = parse_version(version1)
     v2 = parse_version(version2)
-    
+
     if v1 < v2:
         return -1
     elif v1 > v2:
@@ -68,7 +68,7 @@ def compare_versions(version1: str, version2: str) -> int:
 
 def get_current_version() -> str:
     """获取当前版本号
-    
+
     Returns:
         当前版本号字符串
     """
@@ -77,9 +77,9 @@ def get_current_version() -> str:
 
 def check_for_updates() -> dict:
     """检查是否有新版本可用
-    
+
     通过GitHub API检查最新发布版本，并与当前版本进行比较。
-    
+
     Returns:
         dict: 包含以下字段:
             - success: 是否成功检查
@@ -101,11 +101,11 @@ def check_for_updates() -> dict:
         'published_at': None,
         'message': ''
     }
-    
+
     try:
         # 构建GitHub API URL
         api_url = f'https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest'
-        
+
         # 创建请求
         req = urllib.request.Request(
             api_url,
@@ -114,30 +114,30 @@ def check_for_updates() -> dict:
                 'User-Agent': f'ServerManager/{CURRENT_VERSION}'
             }
         )
-        
+
         # 发送请求
         with urllib.request.urlopen(req, timeout=GITHUB_API_TIMEOUT) as response:
             data = json.loads(response.read().decode('utf-8'))
-        
+
         # 解析响应
         latest_version = data.get('tag_name', '')
         result['latest_version'] = latest_version.lstrip('vV')
         result['release_url'] = data.get('html_url', '')
         result['release_notes'] = data.get('body', '')
         result['published_at'] = data.get('published_at', '')
-        
+
         # 比较版本
         comparison = compare_versions(CURRENT_VERSION, latest_version)
         result['has_update'] = comparison < 0
-        
+
         if result['has_update']:
             result['message'] = f'发现新版本 {result["latest_version"]}，当前版本 {CURRENT_VERSION}'
         else:
             result['message'] = f'当前版本 {CURRENT_VERSION} 已是最新版本'
-        
+
         result['success'] = True
         logger.info(f"Version check completed: {result['message']}")
-        
+
     except urllib.error.HTTPError as e:
         if e.code == 404:
             # 没有发布版本 - 这不是一个错误，只是没有发布版本
@@ -163,13 +163,13 @@ def check_for_updates() -> dict:
         result['message'] = f'检查更新时发生错误: {str(e)}'
         result['success'] = False
         logger.error(f"Error checking for updates: {e}")
-    
+
     return result
 
 
 def get_version_info() -> dict:
     """获取完整的版本信息
-    
+
     Returns:
         dict: 包含版本信息
     """

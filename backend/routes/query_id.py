@@ -146,7 +146,7 @@ def register_query_id_events(socketio):
                 )
 
                 full_output = ''
-                
+
                 # 读取输出并实时发送
                 try:
                     for line in iter(process.stdout.readline, ''):

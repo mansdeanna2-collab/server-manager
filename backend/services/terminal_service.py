@@ -22,7 +22,7 @@ class TerminalService:
 
     def connect(self):
         """建立SSH连接并获取PTY通道
-        
+
         Returns:
             dict: {'success': bool, 'error_type': str|None, 'message': str}
         """
@@ -134,7 +134,7 @@ class TerminalService:
     def is_connected(self):
         """检查连接状态"""
         return (
-            self.client is not None and
-            self.channel is not None and
-            not self.channel.closed
+            self.client is not None
+            and self.channel is not None
+            and not self.channel.closed
         )

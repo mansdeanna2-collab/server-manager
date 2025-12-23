@@ -5,10 +5,6 @@ from flask_socketio import SocketIO
 from sqlalchemy import inspect, text
 from models import db
 from models.user import User
-from models.user_preference import (
-    IpCheckStatus, IpIdResult, SegmentNote, SegmentFavorite, ServerFavorite
-)
-from models.system_log import SystemLog
 from routes.auth import auth_bp
 from routes.servers import servers_bp
 from routes.preferences import preferences_bp
@@ -30,18 +26,18 @@ socketio = SocketIO()
 
 def _migrate_add_missing_columns(db_engine):
     """Add missing columns to the tables if they don't exist.
-    
+
     This handles the case where the database was created with an older schema
     and new columns were added to the model.
     """
     inspector = inspect(db_engine)
-    
+
     # Skip if the servers table doesn't exist yet (fresh database)
     if 'servers' not in inspector.get_table_names():
         return
-    
+
     columns = {col['name'] for col in inspector.get_columns('servers')}
-    
+
     with db_engine.connect() as conn:
         if 'check_detail' not in columns:
             conn.execute(text('ALTER TABLE servers ADD COLUMN check_detail TEXT'))
@@ -50,7 +46,7 @@ def _migrate_add_missing_columns(db_engine):
             conn.execute(text('ALTER TABLE servers ADD COLUMN error_type VARCHAR(50)'))
             logger.info("Added 'error_type' column to servers table")
         conn.commit()
-    
+
     # Add TOTP columns to users table if not exist
     if 'users' in inspector.get_table_names():
         user_columns = {col['name'] for col in inspector.get_columns('users')}
@@ -131,7 +127,7 @@ def create_app():
     # Create tables and default admin user
     with app.app_context():
         db.create_all()
-        
+
         # Migrate schema: add any missing columns to existing tables
         _migrate_add_missing_columns(db.engine)
 

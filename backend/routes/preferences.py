@@ -351,12 +351,12 @@ def toggle_server_favorite(current_user):
 @token_required
 def update_cookie(_current_user):
     """执行更新Cookie脚本
-    
+
     调用 update_cookie.sh 脚本来:
     1. 发送登录请求到 user.jtti.cc
     2. 从响应中提取 XSRF-TOKEN 和 jtti_session
     3. 更新 mm.py 和 id.py 中的 cookie 值
-    
+
     Returns:
         success: 是否成功
         message: 结果信息
@@ -365,7 +365,7 @@ def update_cookie(_current_user):
     # 获取 Python 目录路径（相对于当前文件的路径）
     backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     python_dir = os.path.join(backend_dir, 'Python')
-    
+
     # 验证 Python 目录在 backend 目录下（防止目录遍历）
     python_dir = os.path.realpath(python_dir)
     backend_dir = os.path.realpath(backend_dir)
@@ -374,16 +374,16 @@ def update_cookie(_current_user):
             'success': False,
             'message': '无效的目录路径'
         }), 400
-    
+
     script_path = os.path.join(python_dir, 'update_cookie.sh')
-    
+
     # 检查脚本是否存在
     if not os.path.exists(script_path):
         return jsonify({
             'success': False,
             'message': 'update_cookie.sh 脚本不存在'
         }), 404
-    
+
     try:
         # 运行脚本
         result = subprocess.run(
@@ -393,11 +393,11 @@ def update_cookie(_current_user):
             timeout=60,  # 60 seconds timeout
             cwd=python_dir
         )
-        
+
         output = result.stdout
         if result.stderr:
             output += '\n' + result.stderr
-        
+
         if result.returncode == 0:
             return jsonify({
                 'success': True,
@@ -410,7 +410,7 @@ def update_cookie(_current_user):
                 'message': 'Cookie更新失败',
                 'output': output
             }), 400
-            
+
     except subprocess.TimeoutExpired:
         return jsonify({
             'success': False,
@@ -430,7 +430,7 @@ def update_cookie(_current_user):
 @token_required
 def get_all_fetch_server_tasks(current_user):
     """获取当前用户的所有获取服务器任务状态
-    
+
     Returns a dict mapping IP addresses to task info
     """
     tasks = FetchServerTask.query.filter_by(user_id=current_user.id).all()
@@ -448,7 +448,7 @@ def get_fetch_server_task(current_user, ip_address):
         user_id=current_user.id,
         ip_address=ip_address
     ).first()
-    
+
     if task:
         return jsonify(task.to_dict()), 200
     else:
@@ -459,7 +459,7 @@ def get_fetch_server_task(current_user, ip_address):
 @token_required
 def get_running_fetch_server_tasks(current_user):
     """获取当前用户所有正在运行的获取服务器任务
-    
+
     Returns tasks with status 'running'
     """
     tasks = FetchServerTask.query.filter_by(
@@ -563,7 +563,7 @@ def format_file_size(size_bytes):
 @token_required
 def create_system_backup(current_user):
     """创建系统备份
-    
+
     创建一个包含所有文件和数据库的zip备份文件
     备份内容包括:
     - 数据库文件
@@ -571,7 +571,7 @@ def create_system_backup(current_user):
     - 服务器文件目录
     - 配置文件
     - 后端源代码
-    
+
     Returns:
         success: 是否成功
         backup_id: 备份文件标识符
@@ -583,23 +583,23 @@ def create_system_backup(current_user):
     import zipfile
     from datetime import datetime
     from config import Config
-    
+
     try:
         # 获取当前时间作为备份文件名
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         backup_filename = f"system_backup_{timestamp}.zip"
-        
+
         # 获取后端目录路径
         backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         # 获取项目根目录（server-manager）
         project_root = os.path.dirname(backend_dir)
-        
+
         # 创建临时目录存放备份文件
         backup_dir = os.path.join(backend_dir, 'backups')
         os.makedirs(backup_dir, exist_ok=True)
-        
+
         backup_path = os.path.join(backup_dir, backup_filename)
-        
+
         # 创建zip文件
         with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
             # 备份数据库文件
@@ -617,16 +617,16 @@ def create_system_backup(current_user):
                         db_path = os.path.join(backend_dir, db_filename)
                 else:
                     db_path = db_filename
-                    
+
                 if os.path.exists(db_path):
                     zipf.write(db_path, f"database/{os.path.basename(db_path)}")
                     logger.info(f"Added database to backup: {db_path}")
-            
+
             # 备份后端目录（完整备份）
             for root, dirs, files in os.walk(backend_dir):
                 # 排除特定目录
                 dirs[:] = [d for d in dirs if d not in BACKUP_EXCLUDE_DIRS]
-                
+
                 for file in files:
                     if file in BACKUP_EXCLUDE_FILES:
                         continue
@@ -637,14 +637,14 @@ def create_system_backup(current_user):
                     except Exception as e:
                         logger.warning(f"Could not add file to backup: {file_path} - {str(e)}")
             logger.info("Added backend directory to backup")
-            
+
             # 备份前端目录
             frontend_dir = os.path.join(project_root, 'frontend')
             if os.path.exists(frontend_dir):
                 for root, dirs, files in os.walk(frontend_dir):
                     # 排除特定目录
                     dirs[:] = [d for d in dirs if d not in BACKUP_EXCLUDE_DIRS]
-                    
+
                     for file in files:
                         if file in BACKUP_EXCLUDE_FILES:
                             continue
@@ -655,7 +655,7 @@ def create_system_backup(current_user):
                         except Exception as e:
                             logger.warning(f"Could not add file to backup: {file_path} - {str(e)}")
                 logger.info("Added frontend directory to backup")
-            
+
             # 备份服务器文件目录
             server_files_dir = Config.SERVER_FILES_DIR
             if os.path.exists(server_files_dir):
@@ -671,11 +671,13 @@ def create_system_backup(current_user):
                         except Exception as e:
                             logger.warning(f"Could not add file to backup: {file_path} - {str(e)}")
                 logger.info("Added server_files directory to backup")
-            
+
             # 备份根目录下的配置文件
-            root_files = ['docker-compose.yml', 'deploy-docker.sh', 'deploy-ubuntu.sh', 
-                         'README.md', 'DEPLOYMENT_OPTIONS.md', 'DEPLOYMENT_UBUNTU.md',
-                         'DOCUMENTATION_INDEX.md', 'QUICK_REFERENCE.md', '.gitignore']
+            root_files = [
+                'docker-compose.yml', 'deploy-docker.sh', 'deploy-ubuntu.sh',
+                'README.md', 'DEPLOYMENT_OPTIONS.md', 'DEPLOYMENT_UBUNTU.md',
+                'DOCUMENTATION_INDEX.md', 'QUICK_REFERENCE.md', '.gitignore'
+            ]
             for filename in root_files:
                 file_path = os.path.join(project_root, filename)
                 if os.path.exists(file_path):
@@ -683,13 +685,13 @@ def create_system_backup(current_user):
                         zipf.write(file_path, filename)
                     except Exception as e:
                         logger.warning(f"Could not add file to backup: {file_path} - {str(e)}")
-        
+
         # 获取文件大小
         file_size = os.path.getsize(backup_path)
-        
+
         # 记录备份日志
         log_backup(current_user, backup_filename, success=True)
-        
+
         return jsonify({
             'success': True,
             'backup_id': timestamp,
@@ -698,10 +700,10 @@ def create_system_backup(current_user):
             'size_formatted': format_file_size(file_size),
             'message': '系统备份创建成功'
         }), 200
-        
+
     except Exception as e:
         logger.error(f"Error creating system backup: {str(e)}")
-        log_backup(current_user, backup_filename if 'backup_filename' in locals() else 'unknown', 
+        log_backup(current_user, backup_filename if 'backup_filename' in locals() else 'unknown',
                    success=False, error_msg=str(e))
         return jsonify({
             'success': False,
@@ -713,15 +715,15 @@ def create_system_backup(current_user):
 @token_required
 def download_system_backup(_current_user, backup_id):
     """下载系统备份文件
-    
+
     Args:
         backup_id: 备份文件标识符（时间戳）
-        
+
     Returns:
         备份zip文件流
     """
     from flask import send_file
-    
+
     try:
         # 验证backup_id格式（防止目录遍历攻击）
         if not backup_id or not BACKUP_ID_PATTERN.match(backup_id):
@@ -729,13 +731,13 @@ def download_system_backup(_current_user, backup_id):
                 'success': False,
                 'message': '无效的备份标识符'
             }), 400
-        
+
         # 获取备份目录路径
         backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         backup_dir = os.path.join(backend_dir, 'backups')
         backup_filename = f"system_backup_{backup_id}.zip"
         backup_path = os.path.join(backup_dir, backup_filename)
-        
+
         # 验证路径安全性（防止目录遍历）
         backup_path = os.path.realpath(backup_path)
         backup_dir = os.path.realpath(backup_dir)
@@ -744,21 +746,21 @@ def download_system_backup(_current_user, backup_id):
                 'success': False,
                 'message': '无效的备份路径'
             }), 400
-        
+
         # 检查文件是否存在
         if not os.path.exists(backup_path):
             return jsonify({
                 'success': False,
                 'message': '备份文件不存在'
             }), 404
-        
+
         return send_file(
             backup_path,
             mimetype='application/zip',
             as_attachment=True,
             download_name=backup_filename
         )
-        
+
     except Exception as e:
         logger.error(f"Error downloading backup: {str(e)}")
         return jsonify({
@@ -771,7 +773,7 @@ def download_system_backup(_current_user, backup_id):
 @token_required
 def list_system_backups(_current_user):
     """列出所有可用的系统备份
-    
+
     Returns:
         backups: 备份文件列表，每个包含:
             - backup_id: 备份标识符
@@ -781,20 +783,20 @@ def list_system_backups(_current_user):
             - created_at: 创建时间
     """
     from datetime import datetime
-    
+
     try:
         # 获取备份目录路径
         backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         backup_dir = os.path.join(backend_dir, 'backups')
-        
+
         backups = []
-        
+
         if os.path.exists(backup_dir):
             for filename in os.listdir(backup_dir):
                 if filename.startswith('system_backup_') and filename.endswith('.zip'):
                     backup_path = os.path.join(backup_dir, filename)
                     file_size = os.path.getsize(backup_path)
-                    
+
                     # 从文件名提取时间戳
                     try:
                         timestamp_str = filename.replace('system_backup_', '').replace('.zip', '')
@@ -802,7 +804,7 @@ def list_system_backups(_current_user):
                         created_at_str = created_at.strftime('%Y-%m-%d %H:%M:%S')
                     except ValueError:
                         created_at_str = None
-                    
+
                     backups.append({
                         'backup_id': timestamp_str,
                         'filename': filename,
@@ -810,15 +812,15 @@ def list_system_backups(_current_user):
                         'size_formatted': format_file_size(file_size),
                         'created_at': created_at_str
                     })
-        
+
         # 按创建时间倒序排列
         backups.sort(key=lambda x: x['backup_id'], reverse=True)
-        
+
         return jsonify({
             'success': True,
             'backups': backups
         }), 200
-        
+
     except Exception as e:
         logger.error(f"Error listing backups: {str(e)}")
         return jsonify({
@@ -831,7 +833,7 @@ def list_system_backups(_current_user):
 @token_required
 def delete_system_backup(_current_user, backup_id):
     """删除系统备份文件
-    
+
     Args:
         backup_id: 备份文件标识符（时间戳）
     """
@@ -842,13 +844,13 @@ def delete_system_backup(_current_user, backup_id):
                 'success': False,
                 'message': '无效的备份标识符'
             }), 400
-        
+
         # 获取备份目录路径
         backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         backup_dir = os.path.join(backend_dir, 'backups')
         backup_filename = f"system_backup_{backup_id}.zip"
         backup_path = os.path.join(backup_dir, backup_filename)
-        
+
         # 验证路径安全性（防止目录遍历）
         backup_path = os.path.realpath(backup_path)
         backup_dir = os.path.realpath(backup_dir)
@@ -857,22 +859,22 @@ def delete_system_backup(_current_user, backup_id):
                 'success': False,
                 'message': '无效的备份路径'
             }), 400
-        
+
         # 检查文件是否存在
         if not os.path.exists(backup_path):
             return jsonify({
                 'success': False,
                 'message': '备份文件不存在'
             }), 404
-        
+
         # 删除文件
         os.remove(backup_path)
-        
+
         return jsonify({
             'success': True,
             'message': '备份文件已删除'
         }), 200
-        
+
     except Exception as e:
         logger.error(f"Error deleting backup: {str(e)}")
         return jsonify({
@@ -885,10 +887,10 @@ def delete_system_backup(_current_user, backup_id):
 @token_required
 def verify_system_backup(_current_user, backup_id):
     """验证系统备份文件完整性
-    
+
     Args:
         backup_id: 备份文件标识符（时间戳）
-        
+
     Returns:
         success: 是否成功
         valid: 备份文件是否有效
@@ -899,7 +901,7 @@ def verify_system_backup(_current_user, backup_id):
         errors: 验证错误列表
     """
     import zipfile
-    
+
     try:
         # 验证backup_id格式
         if not backup_id or not BACKUP_ID_PATTERN.match(backup_id):
@@ -907,13 +909,13 @@ def verify_system_backup(_current_user, backup_id):
                 'success': False,
                 'message': '无效的备份标识符'
             }), 400
-        
+
         # 获取备份文件路径
         backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         backup_dir = os.path.join(backend_dir, 'backups')
         backup_filename = f"system_backup_{backup_id}.zip"
         backup_path = os.path.join(backup_dir, backup_filename)
-        
+
         # 验证路径安全性
         backup_path = os.path.realpath(backup_path)
         backup_dir = os.path.realpath(backup_dir)
@@ -922,20 +924,20 @@ def verify_system_backup(_current_user, backup_id):
                 'success': False,
                 'message': '无效的备份路径'
             }), 400
-        
+
         # 检查文件是否存在
         if not os.path.exists(backup_path):
             return jsonify({
                 'success': False,
                 'message': '备份文件不存在'
             }), 404
-        
+
         errors = []
         file_count = 0
         has_database = False
         has_backend = False
         has_frontend = False
-        
+
         # 验证zip文件完整性
         try:
             with zipfile.ZipFile(backup_path, 'r') as zipf:
@@ -943,11 +945,11 @@ def verify_system_backup(_current_user, backup_id):
                 bad_files = zipf.testzip()
                 if bad_files:
                     errors.append(f'损坏的文件: {bad_files}')
-                
+
                 # 获取文件列表
                 file_list = zipf.namelist()
                 file_count = len(file_list)
-                
+
                 # 检查关键目录
                 for f in file_list:
                     if f.startswith('database/'):
@@ -956,15 +958,15 @@ def verify_system_backup(_current_user, backup_id):
                         has_backend = True
                     elif f.startswith('frontend/'):
                         has_frontend = True
-                        
+
         except zipfile.BadZipFile:
             errors.append('无效的ZIP文件格式')
         except Exception as e:
             errors.append(f'验证错误: {str(e)}')
-        
+
         # 判断是否有效
         valid = len(errors) == 0 and file_count > 0
-        
+
         return jsonify({
             'success': True,
             'valid': valid,
@@ -974,7 +976,7 @@ def verify_system_backup(_current_user, backup_id):
             'has_frontend': has_frontend,
             'errors': errors
         }), 200
-        
+
     except Exception as e:
         logger.error(f"Error verifying backup: {str(e)}")
         return jsonify({
@@ -987,7 +989,7 @@ def verify_system_backup(_current_user, backup_id):
 @token_required
 def get_backup_stats(_current_user):
     """获取备份统计信息
-    
+
     Returns:
         success: 是否成功
         stats: 统计信息
@@ -1000,16 +1002,16 @@ def get_backup_stats(_current_user):
             - average_size_formatted: 格式化的平均大小
     """
     from datetime import datetime
-    
+
     try:
         backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         backup_dir = os.path.join(backend_dir, 'backups')
-        
+
         total_count = 0
         total_size = 0
         oldest_backup = None
         newest_backup = None
-        
+
         if os.path.exists(backup_dir):
             for filename in os.listdir(backup_dir):
                 if filename.startswith('system_backup_') and filename.endswith('.zip'):
@@ -1017,21 +1019,21 @@ def get_backup_stats(_current_user):
                     file_size = os.path.getsize(backup_path)
                     total_count += 1
                     total_size += file_size
-                    
+
                     # 提取时间戳
                     try:
                         timestamp_str = filename.replace('system_backup_', '').replace('.zip', '')
                         created_at = datetime.strptime(timestamp_str, '%Y%m%d_%H%M%S')
-                        
+
                         if oldest_backup is None or created_at < oldest_backup:
                             oldest_backup = created_at
                         if newest_backup is None or created_at > newest_backup:
                             newest_backup = created_at
                     except ValueError:
                         pass
-        
+
         average_size = int(total_size / total_count) if total_count > 0 else 0
-        
+
         return jsonify({
             'success': True,
             'stats': {
@@ -1044,7 +1046,7 @@ def get_backup_stats(_current_user):
                 'average_size_formatted': format_file_size(average_size)
             }
         }), 200
-        
+
     except Exception as e:
         logger.error(f"Error getting backup stats: {str(e)}")
         return jsonify({
@@ -1059,7 +1061,7 @@ def get_backup_stats(_current_user):
 @token_required
 def get_database_schema(_current_user):
     """获取数据库结构（所有表和列）
-    
+
     Returns:
         success: 是否成功
         tables: 表列表，每个包含:
@@ -1071,15 +1073,15 @@ def get_database_schema(_current_user):
                 - primary_key: 是否为主键
     """
     from sqlalchemy import inspect
-    
+
     try:
         inspector = inspect(db.engine)
         tables = []
-        
+
         for table_name in inspector.get_table_names():
             columns = []
             pk_columns = {col for col in inspector.get_pk_constraint(table_name).get('constrained_columns', [])}
-            
+
             for column in inspector.get_columns(table_name):
                 columns.append({
                     'name': column['name'],
@@ -1088,20 +1090,20 @@ def get_database_schema(_current_user):
                     'primary_key': column['name'] in pk_columns,
                     'default': str(column.get('default')) if column.get('default') else None
                 })
-            
+
             tables.append({
                 'name': table_name,
                 'columns': columns
             })
-        
+
         # Sort tables by name
         tables.sort(key=lambda x: x['name'])
-        
+
         return jsonify({
             'success': True,
             'tables': tables
         }), 200
-        
+
     except Exception as e:
         logger.error(f"Error getting database schema: {str(e)}")
         return jsonify({
@@ -1114,14 +1116,14 @@ def get_database_schema(_current_user):
 @token_required
 def get_database_table_data(_current_user, table_name):
     """获取数据库表的数据
-    
+
     Args:
         table_name: 表名
-        
+
     Query params:
         page: 页码（默认1）
         per_page: 每页记录数（默认50，最大200）
-        
+
     Returns:
         success: 是否成功
         table_name: 表名
@@ -1133,24 +1135,24 @@ def get_database_table_data(_current_user, table_name):
         total_pages: 总页数
     """
     from sqlalchemy import inspect, table, select, func, column as sa_column
-    
+
     try:
         # 验证表名（防止SQL注入）
         inspector = inspect(db.engine)
         valid_tables = inspector.get_table_names()
-        
+
         if table_name not in valid_tables:
             return jsonify({
                 'success': False,
                 'message': f'表 {table_name} 不存在'
             }), 404
-        
+
         # 获取分页参数
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 50, type=int)
         page = max(1, page)
         per_page = min(max(1, per_page), 200)
-        
+
         # 获取列信息
         columns = []
         pk_columns = {col for col in inspector.get_pk_constraint(table_name).get('constrained_columns', [])}
@@ -1160,18 +1162,18 @@ def get_database_table_data(_current_user, table_name):
                 'type': str(column['type']),
                 'primary_key': column['name'] in pk_columns
             })
-        
+
         # 获取总记录数
         # 使用 SQLAlchemy 的 table() 构造，表名已验证在 valid_tables 列表中
         tbl = table(table_name)
         count_query = select(func.count()).select_from(tbl)
         count_result = db.session.execute(count_query)
         total = count_result.scalar()
-        
+
         # 计算分页
         total_pages = (total + per_page - 1) // per_page if total > 0 else 1
         offset = (page - 1) * per_page
-        
+
         # 获取数据 - 使用 SQLAlchemy 的 table() 和 select()
         # 显式选择所有已验证的列名，而不是使用 *
         # 注意：table_name 和 column_names 都经过验证
@@ -1179,7 +1181,7 @@ def get_database_table_data(_current_user, table_name):
         col_objects = [sa_column(name) for name in column_names]
         data_query = select(*col_objects).select_from(tbl).limit(per_page).offset(offset)
         result = db.session.execute(data_query)
-        
+
         # 转换为字典列表
         data = []
         for row in result:
@@ -1197,7 +1199,7 @@ def get_database_table_data(_current_user, table_name):
                         value = '<binary data>'
                 row_dict[col_name] = value
             data.append(row_dict)
-        
+
         return jsonify({
             'success': True,
             'table_name': table_name,
@@ -1208,7 +1210,7 @@ def get_database_table_data(_current_user, table_name):
             'per_page': per_page,
             'total_pages': total_pages
         }), 200
-        
+
     except Exception as e:
         logger.error(f"Error getting table data: {str(e)}")
         return jsonify({
@@ -1236,7 +1238,7 @@ def load_system_settings():
             'key_path': ''
         }
     }
-    
+
     if os.path.exists(SYSTEM_SETTINGS_FILE):
         try:
             with open(SYSTEM_SETTINGS_FILE, 'r', encoding='utf-8') as f:
@@ -1248,7 +1250,7 @@ def load_system_settings():
                 return settings
         except Exception as e:
             logger.error(f"Error loading system settings: {str(e)}")
-    
+
     return default_settings
 
 
@@ -1267,7 +1269,7 @@ def save_system_settings(settings):
 @token_required
 def get_system_settings(_current_user):
     """获取系统设置
-    
+
     Returns:
         success: 是否成功
         settings: 系统设置，包含:
@@ -1292,22 +1294,22 @@ def get_system_settings(_current_user):
 @token_required
 def update_system_settings(_current_user):
     """更新系统设置
-    
+
     Request body:
         settings: 系统设置对象
     """
     data = request.get_json()
-    
+
     if not data or 'settings' not in data:
         return jsonify({
             'success': False,
             'message': '请提供设置数据'
         }), 400
-    
+
     try:
         current_settings = load_system_settings()
         new_settings = data['settings']
-        
+
         # Update login whitelist settings
         if 'login_whitelist' in new_settings:
             whitelist = new_settings['login_whitelist']
@@ -1325,22 +1327,22 @@ def update_system_settings(_current_user):
                                 valid_ips.append(ip)
                             else:
                                 invalid_ips.append(ip)
-                    
+
                     if invalid_ips:
                         return jsonify({
                             'success': False,
                             'message': f'无效的IP地址: {", ".join(invalid_ips)}'
                         }), 400
-                    
+
                     current_settings['login_whitelist']['ip_list'] = valid_ips
-        
+
         # Update SSL settings
         if 'ssl' in new_settings:
             ssl = new_settings['ssl']
             current_settings['ssl']['enabled'] = ssl.get('enabled', False)
             current_settings['ssl']['cert_path'] = ssl.get('cert_path', '')
             current_settings['ssl']['key_path'] = ssl.get('key_path', '')
-        
+
         if save_system_settings(current_settings):
             return jsonify({
                 'success': True,
@@ -1352,7 +1354,7 @@ def update_system_settings(_current_user):
                 'success': False,
                 'message': '保存系统设置失败'
             }), 500
-            
+
     except Exception as e:
         logger.error(f"Error updating system settings: {str(e)}")
         return jsonify({
@@ -1367,10 +1369,10 @@ def update_system_settings(_current_user):
 @token_required
 def detect_ssl_address(_current_user):
     """检测地址类型（IP或域名）
-    
+
     Request body:
         address: 地址字符串
-        
+
     Returns:
         success: 是否成功
         type: 'ip' | 'domain' | 'unknown'
@@ -1379,17 +1381,17 @@ def detect_ssl_address(_current_user):
         message: 结果信息
     """
     from services.ssl_service import detect_address_type
-    
+
     data = request.get_json()
-    
+
     if not data or not data.get('address'):
         return jsonify({
             'success': False,
             'message': '请提供地址'
         }), 400
-    
+
     result = detect_address_type(data['address'])
-    
+
     return jsonify({
         'success': result['is_valid'],
         **result
@@ -1400,7 +1402,7 @@ def detect_ssl_address(_current_user):
 @token_required
 def detect_server_address(_current_user):
     """自动检测服务器地址
-    
+
     Returns:
         success: 是否成功
         address: 检测到的地址
@@ -1408,9 +1410,9 @@ def detect_server_address(_current_user):
         message: 结果信息
     """
     from services.ssl_service import get_server_address
-    
+
     result = get_server_address()
-    
+
     return jsonify({
         'success': True,
         **result
@@ -1421,12 +1423,12 @@ def detect_server_address(_current_user):
 @token_required
 def auto_configure_ssl(_current_user):
     """自动配置SSL证书
-    
+
     根据提供的地址自动生成自签名SSL证书，并更新系统配置。
-    
+
     Request body:
         address: 服务器地址（IP或域名），如果不提供则自动检测
-        
+
     Returns:
         success: 是否成功
         address: 使用的地址
@@ -1436,13 +1438,13 @@ def auto_configure_ssl(_current_user):
         message: 结果信息
     """
     from services.ssl_service import (
-        detect_address_type, get_server_address, 
+        detect_address_type, get_server_address,
         generate_self_signed_certificate
     )
-    
+
     data = request.get_json() or {}
     address = data.get('address', '').strip()
-    
+
     # If no address provided, auto-detect
     if not address:
         server_info = get_server_address()
@@ -1457,16 +1459,16 @@ def auto_configure_ssl(_current_user):
                 'message': detection['message']
             }), 400
         address_type = detection['type']
-    
+
     # Generate self-signed certificate
     result = generate_self_signed_certificate(address, address_type)
-    
+
     if not result['success']:
         return jsonify({
             'success': False,
             'message': result['message']
         }), 500
-    
+
     # Update system settings with new SSL configuration
     try:
         current_settings = load_system_settings()
@@ -1478,7 +1480,7 @@ def auto_configure_ssl(_current_user):
             'address_type': address_type,
             'auto_generated': True
         }
-        
+
         if save_system_settings(current_settings):
             log_settings_change(_current_user, 'SSL自动配置', f'为{address}生成自签名证书')
             return jsonify({
@@ -1494,7 +1496,7 @@ def auto_configure_ssl(_current_user):
                 'success': False,
                 'message': '保存SSL配置失败'
             }), 500
-            
+
     except Exception as e:
         logger.error(f"Error saving SSL configuration: {str(e)}")
         return jsonify({
@@ -1507,11 +1509,11 @@ def auto_configure_ssl(_current_user):
 @token_required
 def verify_ssl_certificate(_current_user):
     """验证SSL证书
-    
+
     Request body:
         cert_path: 证书文件路径
         key_path: 私钥文件路径
-        
+
     Returns:
         success: 是否成功
         valid: 证书是否有效
@@ -1519,26 +1521,26 @@ def verify_ssl_certificate(_current_user):
         details: 证书详情
     """
     from services.ssl_service import verify_certificate
-    
+
     data = request.get_json()
-    
+
     if not data:
         return jsonify({
             'success': False,
             'message': '请提供证书信息'
         }), 400
-    
+
     cert_path = data.get('cert_path', '').strip()
     key_path = data.get('key_path', '').strip()
-    
+
     if not cert_path or not key_path:
         return jsonify({
             'success': False,
             'message': '请提供证书路径和私钥路径'
         }), 400
-    
+
     result = verify_certificate(cert_path, key_path)
-    
+
     return jsonify({
         'success': result['valid'],
         **result
@@ -1551,13 +1553,13 @@ def verify_ssl_certificate(_current_user):
 @token_required
 def get_system_logs(_current_user):
     """获取系统日志（从数据库）
-    
+
     Query params:
         page: 页码（默认1）
         per_page: 每页记录数（默认100，最大500）
         log_type: 日志类型过滤（可选）
         status: 状态过滤（可选）
-        
+
     Returns:
         success: 是否成功
         logs: 日志列表
@@ -1572,29 +1574,29 @@ def get_system_logs(_current_user):
         per_page = request.args.get('per_page', 100, type=int)
         log_type = request.args.get('log_type', None, type=str)
         status = request.args.get('status', None, type=str)
-        
+
         page = max(1, page)
         per_page = min(max(1, per_page), 500)
-        
+
         # 构建查询
         query = SystemLog.query
-        
+
         # 应用过滤器
         if log_type:
             query = query.filter(SystemLog.log_type == log_type)
         if status:
             query = query.filter(SystemLog.status == status)
-        
+
         # 按时间倒序排列
         query = query.order_by(SystemLog.created_at.desc())
-        
+
         # 获取总记录数
         total = query.count()
-        
+
         # 分页
         total_pages = (total + per_page - 1) // per_page if total > 0 else 1
         logs = query.offset((page - 1) * per_page).limit(per_page).all()
-        
+
         return jsonify({
             'success': True,
             'logs': [log.to_dict() for log in logs],
@@ -1603,7 +1605,7 @@ def get_system_logs(_current_user):
             'per_page': per_page,
             'total_pages': total_pages
         }), 200
-        
+
     except Exception as e:
         logger.error(f"Error getting system logs: {str(e)}")
         return jsonify({
@@ -1616,7 +1618,7 @@ def get_system_logs(_current_user):
 @token_required
 def get_log_types(_current_user):
     """获取所有日志类型及其描述
-    
+
     Returns:
         success: 是否成功
         types: 日志类型列表
@@ -1628,7 +1630,7 @@ def get_log_types(_current_user):
         LOG_TYPE_SERVER_DELETE, LOG_TYPE_SERVER_CHECK,
         LOG_TYPE_BACKUP, LOG_TYPE_SETTINGS, LOG_TYPE_IMPORT
     )
-    
+
     log_types = [
         {'value': LOG_TYPE_LOGIN, 'label': '登录成功', 'color': 'success'},
         {'value': LOG_TYPE_LOGIN_FAILED, 'label': '登录失败', 'color': 'danger'},
@@ -1643,7 +1645,7 @@ def get_log_types(_current_user):
         {'value': LOG_TYPE_SETTINGS, 'label': '设置修改', 'color': 'warning'},
         {'value': LOG_TYPE_IMPORT, 'label': '服务器导入', 'color': 'success'},
     ]
-    
+
     return jsonify({
         'success': True,
         'types': log_types
@@ -1654,29 +1656,29 @@ def get_log_types(_current_user):
 @token_required
 def get_log_stats(_current_user):
     """获取日志统计信息
-    
+
     Returns:
         success: 是否成功
         stats: 统计信息
     """
     from sqlalchemy import func
-    
+
     try:
         # 按类型统计
         type_stats = db.session.query(
             SystemLog.log_type,
             func.count(SystemLog.id).label('count')
         ).group_by(SystemLog.log_type).all()
-        
+
         # 按状态统计
         status_stats = db.session.query(
             SystemLog.status,
             func.count(SystemLog.id).label('count')
         ).group_by(SystemLog.status).all()
-        
+
         # 总数
         total = SystemLog.query.count()
-        
+
         return jsonify({
             'success': True,
             'stats': {
@@ -1685,7 +1687,7 @@ def get_log_stats(_current_user):
                 'by_status': {s: c for s, c in status_stats}
             }
         }), 200
-        
+
     except Exception as e:
         logger.error(f"Error getting log stats: {str(e)}")
         return jsonify({
@@ -1700,7 +1702,7 @@ def get_log_stats(_current_user):
 @token_required
 def get_version_info(_current_user):
     """获取当前版本信息
-    
+
     Returns:
         success: 是否成功
         version: 版本信息
@@ -1710,7 +1712,7 @@ def get_version_info(_current_user):
             - github_url: GitHub仓库URL
     """
     from services.version_service import get_version_info as get_info
-    
+
     try:
         info = get_info()
         return jsonify({
@@ -1729,9 +1731,9 @@ def get_version_info(_current_user):
 @token_required
 def check_for_updates(_current_user):
     """检查是否有新版本可用
-    
+
     通过GitHub API检查最新发布版本。
-    
+
     Returns:
         success: 是否成功
         current_version: 当前版本号
@@ -1743,7 +1745,7 @@ def check_for_updates(_current_user):
         message: 结果信息
     """
     from services.version_service import check_for_updates as check_updates
-    
+
     try:
         result = check_updates()
         return jsonify(result), 200

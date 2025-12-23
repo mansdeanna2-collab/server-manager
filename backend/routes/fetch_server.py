@@ -48,7 +48,7 @@ def verify_token(token):
 
 def _save_task_to_db(app, user_id, ip_address, status, log_output=None, servers_added=None):
     """Save task state to database for persistence
-    
+
     Args:
         app: Flask app instance for context
         user_id: User ID
@@ -62,19 +62,19 @@ def _save_task_to_db(app, user_id, ip_address, status, log_output=None, servers_
             from models import db
             from models.user_preference import FetchServerTask
             from utils import china_now
-            
+
             task = FetchServerTask.query.filter_by(
                 user_id=user_id,
                 ip_address=ip_address
             ).first()
-            
+
             if not task:
                 task = FetchServerTask(
                     user_id=user_id,
                     ip_address=ip_address
                 )
                 db.session.add(task)
-            
+
             task.status = status
             if log_output is not None:
                 task.log_output = log_output
@@ -85,7 +85,7 @@ def _save_task_to_db(app, user_id, ip_address, status, log_output=None, servers_
             if status in ['completed', 'failed', 'timeout', 'error']:
                 task.completed_at = china_now()
             task.updated_at = china_now()
-            
+
             db.session.commit()
     except Exception as e:
         logger.error(f"Error saving task to database: {str(e)}")
@@ -93,20 +93,20 @@ def _save_task_to_db(app, user_id, ip_address, status, log_output=None, servers_
 
 def _parse_server_info(output):
     """从脚本输出中解析服务器信息
-    
+
     Args:
         output: 脚本输出文本
-    
+
     Returns:
         list: 解析出的服务器信息列表
     """
     servers = []
-    
+
     # 查找 "===== 完整获取结果（控制台输出） =====" 后面的JSON数据
     # Find JSON data after "===== 完整获取结果（控制台输出） ====="
     pattern = r'=====\s*完整获取结果（控制台输出）\s*=====\s*\n(.+)'
     match = re.search(pattern, output, re.MULTILINE | re.DOTALL)
-    
+
     if match:
         remaining_text = match.group(1)
         # 尝试逐行解析JSON
@@ -119,7 +119,7 @@ def _parse_server_info(output):
                     last_brace = line.rfind('}')
                     if last_brace > 0:
                         line = line[:last_brace + 1]
-                
+
                 try:
                     server_data = json.loads(line)
                     # 验证必要字段
@@ -139,11 +139,11 @@ def _parse_server_info(output):
                         server_data = _extract_server_data_regex(line)
                         if server_data:
                             servers.append(server_data)
-                            logger.info(f"Extracted server data using regex fallback")
+                            logger.info("Extracted server data using regex fallback")
                         else:
                             logger.warning(f"Failed to parse server JSON: {line[:100]}...")
                             continue
-    
+
     # Also check for "未知字符数量(未做二次验证)" which indicates incomplete parsing
     # but the data should still be usable
     if not servers and '未知字符数量' in output:
@@ -156,19 +156,19 @@ def _parse_server_info(output):
                 server_data = json.loads(json_str)
                 if 'ips' in server_data and 'password' in server_data:
                     servers.append(server_data)
-                    logger.info(f"Extracted server data using alternative pattern")
+                    logger.info("Extracted server data using alternative pattern")
             except json.JSONDecodeError:
                 continue
-    
+
     return servers
 
 
 def _extract_server_data_regex(line):
     """Extract server data using regex when JSON parsing fails.
-    
+
     Args:
         line: String containing malformed JSON
-    
+
     Returns:
         dict: Extracted server data or None if extraction failed
     """
@@ -177,25 +177,25 @@ def _extract_server_data_regex(line):
         ips_match = re.search(r'"ips"\s*:\s*\[([^\]]+)\]', line)
         if not ips_match:
             return None
-        
+
         # Extract individual IPs from the array
         ips_str = ips_match.group(1)
         ips = re.findall(r'"([^"]+)"', ips_str)
         if not ips:
             return None
-        
+
         # Extract password
         password_match = re.search(r'"password"\s*:\s*"([^"]+)"', line)
         if not password_match:
             return None
         password = password_match.group(1)
-        
+
         # Extract optional fields
         os_id_match = re.search(r'"os_id"\s*:\s*"([^"]+)"', line)
         os_name_match = re.search(r'"os_name"\s*:\s*"([^"]+)"', line)
         instance_id_match = re.search(r'"instance_id"\s*:\s*"([^"]+)"', line)
         name_match = re.search(r'"name"\s*:\s*"([^"]+)"', line)
-        
+
         return {
             'ips': ips,
             'password': password,
@@ -211,20 +211,20 @@ def _extract_server_data_regex(line):
 
 def _determine_port_and_username(server_data):
     """根据操作系统类型确定端口和用户名
-    
+
     Args:
         server_data: 服务器信息字典
-    
+
     Returns:
         tuple: (port, username)
     """
     os_name = server_data.get('os_name', '').lower()
     os_id = server_data.get('os_id', '').lower()
-    
+
     # Windows系统使用端口3389和Administrator用户
     if 'windows' in os_name or 'windows' in os_id:
         return 3389, 'Administrator'
-    
+
     # Linux/Ubuntu等系统使用端口22和root用户
     return 22, 'root'
 
@@ -264,7 +264,7 @@ def register_fetch_server_events(socketio):
         # 获取可选的IP地址（用于标识任务）
         ip_address = data.get('ip_address', '')
         task_id = ip_address or f"task_{sid}"
-        
+
         # 获取ipid参数（用于更新mm.py中的target_ids）
         ipid = data.get('ipid', '')
 
@@ -291,11 +291,11 @@ def register_fetch_server_events(socketio):
             try:
                 # 验证ipid是否为有效数字
                 ipid_int = int(ipid)
-                
+
                 # 读取mm.py文件内容
                 with open(mm_py_file, 'r', encoding='utf-8') as f:
                     content = f.read()
-                
+
                 # 使用正则表达式替换target_ids的值，支持任意数组格式（包括多行）
                 # 使用 [^\]]* 匹配除右方括号外的任意字符，安全支持多行数组
                 new_content = re.sub(
@@ -303,11 +303,11 @@ def register_fetch_server_events(socketio):
                     f'target_ids = [{ipid_int}]',
                     content
                 )
-                
+
                 # 写回文件
                 with open(mm_py_file, 'w', encoding='utf-8') as f:
                     f.write(new_content)
-                
+
                 logger.info(f"Updated mm.py target_ids to [{ipid_int}]")
             except ValueError:
                 emit('fetch_server_error', {'message': '无效的ID格式，ID必须是数字'})
@@ -338,10 +338,10 @@ def register_fetch_server_events(socketio):
         # 获取Flask app实例，用于在后台线程中创建应用上下文
         # Get Flask app instance for creating app context in background thread
         app = current_app._get_current_object()
-        
+
         # Save initial task state to database
         _save_task_to_db(app, user_id, task_id, 'running', '', None)
-        
+
         # Join a room for this task so multiple clients can receive updates
         join_room(f'task_{task_id}')
 
@@ -361,7 +361,7 @@ def register_fetch_server_events(socketio):
 
                 full_output = ''
                 line_count = 0
-                
+
                 # 读取输出并实时发送
                 try:
                     for line in iter(process.stdout.readline, ''):
@@ -373,7 +373,7 @@ def register_fetch_server_events(socketio):
                                 if task_id in fetch_server_tasks:
                                     fetch_server_tasks[task_id]['output'] = full_output
                                     fetch_server_tasks[task_id]['line_count'] = line_count
-                            
+
                             # 实时发送输出到客户端（发送到任务房间，所有订阅的客户端都能收到）
                             socketio.emit(
                                 'fetch_server_output',
@@ -381,7 +381,7 @@ def register_fetch_server_events(socketio):
                                 namespace='/fetch-server',
                                 room=f'task_{task_id}'
                             )
-                            
+
                             # Periodically save to database (every LOG_SAVE_INTERVAL lines)
                             if line_count % LOG_SAVE_INTERVAL == 0:
                                 _save_task_to_db(app, user_id, task_id, 'running', full_output, None)
@@ -409,38 +409,38 @@ def register_fetch_server_events(socketio):
 
                 # 从输出中解析服务器信息
                 servers = _parse_server_info(full_output)
-                
+
                 # 如果解析到服务器信息，尝试添加到数据库
                 added_servers = []
                 if servers:
                     from models import db
                     from models.server import Server
                     from utils.crypto import PasswordEncryption
-                    
+
                     password_encryptor = PasswordEncryption(Config.ENCRYPTION_KEY)
-                    
+
                     # 使用之前捕获的app实例创建应用上下文
                     # Use the previously captured app instance to create app context
                     with app.app_context():
                         for server_data in servers:
                             ips = server_data.get('ips', [])
                             password = server_data.get('password', '')
-                            
+
                             if not ips or not password:
                                 continue
-                            
+
                             # Ensure ips is a list
                             if not isinstance(ips, list):
                                 ips = [str(ips)]
-                            
+
                             port, username = _determine_port_and_username(server_data)
-                            
+
                             # 生成备注：所有IP用/连接
                             notes = '/'.join(ips) if len(ips) > 1 else (server_data.get('name') or server_data.get('instance_id') or '')
-                            
+
                             # 加密密码（所有IP使用相同密码）
                             encrypted_password = password_encryptor.encrypt(password)
-                            
+
                             # 为每个IP创建服务器记录
                             for ip_address in ips:
                                 # 检查IP是否已存在
@@ -448,7 +448,7 @@ def register_fetch_server_events(socketio):
                                 if existing:
                                     logger.info(f"Server {ip_address} already exists, skipping")
                                     continue
-                                
+
                                 server = Server(
                                     ip_address=ip_address,
                                     port=port,
@@ -464,7 +464,7 @@ def register_fetch_server_events(socketio):
                                     'notes': notes
                                 })
                                 logger.info(f"Added new server: {ip_address}")
-                        
+
                         if added_servers:
                             db.session.commit()
 
@@ -475,7 +475,7 @@ def register_fetch_server_events(socketio):
                         fetch_server_tasks[task_id]['status'] = final_status
                         fetch_server_tasks[task_id]['servers'] = added_servers
                         fetch_server_tasks[task_id]['output'] = full_output
-                
+
                 # Save final state to database
                 _save_task_to_db(app, user_id, task_id, final_status, full_output, added_servers)
 
@@ -518,12 +518,12 @@ def register_fetch_server_events(socketio):
     @socketio.on('subscribe_task', namespace='/fetch-server')
     def handle_subscribe_task(data):
         """订阅任务更新（用于重新连接到正在运行的任务）
-        
+
         当用户关闭对话框后重新打开，或者在其他设备打开时，
         可以通过此事件订阅正在运行的任务，接收实时更新。
         """
-        sid = request.sid
-        
+        # Note: request.sid is available but not needed in this handler
+
         # 验证token
         token = data.get('token')
         user_data = verify_token(token)
@@ -531,19 +531,19 @@ def register_fetch_server_events(socketio):
             emit('fetch_server_error', {'message': '认证失败，请重新登录'})
             disconnect()
             return
-        
+
         task_id = data.get('task_id', '')
         if not task_id:
             emit('subscribe_error', {'message': '请提供任务ID'})
             return
-        
+
         # Join the task room to receive updates
         join_room(f'task_{task_id}')
-        
+
         # Check if task is still running in memory
         with fetch_server_tasks_lock:
             task = fetch_server_tasks.get(task_id)
-        
+
         if task:
             # Task is still running, send current state
             emit('task_subscribed', {
