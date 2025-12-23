@@ -27,6 +27,11 @@ COMPOSE_SSL_FILE="docker-compose-ssl.yml"
 SSL_DIR="$ROOT_DIR/ssl"
 SERVER_FILES_DIR="$ROOT_DIR/server_files"
 
+# Service Ports / 服务端口
+BACKEND_PORT=5000
+FRONTEND_PORT=3000
+FRONTEND_HTTP_PORT=3080  # For SSL mode
+
 # Colors / 颜色
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -282,14 +287,13 @@ wait_for_services() {
     local frontend_ready=false
     
     while [[ $attempt -le $max_attempts ]]; do
-        # Check backend
-        if curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/health 2>/dev/null | grep -q "200"; then
+        # Check backend health endpoint
+        if curl -s -o /dev/null -w "%{http_code}" "http://localhost:$BACKEND_PORT/health" 2>/dev/null | grep -q "200"; then
             backend_ready=true
         fi
         
-        # Check frontend
-        local frontend_port=3000
-        if curl -s -o /dev/null -w "%{http_code}" http://localhost:$frontend_port 2>/dev/null | grep -qE "200|301|302"; then
+        # Check frontend availability
+        if curl -s -o /dev/null -w "%{http_code}" "http://localhost:$FRONTEND_PORT" 2>/dev/null | grep -qE "200|301|302"; then
             frontend_ready=true
         fi
         
@@ -322,16 +326,16 @@ print_success_summary() {
         echo -e "${GREEN}  已使用 SSL/HTTPS 部署服务${NC}"
         echo ""
         echo -e "${YELLOW}Access URLs / 访问地址:${NC}"
-        echo -e "  HTTPS Frontend: ${CYAN}https://localhost:3000${NC}"
-        echo -e "  HTTP  Frontend: ${CYAN}http://localhost:3080${NC} (redirects to HTTPS)"
-        echo -e "  Backend API:    ${CYAN}http://localhost:5000${NC}"
+        echo -e "  HTTPS Frontend: ${CYAN}https://localhost:$FRONTEND_PORT${NC}"
+        echo -e "  HTTP  Frontend: ${CYAN}http://localhost:$FRONTEND_HTTP_PORT${NC} (redirects to HTTPS)"
+        echo -e "  Backend API:    ${CYAN}http://localhost:$BACKEND_PORT${NC}"
     else
         echo -e "${GREEN}✓ Services deployed successfully${NC}"
         echo -e "${GREEN}  服务已成功部署${NC}"
         echo ""
         echo -e "${YELLOW}Access URLs / 访问地址:${NC}"
-        echo -e "  Frontend: ${CYAN}http://localhost:3000${NC}"
-        echo -e "  Backend:  ${CYAN}http://localhost:5000${NC}"
+        echo -e "  Frontend: ${CYAN}http://localhost:$FRONTEND_PORT${NC}"
+        echo -e "  Backend:  ${CYAN}http://localhost:$BACKEND_PORT${NC}"
     fi
     
     echo ""
