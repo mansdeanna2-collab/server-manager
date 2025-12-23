@@ -154,6 +154,13 @@ export const preferencesAPI = {
   getSystemSettings: () => api.get('/preferences/system-settings'),
   updateSystemSettings: (settings) => api.post('/preferences/system-settings', { settings }),
 
+  // SSL自动配置
+  detectSSLAddress: (address) => api.post('/preferences/ssl/detect-address', { address }),
+  detectServerAddress: () => api.get('/preferences/ssl/detect-server'),
+  autoConfigureSSL: (address = '') => api.post('/preferences/ssl/auto-configure', { address }),
+  verifySSLCertificate: (certPath, keyPath) => 
+    api.post('/preferences/ssl/verify', { cert_path: certPath, key_path: keyPath }),
+
   // 系统日志
   getSystemLogs: (params = {}) => {
     const { page = 1, perPage = 100, logType, status } = params

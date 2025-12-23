@@ -1361,6 +1361,190 @@ def update_system_settings(_current_user):
         }), 500
 
 
+# ============ SSL Auto-Configuration APIs ============
+
+@preferences_bp.route('/ssl/detect-address', methods=['POST'])
+@token_required
+def detect_ssl_address(_current_user):
+    """检测地址类型（IP或域名）
+    
+    Request body:
+        address: 地址字符串
+        
+    Returns:
+        success: 是否成功
+        type: 'ip' | 'domain' | 'unknown'
+        address: 清理后的地址
+        is_valid: 地址是否有效
+        message: 结果信息
+    """
+    from services.ssl_service import detect_address_type
+    
+    data = request.get_json()
+    
+    if not data or not data.get('address'):
+        return jsonify({
+            'success': False,
+            'message': '请提供地址'
+        }), 400
+    
+    result = detect_address_type(data['address'])
+    
+    return jsonify({
+        'success': result['is_valid'],
+        **result
+    }), 200
+
+
+@preferences_bp.route('/ssl/detect-server', methods=['GET'])
+@token_required
+def detect_server_address(_current_user):
+    """自动检测服务器地址
+    
+    Returns:
+        success: 是否成功
+        address: 检测到的地址
+        type: 'ip' | 'hostname'
+        message: 结果信息
+    """
+    from services.ssl_service import get_server_address
+    
+    result = get_server_address()
+    
+    return jsonify({
+        'success': True,
+        **result
+    }), 200
+
+
+@preferences_bp.route('/ssl/auto-configure', methods=['POST'])
+@token_required
+def auto_configure_ssl(_current_user):
+    """自动配置SSL证书
+    
+    根据提供的地址自动生成自签名SSL证书，并更新系统配置。
+    
+    Request body:
+        address: 服务器地址（IP或域名），如果不提供则自动检测
+        
+    Returns:
+        success: 是否成功
+        address: 使用的地址
+        address_type: 'ip' | 'domain'
+        cert_path: 证书路径
+        key_path: 私钥路径
+        message: 结果信息
+    """
+    from services.ssl_service import (
+        detect_address_type, get_server_address, 
+        generate_self_signed_certificate
+    )
+    
+    data = request.get_json() or {}
+    address = data.get('address', '').strip()
+    
+    # If no address provided, auto-detect
+    if not address:
+        server_info = get_server_address()
+        address = server_info['address']
+        address_type = server_info['type']
+    else:
+        # Validate provided address
+        detection = detect_address_type(address)
+        if not detection['is_valid']:
+            return jsonify({
+                'success': False,
+                'message': detection['message']
+            }), 400
+        address_type = detection['type']
+    
+    # Generate self-signed certificate
+    result = generate_self_signed_certificate(address, address_type)
+    
+    if not result['success']:
+        return jsonify({
+            'success': False,
+            'message': result['message']
+        }), 500
+    
+    # Update system settings with new SSL configuration
+    try:
+        current_settings = load_system_settings()
+        current_settings['ssl'] = {
+            'enabled': True,
+            'cert_path': result['cert_path'],
+            'key_path': result['key_path'],
+            'address': address,
+            'address_type': address_type,
+            'auto_generated': True
+        }
+        
+        if save_system_settings(current_settings):
+            log_settings_change(_current_user, 'SSL自动配置', f'为{address}生成自签名证书')
+            return jsonify({
+                'success': True,
+                'address': address,
+                'address_type': address_type,
+                'cert_path': result['cert_path'],
+                'key_path': result['key_path'],
+                'message': result['message']
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'message': '保存SSL配置失败'
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error saving SSL configuration: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'保存SSL配置失败: {str(e)}'
+        }), 500
+
+
+@preferences_bp.route('/ssl/verify', methods=['POST'])
+@token_required
+def verify_ssl_certificate(_current_user):
+    """验证SSL证书
+    
+    Request body:
+        cert_path: 证书文件路径
+        key_path: 私钥文件路径
+        
+    Returns:
+        success: 是否成功
+        valid: 证书是否有效
+        message: 结果信息
+        details: 证书详情
+    """
+    from services.ssl_service import verify_certificate
+    
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({
+            'success': False,
+            'message': '请提供证书信息'
+        }), 400
+    
+    cert_path = data.get('cert_path', '').strip()
+    key_path = data.get('key_path', '').strip()
+    
+    if not cert_path or not key_path:
+        return jsonify({
+            'success': False,
+            'message': '请提供证书路径和私钥路径'
+        }), 400
+    
+    result = verify_certificate(cert_path, key_path)
+    
+    return jsonify({
+        'success': result['valid'],
+        **result
+    }), 200
+
+
 # ============ System Logs APIs ============
 
 @preferences_bp.route('/system-logs', methods=['GET'])
