@@ -198,7 +198,9 @@ def register_anti_scanner_handlers(app):
     @app.after_request
     def add_security_headers(response):
         # Remove server header that could reveal technology stack
-        response.headers['Server'] = 'nginx'
+        # Don't set 'Server' header here - let nginx add its own to avoid duplicate headers
+        # when running behind nginx proxy
+        response.headers.pop('Server', None)
         # Remove X-Powered-By if present
         response.headers.pop('X-Powered-By', None)
         # Add security headers
