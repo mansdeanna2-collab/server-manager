@@ -245,9 +245,75 @@
                       class="setting-alert"
                     >
                       <template #title>
-                        SSL证书用于加密HTTPS连接。请确保证书文件路径正确且文件存在。
+                        SSL证书用于加密HTTPS连接。可以选择自动配置或手动输入证书路径。
                       </template>
                     </el-alert>
+                    
+                    <!-- 自动配置区域 -->
+                    <div class="ssl-auto-config">
+                      <h4 class="sub-title">
+                        <el-icon><MagicStick /></el-icon>
+                        一键自动配置
+                      </h4>
+                      <el-form
+                        :model="sslAutoForm"
+                        label-width="120px"
+                      >
+                        <el-form-item label="服务器地址">
+                          <el-input
+                            v-model="sslAutoForm.address"
+                            placeholder="输入IP地址或域名，留空则自动检测"
+                            clearable
+                          >
+                            <template #prefix>
+                              <el-icon><Link /></el-icon>
+                            </template>
+                            <template #append>
+                              <el-button
+                                type="primary"
+                                :loading="detectingAddress"
+                                @click="handleDetectAddress"
+                              >
+                                <el-icon><Search /></el-icon>
+                                检测
+                              </el-button>
+                            </template>
+                          </el-input>
+                          <div class="address-info">
+                            <el-tag
+                              v-if="sslAutoForm.addressType"
+                              :type="sslAutoForm.addressType === 'ip' ? 'warning' : 'success'"
+                              size="small"
+                            >
+                              {{ sslAutoForm.addressType === 'ip' ? 'IP地址' : '域名' }}
+                            </el-tag>
+                            <span
+                              v-if="sslAutoForm.detectMessage"
+                              class="detect-message"
+                            >
+                              {{ sslAutoForm.detectMessage }}
+                            </span>
+                          </div>
+                        </el-form-item>
+                        <el-form-item>
+                          <el-button
+                            type="success"
+                            :loading="autoConfiguring"
+                            @click="handleAutoConfigureSSL"
+                          >
+                            <el-icon><Setting /></el-icon>
+                            一键自动配置SSL
+                          </el-button>
+                          <span class="form-tip">将自动生成自签名证书（有效期10年）</span>
+                        </el-form-item>
+                      </el-form>
+                    </div>
+                    
+                    <el-divider content-position="center">
+                      或者手动配置
+                    </el-divider>
+                    
+                    <!-- 手动配置区域 -->
                     <el-form
                       :model="sslForm"
                       label-width="120px"
@@ -318,6 +384,15 @@
                           <el-icon><Check /></el-icon>
                           保存设置
                         </el-button>
+                        <el-button
+                          v-if="sslForm.cert_path && sslForm.key_path"
+                          type="info"
+                          :loading="verifyingCert"
+                          @click="handleVerifyCertificate"
+                        >
+                          <el-icon><CircleCheck /></el-icon>
+                          验证证书
+                        </el-button>
                         <el-tooltip
                           v-if="sslForm.enabled && (!sslForm.cert_path || !sslForm.key_path)"
                           content="启用SSL时需要配置证书和私钥路径"
@@ -329,6 +404,25 @@
                         </el-tooltip>
                       </el-form-item>
                     </el-form>
+                    
+                    <!-- 证书信息 -->
+                    <div
+                      v-if="sslForm.auto_generated"
+                      class="cert-info"
+                    >
+                      <el-tag
+                        type="warning"
+                        size="large"
+                      >
+                        自动生成的自签名证书
+                      </el-tag>
+                      <span
+                        v-if="sslForm.address"
+                        class="cert-address"
+                      >
+                        地址: {{ sslForm.address }}
+                      </span>
+                    </div>
                   </div>
                   
                   <!-- 系统日志 -->
@@ -687,7 +781,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
-  ArrowDown, Back, Check, CircleCheck, CircleClose, Delete, Document, FolderOpened, InfoFilled, Key, Loading, Lock, Monitor, Odometer, OfficeBuilding, Plus, Refresh, Search, Setting, Tools, User, View, Warning
+  ArrowDown, Back, Check, CircleCheck, CircleClose, Delete, Document, FolderOpened, InfoFilled, Key, Link, Loading, Lock, MagicStick, Monitor, Odometer, OfficeBuilding, Plus, Refresh, Search, Setting, Tools, User, View, Warning
 } from '@element-plus/icons-vue'
 import { authAPI, preferencesAPI } from '@/api'
 
@@ -712,8 +806,23 @@ const whitelistForm = reactive({
 const sslForm = reactive({
   enabled: false,
   cert_path: '',
-  key_path: ''
+  key_path: '',
+  address: '',
+  address_type: '',
+  auto_generated: false
 })
+
+// SSL自动配置表单
+const sslAutoForm = reactive({
+  address: '',
+  addressType: '',
+  detectMessage: ''
+})
+
+// SSL自动配置状态
+const detectingAddress = ref(false)
+const autoConfiguring = ref(false)
+const verifyingCert = ref(false)
 
 // IP验证正则表达式（IPv4）
 // IPv6 validation is handled by the backend using Python's ipaddress module
@@ -826,6 +935,9 @@ const loadSystemSettings = async () => {
       sslForm.enabled = settings.ssl?.enabled || false
       sslForm.cert_path = settings.ssl?.cert_path || ''
       sslForm.key_path = settings.ssl?.key_path || ''
+      sslForm.address = settings.ssl?.address || ''
+      sslForm.address_type = settings.ssl?.address_type || ''
+      sslForm.auto_generated = settings.ssl?.auto_generated || false
     }
   } catch (error) {
     const message = error.response?.data?.message || error.message || '网络连接失败'
@@ -890,6 +1002,109 @@ const removeWhitelistIp = (index) => {
   whitelistForm.ip_list.splice(index, 1)
   if (whitelistForm.ip_list.length === 0) {
     whitelistForm.ip_list.push('')
+  }
+}
+
+// 检测地址类型（IP或域名）
+const handleDetectAddress = async () => {
+  const address = sslAutoForm.address.trim()
+  
+  if (!address) {
+    // 如果没有输入地址，自动检测服务器地址
+    detectingAddress.value = true
+    try {
+      const response = await preferencesAPI.detectServerAddress()
+      if (response.data.success) {
+        sslAutoForm.address = response.data.address
+        sslAutoForm.addressType = response.data.type
+        sslAutoForm.detectMessage = response.data.message
+        ElMessage.success(response.data.message)
+      }
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || '检测失败'
+      ElMessage.error(`检测服务器地址失败: ${message}`)
+    } finally {
+      detectingAddress.value = false
+    }
+    return
+  }
+  
+  // 检测用户输入的地址类型
+  detectingAddress.value = true
+  try {
+    const response = await preferencesAPI.detectSSLAddress(address)
+    sslAutoForm.addressType = response.data.type
+    sslAutoForm.detectMessage = response.data.message
+    if (response.data.is_valid) {
+      ElMessage.success(response.data.message)
+    } else {
+      ElMessage.warning(response.data.message)
+    }
+  } catch (error) {
+    const message = error.response?.data?.message || error.message || '检测失败'
+    ElMessage.error(`检测地址失败: ${message}`)
+  } finally {
+    detectingAddress.value = false
+  }
+}
+
+// 一键自动配置SSL
+const handleAutoConfigureSSL = async () => {
+  autoConfiguring.value = true
+  try {
+    const response = await preferencesAPI.autoConfigureSSL(sslAutoForm.address)
+    if (response.data.success) {
+      // 更新SSL表单
+      sslForm.enabled = true
+      sslForm.cert_path = response.data.cert_path
+      sslForm.key_path = response.data.key_path
+      sslForm.address = response.data.address
+      sslForm.address_type = response.data.address_type
+      sslForm.auto_generated = true
+      
+      // 更新自动配置表单
+      sslAutoForm.address = response.data.address
+      sslAutoForm.addressType = response.data.address_type
+      sslAutoForm.detectMessage = response.data.message
+      
+      ElMessage.success('SSL证书已自动生成并配置！')
+    } else {
+      ElMessage.error(response.data.message || '自动配置失败')
+    }
+  } catch (error) {
+    const message = error.response?.data?.message || error.message || '配置失败'
+    ElMessage.error(`SSL自动配置失败: ${message}`)
+  } finally {
+    autoConfiguring.value = false
+  }
+}
+
+// 验证证书
+const handleVerifyCertificate = async () => {
+  if (!sslForm.cert_path || !sslForm.key_path) {
+    ElMessage.warning('请先配置证书和私钥路径')
+    return
+  }
+  
+  verifyingCert.value = true
+  try {
+    const response = await preferencesAPI.verifySSLCertificate(sslForm.cert_path, sslForm.key_path)
+    if (response.data.valid) {
+      ElMessage.success('证书验证通过！')
+      if (response.data.details) {
+        // 可以显示更多证书详情
+        if (response.data.details.expires) {
+          ElMessage.info(`证书有效期: ${response.data.details.expires}`)
+        }
+      }
+    } else {
+      ElMessage.error(response.data.message || '证书验证失败')
+    }
+  } catch (error) {
+    const message = error.response?.data?.message || error.message || '验证失败'
+    ElMessage.error(`证书验证失败: ${message}`)
+  } finally {
+    verifyingCert.value = false
   }
 }
 
@@ -1535,5 +1750,53 @@ const handleChangePassword = async () => {
   margin-top: 16px;
   padding-top: 16px;
   border-top: 1px solid #ebeef5;
+}
+
+/* SSL自动配置样式 */
+.ssl-auto-config {
+  background: linear-gradient(135deg, #f0f9eb 0%, #e8f5e0 100%);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  border: 1px solid #c2e7b0;
+}
+
+.sub-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #67C23A;
+  margin: 0 0 16px 0;
+}
+
+.address-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.detect-message {
+  font-size: 13px;
+  color: #67C23A;
+}
+
+.cert-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+  padding: 16px;
+  background: #fdf6ec;
+  border-radius: 8px;
+  border: 1px solid #faecd8;
+}
+
+.cert-address {
+  font-size: 14px;
+  color: #E6A23C;
+  font-weight: 500;
 }
 </style>
