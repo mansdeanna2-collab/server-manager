@@ -1758,7 +1758,6 @@ const handleCheckForUpdates = async () => {
   }
 }
 
-// 格式化发布说明（简单的markdown到HTML转换）
 // 打开发布页面
 const openReleaseUrl = (url) => {
   window.open(url, '_blank')

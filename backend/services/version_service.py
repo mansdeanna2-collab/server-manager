@@ -8,19 +8,18 @@ import logging
 import urllib.request
 import urllib.error
 import json
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 # 当前版本号
 CURRENT_VERSION = '2.1.0'
 
-# GitHub仓库信息
-GITHUB_OWNER = 'mansdeanna2-collab'
-GITHUB_REPO = 'server-manager'
+# GitHub仓库信息（可通过环境变量配置）
+GITHUB_OWNER = os.getenv('GITHUB_OWNER', 'mansdeanna2-collab')
+GITHUB_REPO = os.getenv('GITHUB_REPO', 'server-manager')
 
 # GitHub API超时时间（秒）
-GITHUB_API_TIMEOUT = 10
+GITHUB_API_TIMEOUT = int(os.getenv('GITHUB_API_TIMEOUT', '10'))
 
 
 def parse_version(version_str: str) -> tuple:
@@ -141,22 +140,28 @@ def check_for_updates() -> dict:
         
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            # 没有发布版本
-            result['message'] = '暂无发布版本信息'
+            # 没有发布版本 - 这不是一个错误，只是没有发布版本
+            # 返回 success=True 因为检查本身成功了，只是没有发布
+            result['message'] = '暂无发布版本信息，无法检查更新'
             result['success'] = True
             result['has_update'] = False
-            logger.info("No releases found on GitHub")
+            result['latest_version'] = CURRENT_VERSION  # 设置为当前版本表示没有更新
+            logger.info("No releases found on GitHub - repository may not have published releases")
         else:
             result['message'] = f'检查更新失败: HTTP {e.code}'
+            result['success'] = False
             logger.error(f"HTTP error checking for updates: {e.code}")
     except urllib.error.URLError as e:
         result['message'] = f'网络错误: {str(e.reason)}'
+        result['success'] = False
         logger.error(f"URL error checking for updates: {e.reason}")
     except json.JSONDecodeError as e:
         result['message'] = '解析版本信息失败'
+        result['success'] = False
         logger.error(f"JSON decode error: {e}")
     except Exception as e:
         result['message'] = f'检查更新时发生错误: {str(e)}'
+        result['success'] = False
         logger.error(f"Error checking for updates: {e}")
     
     return result
