@@ -96,6 +96,36 @@ class TestParseServerInfo:
         assert servers[0]['password'] == 'Ge5,Eb5_Nv6<'
         assert 'windows' in servers[0]['os_id'].lower()
 
+    def test_parse_server_with_server_pwd_format(self):
+        """Test parsing the new server format with server_pwd, server_user, and server_port.
+
+        This is the format from the issue where server credentials are stored
+        in server_pwd, server_user, and server_port fields instead of password.
+        """
+        output = '''===== 完整获取结果（控制台输出） =====
+{"region":"usa","cpu":"Xeon E5-2650","memory":"16G DDR3","bandwidth":50,"ddos":30,"disk":["500G SSD"],"ip":3,"ip_segment":0,"add_ip":9,"add_ddos_ip":0,"add_bandwidth":20,"add_ddos":0,"add_ip_segment":0,"os_id":"44","os_name":"Ubuntu Server 24 64-bit","oid":"2896","name":"SERRKVCXAP","server_user":"root","server_pwd":"upBmz6KWEzXRqOcq","server_port":"22","ips":["38.47.248.26","38.47.237.71","38.47.237.127"],"remark":"","status":0}
+'''
+        servers = _parse_server_info(output)
+
+        assert len(servers) == 1
+        # server_pwd should be normalized to password
+        assert servers[0]['password'] == 'upBmz6KWEzXRqOcq'
+        assert servers[0]['ips'] == ['38.47.248.26', '38.47.237.71', '38.47.237.127']
+        assert servers[0]['server_user'] == 'root'
+        assert servers[0]['server_port'] == '22'
+        assert servers[0]['os_name'] == 'Ubuntu Server 24 64-bit'
+
+    def test_parse_server_with_both_password_and_server_pwd(self):
+        """Test that password field takes precedence when both password and server_pwd exist."""
+        output = '''===== 完整获取结果（控制台输出） =====
+{"ips":["192.168.1.1"],"password":"OriginalPass","server_pwd":"AlternatePass"}
+'''
+        servers = _parse_server_info(output)
+
+        assert len(servers) == 1
+        # password should take precedence
+        assert servers[0]['password'] == 'OriginalPass'
+
 
 class TestExtractServerDataRegex:
     """Test cases for _extract_server_data_regex fallback function."""
@@ -132,6 +162,25 @@ class TestExtractServerDataRegex:
         line = '{"ips":["192.168.1.1"]}'
         result = _extract_server_data_regex(line)
         assert result is None
+
+    def test_extract_with_server_pwd_field(self):
+        """Test regex extraction when server_pwd is used instead of password."""
+        line = '{"ips":["38.47.248.26"],"server_pwd":"upBmz6KWEzXRqOcq","server_user":"root","server_port":"22"}'
+        result = _extract_server_data_regex(line)
+
+        assert result is not None
+        assert result['ips'] == ['38.47.248.26']
+        assert result['password'] == 'upBmz6KWEzXRqOcq'
+        assert result['server_user'] == 'root'
+        assert result['server_port'] == '22'
+
+    def test_extract_with_both_password_and_server_pwd(self):
+        """Test that password takes precedence over server_pwd when both exist."""
+        line = '{"ips":["192.168.1.1"],"password":"FirstPass","server_pwd":"SecondPass"}'
+        result = _extract_server_data_regex(line)
+
+        assert result is not None
+        assert result['password'] == 'FirstPass'
 
 
 class TestDeterminePortAndUsername:
@@ -185,4 +234,61 @@ class TestDeterminePortAndUsername:
         }
         port, username = _determine_port_and_username(server_data)
         assert port == 22
+        assert username == 'root'
+
+    def test_explicit_server_user_and_port(self):
+        """Test that explicit server_user and server_port override defaults."""
+        server_data = {
+            'os_name': 'Ubuntu 24 64-bit',
+            'os_id': 'ubuntu-24',
+            'server_user': 'custom_user',
+            'server_port': '2222'
+        }
+        port, username = _determine_port_and_username(server_data)
+        assert port == 2222
+        assert username == 'custom_user'
+
+    def test_explicit_server_port_only(self):
+        """Test that explicit server_port is used with default username."""
+        server_data = {
+            'os_name': 'Ubuntu 22.04',
+            'os_id': 'ubuntu-22.04',
+            'server_port': '8022'
+        }
+        port, username = _determine_port_and_username(server_data)
+        assert port == 8022
+        assert username == 'root'  # Default for Linux
+
+    def test_explicit_server_user_only(self):
+        """Test that explicit server_user is used with default port."""
+        server_data = {
+            'os_name': 'Ubuntu 22.04',
+            'os_id': 'ubuntu-22.04',
+            'server_user': 'ubuntu'
+        }
+        port, username = _determine_port_and_username(server_data)
+        assert port == 22  # Default for Linux
+        assert username == 'ubuntu'
+
+    def test_explicit_server_port_overrides_windows_default(self):
+        """Test that explicit server_port overrides Windows 3389 default."""
+        server_data = {
+            'os_name': 'Windows Server 2022',
+            'os_id': 'windows-2022',
+            'server_user': 'Admin',
+            'server_port': '3390'
+        }
+        port, username = _determine_port_and_username(server_data)
+        assert port == 3390
+        assert username == 'Admin'
+
+    def test_invalid_server_port_uses_default(self):
+        """Test that invalid server_port value uses OS default."""
+        server_data = {
+            'os_name': 'Ubuntu 22.04',
+            'os_id': 'ubuntu-22.04',
+            'server_port': 'invalid'
+        }
+        port, username = _determine_port_and_username(server_data)
+        assert port == 22  # Default for Linux
         assert username == 'root'

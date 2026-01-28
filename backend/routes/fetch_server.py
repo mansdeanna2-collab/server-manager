@@ -122,8 +122,12 @@ def _parse_server_info(output):
 
                 try:
                     server_data = json.loads(line)
-                    # 验证必要字段
-                    if 'ips' in server_data and 'password' in server_data:
+                    # 验证必要字段 - support both 'password' and 'server_pwd' formats
+                    password_field = server_data.get('password') or server_data.get('server_pwd')
+                    if 'ips' in server_data and password_field:
+                        # Normalize: if server_pwd is used, copy to password for consistency
+                        if 'server_pwd' in server_data and 'password' not in server_data:
+                            server_data['password'] = server_data['server_pwd']
                         servers.append(server_data)
                 except json.JSONDecodeError:
                     # Try to fix common JSON issues (unknown characters)
@@ -131,7 +135,11 @@ def _parse_server_info(output):
                     cleaned_line = PRINTABLE_CHARS_PATTERN.sub('_', line)
                     try:
                         server_data = json.loads(cleaned_line)
-                        if 'ips' in server_data and 'password' in server_data:
+                        password_field = server_data.get('password') or server_data.get('server_pwd')
+                        if 'ips' in server_data and password_field:
+                            # Normalize: if server_pwd is used, copy to password for consistency
+                            if 'server_pwd' in server_data and 'password' not in server_data:
+                                server_data['password'] = server_data['server_pwd']
                             servers.append(server_data)
                             logger.info("Parsed server data after character cleanup")
                     except json.JSONDecodeError:
@@ -149,12 +157,19 @@ def _parse_server_info(output):
     if not servers and '未知字符数量' in output:
         logger.info("Detected '未知字符数量' marker, attempting alternative extraction")
         # Try to find and extract JSON from the entire output
-        json_pattern = r'\{[^{}]*"ips"\s*:\s*\[[^\]]+\][^{}]*"password"\s*:\s*"[^"]+\"[^{}]*\}'
-        matches = re.findall(json_pattern, output, re.DOTALL)
+        # Support both 'password' and 'server_pwd' field formats
+        json_pattern_password = r'\{[^{}]*"ips"\s*:\s*\[[^\]]+\][^{}]*"password"\s*:\s*"[^"]+\"[^{}]*\}'
+        json_pattern_server_pwd = r'\{[^{}]*"ips"\s*:\s*\[[^\]]+\][^{}]*"server_pwd"\s*:\s*"[^"]+\"[^{}]*\}'
+        matches = re.findall(json_pattern_password, output, re.DOTALL)
+        matches.extend(re.findall(json_pattern_server_pwd, output, re.DOTALL))
         for json_str in matches:
             try:
                 server_data = json.loads(json_str)
-                if 'ips' in server_data and 'password' in server_data:
+                password_field = server_data.get('password') or server_data.get('server_pwd')
+                if 'ips' in server_data and password_field:
+                    # Normalize: if server_pwd is used, copy to password for consistency
+                    if 'server_pwd' in server_data and 'password' not in server_data:
+                        server_data['password'] = server_data['server_pwd']
                     servers.append(server_data)
                     logger.info("Extracted server data using alternative pattern")
             except json.JSONDecodeError:
@@ -184,17 +199,21 @@ def _extract_server_data_regex(line):
         if not ips:
             return None
 
-        # Extract password
+        # Extract password - support both 'password' and 'server_pwd' fields
         password_match = re.search(r'"password"\s*:\s*"([^"]+)"', line)
-        if not password_match:
+        server_pwd_match = re.search(r'"server_pwd"\s*:\s*"([^"]+)"', line)
+        if not password_match and not server_pwd_match:
             return None
-        password = password_match.group(1)
+        password = password_match.group(1) if password_match else server_pwd_match.group(1)
 
         # Extract optional fields
         os_id_match = re.search(r'"os_id"\s*:\s*"([^"]+)"', line)
         os_name_match = re.search(r'"os_name"\s*:\s*"([^"]+)"', line)
         instance_id_match = re.search(r'"instance_id"\s*:\s*"([^"]+)"', line)
         name_match = re.search(r'"name"\s*:\s*"([^"]+)"', line)
+        # Extract server_user and server_port if available
+        server_user_match = re.search(r'"server_user"\s*:\s*"([^"]+)"', line)
+        server_port_match = re.search(r'"server_port"\s*:\s*"([^"]+)"', line)
 
         return {
             'ips': ips,
@@ -202,7 +221,9 @@ def _extract_server_data_regex(line):
             'os_id': os_id_match.group(1) if os_id_match else '',
             'os_name': os_name_match.group(1) if os_name_match else '',
             'instance_id': instance_id_match.group(1) if instance_id_match else '',
-            'name': name_match.group(1) if name_match else ''
+            'name': name_match.group(1) if name_match else '',
+            'server_user': server_user_match.group(1) if server_user_match else '',
+            'server_port': server_port_match.group(1) if server_port_match else ''
         }
     except Exception as e:
         logger.warning(f"Regex extraction failed: {str(e)}")
@@ -218,15 +239,35 @@ def _determine_port_and_username(server_data):
     Returns:
         tuple: (port, username)
     """
+    # First check if server_user and server_port are explicitly provided
+    server_user = server_data.get('server_user', '')
+    server_port = server_data.get('server_port', '')
+
+    # Determine OS-based defaults
     os_name = server_data.get('os_name', '').lower()
     os_id = server_data.get('os_id', '').lower()
 
     # Windows系统使用端口3389和Administrator用户
     if 'windows' in os_name or 'windows' in os_id:
-        return 3389, 'Administrator'
+        default_port = 3389
+        default_username = 'Administrator'
+    else:
+        # Linux/Ubuntu等系统使用端口22和root用户
+        default_port = 22
+        default_username = 'root'
 
-    # Linux/Ubuntu等系统使用端口22和root用户
-    return 22, 'root'
+    # Use explicit values if provided, otherwise use defaults
+    if server_port:
+        try:
+            port = int(server_port)
+        except (ValueError, TypeError):
+            port = default_port
+    else:
+        port = default_port
+
+    username = server_user if server_user else default_username
+
+    return port, username
 
 
 def get_task_status(task_id):
@@ -466,6 +507,48 @@ def register_fetch_server_events(socketio):
                                 logger.info(f"Added new server: {ip_address}")
 
                         if added_servers:
+                            db.session.commit()
+
+                            # After adding servers, check their status and update the database
+                            # Import CheckService for status checks
+                            from services.check_service import CheckService
+                            from utils import china_now
+
+                            for added_server_info in added_servers:
+                                ip_address = added_server_info['ip']
+                                port = added_server_info['port']
+
+                                # Check server status (ping and port check only, no auth check for new servers)
+                                try:
+                                    server_record = Server.query.filter_by(ip_address=ip_address).first()
+                                    if server_record:
+                                        # Perform status check
+                                        password = password_encryptor.decrypt(server_record.encrypted_password)
+                                        status_info = CheckService.check_server_status(
+                                            ip_address,
+                                            port,
+                                            server_record.username,
+                                            password
+                                        )
+
+                                        # Update server status
+                                        server_record.status = status_info['overall']
+                                        server_record.last_checked = china_now()
+                                        server_record.check_detail = status_info.get('detail')
+                                        error_type = status_info.get('error_type')
+                                        server_record.error_type = str(error_type)[:50] if error_type else None
+
+                                        # Update added_server_info with status
+                                        added_server_info['status'] = status_info['overall']
+                                        added_server_info['check_detail'] = status_info.get('detail')
+
+                                        logger.info(f"Server {ip_address} status: {status_info['overall']}")
+                                except Exception as e:
+                                    logger.error(f"Error checking status for {ip_address}: {str(e)}")
+                                    added_server_info['status'] = 'unknown'
+                                    added_server_info['check_detail'] = f'检测出错: {str(e)}'
+
+                            # Commit status updates
                             db.session.commit()
 
                 # 更新任务状态（线程安全）
