@@ -91,6 +91,27 @@ def _save_task_to_db(app, user_id, ip_address, status, log_output=None, servers_
         logger.error(f"Error saving task to database: {str(e)}")
 
 
+def _normalize_server_password(server_data):
+    """Normalize password field: copy server_pwd to password if password is not present.
+
+    Args:
+        server_data: Server data dictionary
+
+    Returns:
+        str: The password value, or empty string if neither field exists
+    """
+    password = server_data.get('password')
+    server_pwd = server_data.get('server_pwd')
+
+    if password:
+        return password
+    elif server_pwd:
+        # Normalize: copy server_pwd to password for internal consistency
+        server_data['password'] = server_pwd
+        return server_pwd
+    return ''
+
+
 def _parse_server_info(output):
     """从脚本输出中解析服务器信息
 
@@ -122,12 +143,9 @@ def _parse_server_info(output):
 
                 try:
                     server_data = json.loads(line)
-                    # 验证必要字段 - support both 'password' and 'server_pwd' formats
-                    password_field = server_data.get('password') or server_data.get('server_pwd')
-                    if 'ips' in server_data and password_field:
-                        # Normalize: if server_pwd is used, copy to password for consistency
-                        if 'server_pwd' in server_data and 'password' not in server_data:
-                            server_data['password'] = server_data['server_pwd']
+                    # 验证必要字段，支持 'password' 和 'server_pwd' 两种格式
+                    password = _normalize_server_password(server_data)
+                    if 'ips' in server_data and password:
                         servers.append(server_data)
                 except json.JSONDecodeError:
                     # Try to fix common JSON issues (unknown characters)
@@ -135,11 +153,8 @@ def _parse_server_info(output):
                     cleaned_line = PRINTABLE_CHARS_PATTERN.sub('_', line)
                     try:
                         server_data = json.loads(cleaned_line)
-                        password_field = server_data.get('password') or server_data.get('server_pwd')
-                        if 'ips' in server_data and password_field:
-                            # Normalize: if server_pwd is used, copy to password for consistency
-                            if 'server_pwd' in server_data and 'password' not in server_data:
-                                server_data['password'] = server_data['server_pwd']
+                        password = _normalize_server_password(server_data)
+                        if 'ips' in server_data and password:
                             servers.append(server_data)
                             logger.info("Parsed server data after character cleanup")
                     except json.JSONDecodeError:
@@ -165,11 +180,8 @@ def _parse_server_info(output):
         for json_str in matches:
             try:
                 server_data = json.loads(json_str)
-                password_field = server_data.get('password') or server_data.get('server_pwd')
-                if 'ips' in server_data and password_field:
-                    # Normalize: if server_pwd is used, copy to password for consistency
-                    if 'server_pwd' in server_data and 'password' not in server_data:
-                        server_data['password'] = server_data['server_pwd']
+                password = _normalize_server_password(server_data)
+                if 'ips' in server_data and password:
                     servers.append(server_data)
                     logger.info("Extracted server data using alternative pattern")
             except json.JSONDecodeError:
@@ -260,6 +272,9 @@ def _determine_port_and_username(server_data):
     if server_port:
         try:
             port = int(server_port)
+            # Validate port is within valid range (1-65535)
+            if port < 1 or port > 65535:
+                port = default_port
         except (ValueError, TypeError):
             port = default_port
     else:
@@ -518,11 +533,11 @@ def register_fetch_server_events(socketio):
                                 ip_address = added_server_info['ip']
                                 port = added_server_info['port']
 
-                                # Check server status (ping and port check only, no auth check for new servers)
+                                # Check server status (includes ping, port, and SSH auth for port 22 servers)
                                 try:
                                     server_record = Server.query.filter_by(ip_address=ip_address).first()
                                     if server_record:
-                                        # Perform status check
+                                        # Perform status check with credentials
                                         password = password_encryptor.decrypt(server_record.encrypted_password)
                                         status_info = CheckService.check_server_status(
                                             ip_address,

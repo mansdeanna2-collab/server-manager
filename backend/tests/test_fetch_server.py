@@ -292,3 +292,24 @@ class TestDeterminePortAndUsername:
         port, username = _determine_port_and_username(server_data)
         assert port == 22  # Default for Linux
         assert username == 'root'
+
+    def test_out_of_range_server_port_uses_default(self):
+        """Test that server_port outside valid range (1-65535) uses OS default."""
+        # Test port too high
+        server_data = {
+            'os_name': 'Ubuntu 22.04',
+            'os_id': 'ubuntu-22.04',
+            'server_port': '70000'
+        }
+        port, username = _determine_port_and_username(server_data)
+        assert port == 22  # Default for Linux
+
+        # Test port zero
+        server_data['server_port'] = '0'
+        port, username = _determine_port_and_username(server_data)
+        assert port == 22
+
+        # Test negative port
+        server_data['server_port'] = '-1'
+        port, username = _determine_port_and_username(server_data)
+        assert port == 22
