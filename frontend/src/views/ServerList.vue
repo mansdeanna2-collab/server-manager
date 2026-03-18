@@ -1054,7 +1054,6 @@
                     <el-select
                       v-model="rdpResolution"
                       placeholder="选择分辨率"
-                      @change="onRdpResolutionChange"
                     >
                       <el-option
                         label="1920 × 1080 (推荐)"
@@ -2614,10 +2613,6 @@ const checkRdpPort = async (server) => {
   } catch (_error) {
     rdpPortStatus.value = 'offline'
   }
-}
-
-const onRdpResolutionChange = () => {
-  // Resolution change handled by the download function
 }
 
 const handleSubmit = async (formData) => {

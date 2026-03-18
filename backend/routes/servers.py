@@ -714,8 +714,14 @@ def generate_rdp_file(_current_user, server_id):
         return jsonify({'message': '仅支持RDP端口(3389)的服务器生成连接文件'}), 400
 
     # Parse customizable settings from query parameters
-    width = min(max(int(request.args.get('width', 1920)), 800), 3840)
-    height = min(max(int(request.args.get('height', 1080)), 600), 2160)
+    try:
+        width = min(max(int(request.args.get('width', 1920)), 800), 3840)
+    except (ValueError, TypeError):
+        width = 1920
+    try:
+        height = min(max(int(request.args.get('height', 1080)), 600), 2160)
+    except (ValueError, TypeError):
+        height = 1080
     fullscreen = 1 if request.args.get('fullscreen', '0') == '1' else 0
     clipboard = 1 if request.args.get('clipboard', '1') != '0' else 0
     drives = 1 if request.args.get('drives', '0') == '1' else 0

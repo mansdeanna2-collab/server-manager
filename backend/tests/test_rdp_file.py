@@ -260,3 +260,25 @@ class TestRdpCustomSettings:
         assert 'redirectdrives:i:1' in content
         assert 'administrative session:i:1' in content
         assert 'use multimon:i:1' in content
+
+    def test_invalid_width_falls_back_to_default(self, client, auth_headers, rdp_server):
+        """Test that invalid width value falls back to default 1920"""
+        response = client.get(
+            f'/api/servers/{rdp_server}/rdp-file?width=abc&height=1080',
+            headers=auth_headers
+        )
+        assert response.status_code == 200
+        content = response.data.decode('utf-8')
+        assert 'desktopwidth:i:1920' in content
+        assert 'desktopheight:i:1080' in content
+
+    def test_invalid_height_falls_back_to_default(self, client, auth_headers, rdp_server):
+        """Test that invalid height value falls back to default 1080"""
+        response = client.get(
+            f'/api/servers/{rdp_server}/rdp-file?width=1920&height=xyz',
+            headers=auth_headers
+        )
+        assert response.status_code == 200
+        content = response.data.decode('utf-8')
+        assert 'desktopwidth:i:1920' in content
+        assert 'desktopheight:i:1080' in content
