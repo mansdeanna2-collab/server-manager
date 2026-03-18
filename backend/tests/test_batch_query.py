@@ -1,6 +1,7 @@
 """Tests for batch query API routes"""
 import pytest
 import uuid
+from sqlalchemy.exc import IntegrityError
 from app import create_app
 from models import db
 from models.user import User
@@ -314,6 +315,6 @@ class TestBatchQueryTaskModel:
                 status='running'
             )
             db.session.add(task2)
-            with pytest.raises(Exception):
+            with pytest.raises(IntegrityError):
                 db.session.commit()
             db.session.rollback()

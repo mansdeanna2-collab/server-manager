@@ -623,7 +623,7 @@
             size="large"
             effect="dark"
           >
-            进度 {{ currentBatchQueryTask.current_ip_index }}/255
+            进度 {{ currentBatchQueryTask.current_ip_index }}/{{ IP_RANGE_MAX }}
           </el-tag>
           <el-tag
             type="success"
@@ -648,7 +648,7 @@
           </el-tag>
         </div>
         <el-progress
-          :percentage="Math.round((currentBatchQueryTask.current_ip_index / 255) * 100)"
+          :percentage="Math.round((currentBatchQueryTask.current_ip_index / IP_RANGE_MAX) * 100)"
           :status="currentBatchQueryTask.status === 'completed' ? 'success' : currentBatchQueryTask.status === 'failed' ? 'exception' : ''"
           :stroke-width="20"
           style="margin: 15px 0"
@@ -707,6 +707,8 @@ const currentIpList = ref([])
 const ipListCurrentPage = ref(1)
 const IP_LIST_PAGE_SIZE = 50
 const checkingIpStatus = ref(false)
+const BATCH_QUERY_POLL_INTERVAL = 3000  // Poll every 3 seconds
+const IP_RANGE_MAX = 255  // IP segment range: 1-255
 
 // 更新Cookie状态
 const updatingCookie = ref(false)
@@ -1887,7 +1889,7 @@ const startBatchQueryPolling = (segment) => {
     } catch (_e) {
       // Ignore polling errors
     }
-  }, 3000)  // Poll every 3 seconds
+  }, BATCH_QUERY_POLL_INTERVAL)
 }
 
 const stopBatchQueryPolling = () => {

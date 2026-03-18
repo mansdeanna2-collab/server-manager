@@ -32,8 +32,18 @@ batch_query_bp = Blueprint('batch_query', __name__, url_prefix='/api/batch-query
 _active_tasks = {}
 _active_tasks_lock = threading.Lock()
 
-# Cookie refresh interval: 2 hours in seconds
+# Cookie refresh interval: 2 hours in seconds (per requirement specification)
 COOKIE_REFRESH_INTERVAL = 2 * 60 * 60
+
+# Script execution timeouts
+ID_QUERY_TIMEOUT = 300       # 5 minutes for id.py
+FETCH_SERVER_TIMEOUT = 1200  # 20 minutes for mm.py (script runs ~15 min)
+
+# SSH port constant
+SSH_PORT = 22
+
+# Maximum length for error_type field (must match Server model VARCHAR(50))
+ERROR_TYPE_MAX_LENGTH = 50
 
 # Regex pattern for printable characters (reuse from fetch_server.py)
 PRINTABLE_CHARS_PATTERN = re.compile(r'[^\x20-\x7E\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]')
@@ -143,7 +153,7 @@ def _query_id_for_ip(ip_address, python_dir):
             logger.warning(f"Error reading id.py output: {str(e)}")
 
         try:
-            process.wait(timeout=300)  # 5 minutes timeout
+            process.wait(timeout=ID_QUERY_TIMEOUT)
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait()
@@ -210,7 +220,7 @@ def _fetch_server_for_ip(ip_address, ipid, python_dir, app):
             logger.warning(f"Error reading mm.py output: {str(e)}")
 
         try:
-            process.wait(timeout=1200)  # 20 minutes timeout
+            process.wait(timeout=FETCH_SERVER_TIMEOUT)
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait()
@@ -282,7 +292,7 @@ def _fetch_server_for_ip(ip_address, ipid, python_dir, app):
                             status=overall_status,
                             last_checked=china_now(),
                             check_detail=check_detail,
-                            error_type=str(error_type)[:50] if error_type else None,
+                            error_type=str(error_type)[:ERROR_TYPE_MAX_LENGTH] if error_type else None,
                             source=source
                         )
                         db.session.add(server)
@@ -314,7 +324,7 @@ def _should_skip_ip(app, ip_address):
             from models.server import Server
 
             server = Server.query.filter_by(ip_address=ip_address).first()
-            if server and server.status == 'online' and server.port == 22 and not server.error_type:
+            if server and server.status == 'online' and server.port == SSH_PORT and not server.error_type:
                 return True
     except Exception as e:
         logger.error(f"Error checking if IP should be skipped: {str(e)}")
