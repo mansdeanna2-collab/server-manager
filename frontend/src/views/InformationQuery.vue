@@ -612,6 +612,7 @@
       :title="batchQueryDialogTitle"
       width="800px"
       class="batch-query-dialog"
+      @close="onBatchQueryDialogClose"
     >
       <div
         v-if="currentBatchQueryTask"
@@ -1788,6 +1789,7 @@ const getBatchQueryButtonText = (segment) => {
   if (task.status === 'running') return '查询中...'
   if (task.status === 'completed') return '已完成'
   if (task.status === 'stopped') return '已停止'
+  if (task.status === 'failed') return '已失败'
   return '一键查询'
 }
 
@@ -1798,6 +1800,7 @@ const getBatchQueryButtonType = (segment) => {
   if (task.status === 'running') return 'warning'
   if (task.status === 'completed') return 'info'
   if (task.status === 'stopped') return 'info'
+  if (task.status === 'failed') return 'danger'
   return 'success'
 }
 
@@ -1815,16 +1818,17 @@ const handleBatchQuery = async (segmentData) => {
     return
   }
 
-  // If task is completed/stopped, allow re-run or show status
-  if (task && (task.status === 'completed' || task.status === 'stopped')) {
+  // If task is completed/stopped/failed, allow re-run or show status
+  if (task && (task.status === 'completed' || task.status === 'stopped' || task.status === 'failed')) {
     currentBatchQuerySegment.value = segment
     batchQueryDialogTitle.value = `一键查询 - ${segment}.x`
     batchQueryDialogVisible.value = true
 
+    const statusText = { completed: '已完成', stopped: '已停止', failed: '已失败' }
     // Allow user to see previous result; they can start new query from dialog
     try {
       await ElMessageBox.confirm(
-        `该IP段已有查询记录（${task.status === 'completed' ? '已完成' : '已停止'}）。\n是否重新开始一键查询？`,
+        `该IP段已有查询记录（${statusText[task.status] || task.status}）。\n是否重新开始一键查询？`,
         '确认',
         {
           confirmButtonText: '重新查询',
@@ -1897,6 +1901,11 @@ const stopBatchQueryPolling = () => {
     clearInterval(batchQueryPollTimer)
     batchQueryPollTimer = null
   }
+}
+
+// 对话框关闭时停止轮询（避免后台无意义的API调用）
+const onBatchQueryDialogClose = () => {
+  stopBatchQueryPolling()
 }
 
 // 初始化一键查询任务状态

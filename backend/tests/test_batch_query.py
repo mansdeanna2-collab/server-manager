@@ -318,3 +318,54 @@ class TestBatchQueryTaskModel:
             with pytest.raises(IntegrityError):
                 db.session.commit()
             db.session.rollback()
+
+
+class TestBatchQueryErrorHandling:
+    """Tests for error handling in the batch query background task"""
+
+    def test_run_batch_query_catches_exception(self, app):
+        """Test that _run_batch_query catches unexpected errors and marks task as failed"""
+        from routes.batch_query import _run_batch_query
+
+        with app.app_context():
+            task = BatchQueryTask(
+                user_id=app.test_user_id,
+                segment='99.99.99',
+                status='running'
+            )
+            db.session.add(task)
+            db.session.commit()
+
+        # Run the batch query - it will fail because Python dir doesn't contain
+        # the expected scripts, but the top-level handler should catch any error
+        # and mark the task as failed instead of leaving it stuck in 'running'
+        _run_batch_query(app, app.test_user_id, '99.99.99')
+
+        with app.app_context():
+            task = BatchQueryTask.query.filter_by(
+                user_id=app.test_user_id, segment='99.99.99'
+            ).first()
+            # Task should be either completed or failed, not stuck in 'running'
+            assert task.status != 'running'
+
+    def test_failed_status_in_stop_endpoint(self, app, client, auth_headers):
+        """Test that a failed task can't be stopped"""
+        with app.app_context():
+            task = BatchQueryTask(
+                user_id=app.test_user_id,
+                segment='10.0.1',
+                status='failed'
+            )
+            db.session.add(task)
+            db.session.commit()
+
+        response = client.post('/api/batch-query/stop',
+            headers=auth_headers,
+            json={'segment': '10.0.1'})
+        assert response.status_code == 400
+
+    def test_script_execution_lock_exists(self):
+        """Test that the script execution lock is properly defined"""
+        from routes.batch_query import _script_execution_lock
+        import threading
+        assert isinstance(_script_execution_lock, type(threading.Lock()))

@@ -14,7 +14,6 @@ import threading
 import subprocess
 import os
 import re
-import json
 import sys
 import time
 import logging
@@ -22,7 +21,6 @@ from flask import Blueprint, request, jsonify, current_app
 from config import Config
 from routes.auth import token_required
 from utils import china_now
-import jwt
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +29,9 @@ batch_query_bp = Blueprint('batch_query', __name__, url_prefix='/api/batch-query
 # Store active batch query tasks in memory: {segment: thread}
 _active_tasks = {}
 _active_tasks_lock = threading.Lock()
+
+# Lock for serializing script executions (id.py / mm.py write to shared files ip.txt / mm.py)
+_script_execution_lock = threading.Lock()
 
 # Cookie refresh interval: 2 hours in seconds (per requirement specification)
 COOKIE_REFRESH_INTERVAL = 2 * 60 * 60
@@ -44,9 +45,6 @@ SSH_PORT = 22
 
 # Maximum length for error_type field (must match Server model VARCHAR(50))
 ERROR_TYPE_MAX_LENGTH = 50
-
-# Regex pattern for printable characters (reuse from fetch_server.py)
-PRINTABLE_CHARS_PATTERN = re.compile(r'[^\x20-\x7E\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]')
 
 
 def _append_log(app, user_id, segment, message):
@@ -227,7 +225,7 @@ def _fetch_server_for_ip(ip_address, ipid, python_dir, app):
             return [], full_output + '\n[mm.py execution timed out]'
 
         # Parse server info from output (reuse logic from fetch_server.py)
-        from routes.fetch_server import _parse_server_info, _determine_port_and_username, _normalize_server_password
+        from routes.fetch_server import _parse_server_info, _determine_port_and_username
 
         servers = _parse_server_info(full_output)
         added_servers = []
@@ -356,7 +354,32 @@ def _run_batch_query(app, user_id, segment):
     2. Query ID via id.py
     3. Fetch server via mm.py
     4. Check connectivity and categorize
+
+    Wrapped in a top-level try/except to ensure the task is always marked
+    as failed if an unexpected error occurs (prevents stuck 'running' tasks).
     """
+    try:
+        _run_batch_query_inner(app, user_id, segment)
+    except Exception as e:
+        logger.error(f"Batch query for {segment} failed with unexpected error: {str(e)}")
+        try:
+            _append_log(app, user_id, segment,
+                        f'\n[任务异常终止: {str(e)}]')
+            _update_task_progress(
+                app, user_id, segment,
+                status='failed',
+                completed_at=china_now()
+            )
+        except Exception as inner_e:
+            logger.error(f"Failed to update task status after error: {str(inner_e)}")
+    finally:
+        # Always clean up from active tasks
+        with _active_tasks_lock:
+            _active_tasks.pop(segment, None)
+
+
+def _run_batch_query_inner(app, user_id, segment):
+    """Inner implementation of the batch query task."""
     backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     python_dir = os.path.join(backend_dir, 'Python')
     python_dir = os.path.realpath(python_dir)
@@ -413,46 +436,48 @@ def _run_batch_query(app, user_id, segment):
         _append_log(app, user_id, segment, f'\n=== 处理 {ip_address} ({i}/255) ===')
         _update_task_progress(app, user_id, segment, current_ip_index=i)
 
-        # Step 1: Query ID
-        _append_log(app, user_id, segment, f'[{ip_address}] 正在查询ID...')
-        id_result, id_log = _query_id_for_ip(ip_address, python_dir)
+        # Acquire script execution lock to prevent concurrent writes to ip.txt/mm.py
+        with _script_execution_lock:
+            # Step 1: Query ID
+            _append_log(app, user_id, segment, f'[{ip_address}] 正在查询ID...')
+            id_result, id_log = _query_id_for_ip(ip_address, python_dir)
 
-        if not id_result:
-            _append_log(app, user_id, segment, f'[{ip_address}] 未获取到ID，跳过')
-            total_processed += 1
-            _update_task_progress(app, user_id, segment, total_processed=total_processed)
-            continue
+            if not id_result:
+                _append_log(app, user_id, segment, f'[{ip_address}] 未获取到ID，跳过')
+                total_processed += 1
+                _update_task_progress(app, user_id, segment, total_processed=total_processed)
+                continue
 
-        _append_log(app, user_id, segment, f'[{ip_address}] 获取到ID: {id_result}')
+            _append_log(app, user_id, segment, f'[{ip_address}] 获取到ID: {id_result}')
 
-        # Save ID result to database
-        try:
-            with app.app_context():
-                from models import db
-                from models.user_preference import IpIdResult
+            # Save ID result to database
+            try:
+                with app.app_context():
+                    from models import db
+                    from models.user_preference import IpIdResult
 
-                existing = IpIdResult.query.filter_by(
-                    user_id=user_id, ip_address=ip_address
-                ).first()
-                if existing:
-                    existing.id_result = id_result
-                    existing.log_output = id_log
-                    existing.last_queried = china_now()
-                else:
-                    new_result = IpIdResult(
-                        user_id=user_id,
-                        ip_address=ip_address,
-                        id_result=id_result,
-                        log_output=id_log
-                    )
-                    db.session.add(new_result)
-                db.session.commit()
-        except Exception as e:
-            logger.error(f"Error saving ID result: {str(e)}")
+                    existing = IpIdResult.query.filter_by(
+                        user_id=user_id, ip_address=ip_address
+                    ).first()
+                    if existing:
+                        existing.id_result = id_result
+                        existing.log_output = id_log
+                        existing.last_queried = china_now()
+                    else:
+                        new_result = IpIdResult(
+                            user_id=user_id,
+                            ip_address=ip_address,
+                            id_result=id_result,
+                            log_output=id_log
+                        )
+                        db.session.add(new_result)
+                    db.session.commit()
+            except Exception as e:
+                logger.error(f"Error saving ID result: {str(e)}")
 
-        # Step 2: Fetch server
-        _append_log(app, user_id, segment, f'[{ip_address}] 正在获取服务器 (ID={id_result})...')
-        added_servers, fetch_log = _fetch_server_for_ip(ip_address, id_result, python_dir, app)
+            # Step 2: Fetch server
+            _append_log(app, user_id, segment, f'[{ip_address}] 正在获取服务器 (ID={id_result})...')
+            added_servers, fetch_log = _fetch_server_for_ip(ip_address, id_result, python_dir, app)
 
         total_processed += 1
 
@@ -487,10 +512,6 @@ def _run_batch_query(app, user_id, segment):
             current_ip_index=255,
             completed_at=china_now()
         )
-
-    # Clean up from active tasks
-    with _active_tasks_lock:
-        _active_tasks.pop(segment, None)
 
 
 @batch_query_bp.route('/start', methods=['POST'])
