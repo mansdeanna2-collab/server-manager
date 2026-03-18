@@ -821,7 +821,7 @@
           </el-table-column>
           <el-table-column
             label="操作"
-            width="400"
+            :width="filteredDialogType === 'computer' ? 460 : 400"
             fixed="right"
           >
             <template #default="scope">
@@ -837,6 +837,20 @@
                     @click="toggleServerFavorite(scope.row)"
                   >
                     <el-icon><Star /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip
+                  v-if="scope.row.port === RDP_PORT"
+                  content="下载RDP文件"
+                  placement="top"
+                >
+                  <el-button
+                    size="small"
+                    type="primary"
+                    @click="downloadRdpFile(scope.row)"
+                  >
+                    <el-icon><Download /></el-icon>
+                    RDP
                   </el-button>
                 </el-tooltip>
                 <el-button
@@ -905,9 +919,9 @@
     <!-- Terminal Connection Dialog -->
     <el-dialog
       v-model="terminalDialogVisible"
-      :title="`终端 - ${terminalServer?.ip_address || ''}`"
+      :title="terminalServer?.port === RDP_PORT ? `🪟 远程桌面 - ${terminalServer?.ip_address || ''}` : `终端 - ${terminalServer?.ip_address || ''}`"
       width="1300px"
-      class="terminal-dialog"
+      :class="['terminal-dialog', terminalServer?.port === RDP_PORT ? 'rdp-dialog' : '']"
       append-to-body
       :close-on-click-modal="false"
       @closed="handleTerminalDialogClosed"
@@ -956,31 +970,168 @@
           @error="handleTerminalError"
         />
         
+        <!-- Enhanced RDP Connection Panel -->
         <div
           v-else
-          class="rdp-info"
+          class="rdp-panel"
         >
-          <el-alert
-            title="Windows 远程桌面"
-            type="warning"
-            :closable="false"
-            show-icon
-          >
-            <template #default>
-              <p>端口 {{ RDP_PORT }} 为 Windows RDP 服务，请使用系统远程桌面连接。</p>
-              <div class="rdp-command-box">
-                <code class="rdp-command">{{ getSshCommand(terminalServer) }}</code>
-                <el-button
-                  type="primary"
-                  size="small"
-                  @click="copySshCommand(terminalServer)"
-                >
-                  <el-icon><CopyDocument /></el-icon>
-                  复制命令
-                </el-button>
+          <!-- Connection Status Card -->
+          <div class="rdp-status-card">
+            <div class="rdp-status-header">
+              <div class="rdp-status-icon-area">
+                <div :class="['rdp-status-dot', rdpPortStatus === 'online' ? 'online' : rdpPortStatus === 'checking' ? 'checking' : 'offline']" />
+                <span class="rdp-status-text">
+                  {{ rdpPortStatus === 'online' ? 'RDP 端口就绪' : rdpPortStatus === 'checking' ? '正在检测端口...' : rdpPortStatus === 'offline' ? 'RDP 端口未开放' : '等待检测' }}
+                </span>
               </div>
-            </template>
-          </el-alert>
+              <el-button
+                size="small"
+                :loading="rdpPortStatus === 'checking'"
+                @click="checkRdpPort(terminalServer)"
+              >
+                <el-icon><Refresh /></el-icon>
+                检测端口
+              </el-button>
+            </div>
+          </div>
+
+          <!-- Quick Actions -->
+          <div class="rdp-quick-actions">
+            <el-button
+              type="primary"
+              size="large"
+              class="rdp-main-btn"
+              @click="downloadRdpFile(terminalServer)"
+            >
+              <el-icon :size="18">
+                <Download />
+              </el-icon>
+              下载 RDP 连接文件
+            </el-button>
+            <el-button
+              type="success"
+              size="large"
+              class="rdp-main-btn"
+              @click="launchRdpConnection(terminalServer)"
+            >
+              <el-icon :size="18">
+                <Connection />
+              </el-icon>
+              一键连接远程桌面
+            </el-button>
+            <el-button
+              size="large"
+              class="rdp-main-btn"
+              @click="copySshCommand(terminalServer)"
+            >
+              <el-icon :size="18">
+                <CopyDocument />
+              </el-icon>
+              复制 mstsc 命令
+            </el-button>
+          </div>
+
+          <!-- Command Display -->
+          <div class="rdp-command-box">
+            <code class="rdp-command">{{ getSshCommand(terminalServer) }}</code>
+          </div>
+
+          <!-- RDP Settings Panel -->
+          <div class="rdp-settings-panel">
+            <div class="rdp-settings-title">
+              <el-icon><Setting /></el-icon>
+              <span>连接设置</span>
+            </div>
+            <el-form
+              :model="rdpSettings"
+              label-width="100px"
+              size="small"
+              class="rdp-settings-form"
+            >
+              <el-row :gutter="20">
+                <el-col :span="8">
+                  <el-form-item label="分辨率">
+                    <el-select
+                      v-model="rdpResolution"
+                      placeholder="选择分辨率"
+                    >
+                      <el-option
+                        label="1920 × 1080 (推荐)"
+                        value="1920x1080"
+                      />
+                      <el-option
+                        label="1600 × 900"
+                        value="1600x900"
+                      />
+                      <el-option
+                        label="1366 × 768"
+                        value="1366x768"
+                      />
+                      <el-option
+                        label="1280 × 720"
+                        value="1280x720"
+                      />
+                      <el-option
+                        label="2560 × 1440 (2K)"
+                        value="2560x1440"
+                      />
+                      <el-option
+                        label="3840 × 2160 (4K)"
+                        value="3840x2160"
+                      />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item label="显示模式">
+                    <el-select v-model="rdpSettings.fullscreen">
+                      <el-option
+                        label="窗口模式"
+                        :value="false"
+                      />
+                      <el-option
+                        label="全屏模式"
+                        :value="true"
+                      />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item label="管理员会话">
+                    <el-switch v-model="rdpSettings.admin" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-row :gutter="20">
+                <el-col :span="8">
+                  <el-form-item label="共享剪贴板">
+                    <el-switch v-model="rdpSettings.clipboard" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item label="映射驱动器">
+                    <el-switch v-model="rdpSettings.drives" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item label="多显示器">
+                    <el-switch v-model="rdpSettings.multimon" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+            </el-form>
+          </div>
+
+          <!-- Tips -->
+          <div class="rdp-tips">
+            <p>💡 <strong>使用说明：</strong></p>
+            <ul>
+              <li>点击「下载 RDP 连接文件」后双击 .rdp 文件即可后台发起远程桌面连接</li>
+              <li>点击「一键连接远程桌面」将尝试通过系统协议直接启动远程桌面客户端</li>
+              <li>修改上方连接设置后，重新下载 RDP 文件即可应用新的配置</li>
+              <li>若需以管理员身份连接（/admin），请开启「管理员会话」选项</li>
+            </ul>
+          </div>
         </div>
         
         <!-- File Browser Section - Only show after terminal connected and for SSH servers -->
@@ -1504,6 +1655,17 @@ const fileDialogServer = ref(null)
 
 // 终端连接状态
 const terminalConnected = ref(false)
+
+// RDP 连接设置
+const rdpSettings = reactive({
+  fullscreen: false,
+  clipboard: true,
+  drives: false,
+  admin: false,
+  multimon: false
+})
+const rdpResolution = ref('1920x1080')
+const rdpPortStatus = ref('unknown') // 'unknown' | 'checking' | 'online' | 'offline'
 
 // 文件浏览器状态
 const currentPath = ref('/')
@@ -2199,6 +2361,11 @@ const checkServer = async (server) => {
 const openTerminal = (server) => {
   terminalServer.value = server
   terminalDialogVisible.value = true
+  // Auto-check RDP port status when opening RDP server dialog
+  if (server.port === RDP_PORT) {
+    rdpPortStatus.value = 'unknown'
+    checkRdpPort(server)
+  }
 }
 
 const handleTerminalDialogClosed = () => {
@@ -2211,6 +2378,8 @@ const handleTerminalDialogClosed = () => {
   currentPath.value = '/'
   fileList.value = []
   fileBrowserError.value = ''
+  // 重置 RDP 端口状态
+  rdpPortStatus.value = 'unknown'
 }
 
 const handleTerminalConnected = () => {
@@ -2384,6 +2553,65 @@ const copySshCommand = async (server) => {
     ElMessage.success('命令已复制到剪贴板')
   } catch (_error) {
     ElMessage.error('复制失败，请手动复制')
+  }
+}
+
+const downloadRdpFile = async (server) => {
+  if (!server) return
+  try {
+    // Parse resolution from the rdpResolution ref
+    const [width, height] = rdpResolution.value.split('x').map(Number)
+    const settings = {
+      width,
+      height,
+      fullscreen: rdpSettings.fullscreen,
+      clipboard: rdpSettings.clipboard,
+      drives: rdpSettings.drives,
+      admin: rdpSettings.admin,
+      multimon: rdpSettings.multimon
+    }
+    const response = await serversAPI.downloadRdpFile(server.id, settings)
+    const blob = new Blob([response.data], { type: 'application/x-rdp' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${server.ip_address}.rdp`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('RDP 连接文件已下载，双击即可后台连接远程桌面')
+  } catch (_error) {
+    ElMessage.error('下载 RDP 文件失败')
+  }
+}
+
+const launchRdpConnection = (server) => {
+  if (!server) return
+  // Use ms-rd URI scheme to attempt to launch the system RDP client directly
+  const encodedUsername = encodeURIComponent(server.username)
+  const rdpUri = `ms-rd:full%20address=s:${server.ip_address}:3389&username=s:${encodedUsername}`
+  const link = document.createElement('a')
+  link.href = rdpUri
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  ElMessage.info({
+    message: '正在尝试启动远程桌面客户端，如未自动打开，请下载 RDP 文件后双击连接',
+    duration: 5000
+  })
+}
+
+const checkRdpPort = async (server) => {
+  if (!server) return
+  rdpPortStatus.value = 'checking'
+  try {
+    const response = await serversAPI.checkIpStatus(server.ip_address)
+    const data = response.data
+    rdpPortStatus.value = data.port_3389 ? 'online' : 'offline'
+  } catch (_error) {
+    rdpPortStatus.value = 'offline'
   }
 }
 
@@ -3530,18 +3758,110 @@ const handleChangePassword = async () => {
   margin-bottom: 8px;
 }
 
-.rdp-info {
+/* RDP Dialog Styles */
+.rdp-dialog :deep(.el-dialog__header) {
+  background: linear-gradient(135deg, #0078d4 0%, #106ebe 50%, #005a9e 100%);
+  color: white;
+  padding: 16px 24px;
+  margin: 0;
+}
+
+.rdp-dialog :deep(.el-dialog__title) {
+  color: white;
+  font-weight: 600;
+}
+
+.rdp-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.rdp-dialog :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
+  color: white;
+}
+
+/* RDP Panel Layout */
+.rdp-panel {
   margin-top: 16px;
 }
 
+/* Status Card */
+.rdp-status-card {
+  background: linear-gradient(135deg, #f0f7ff 0%, #e8f4fd 100%);
+  border: 1px solid #d0e8ff;
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.rdp-status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.rdp-status-icon-area {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rdp-status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.rdp-status-dot.online {
+  background: #67c23a;
+  box-shadow: 0 0 8px rgba(103, 194, 58, 0.6);
+}
+
+.rdp-status-dot.checking {
+  background: #e6a23c;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.rdp-status-dot.offline {
+  background: #f56c6c;
+  box-shadow: 0 0 8px rgba(245, 108, 108, 0.4);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.rdp-status-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #303133;
+}
+
+/* Quick Actions */
+.rdp-quick-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.rdp-main-btn {
+  flex: 1;
+  height: 48px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+}
+
+/* Command Box */
 .rdp-command-box {
   display: flex;
   align-items: center;
   gap: 12px;
   background: #1e1e1e;
   padding: 12px 16px;
-  border-radius: 6px;
-  margin-top: 12px;
+  border-radius: 8px;
+  margin-bottom: 20px;
 }
 
 .rdp-command {
@@ -3549,6 +3869,60 @@ const handleChangePassword = async () => {
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
   font-size: 14px;
   color: #67c23a;
+}
+
+/* Settings Panel */
+.rdp-settings-panel {
+  background: #fafbfc;
+  border: 1px solid #ebeef5;
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.rdp-settings-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.rdp-settings-form :deep(.el-form-item) {
+  margin-bottom: 12px;
+}
+
+.rdp-settings-form :deep(.el-form-item__label) {
+  font-size: 13px;
+  color: #606266;
+}
+
+/* Tips */
+.rdp-tips {
+  background: #fff8e6;
+  border: 1px solid #faecd8;
+  border-radius: 8px;
+  padding: 14px 18px;
+  font-size: 13px;
+  color: #606266;
+  line-height: 1.8;
+}
+
+.rdp-tips p {
+  margin: 0 0 6px 0;
+}
+
+.rdp-tips ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.rdp-tips li {
+  margin-bottom: 2px;
 }
 
 .mono-text {
