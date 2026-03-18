@@ -106,8 +106,30 @@ export const serversAPI = {
   listDirectory: (id, dirPath) => api.post(`/servers/${id}/list-directory`, { dir_path: dirPath }),
   saveFile: (id, filePath, content) => api.post(`/servers/${id}/save-file`, { file_path: filePath, content }),
   queryId: (ipAddress) => api.post('/servers/query-id', { ip_address: ipAddress }, { timeout: 300000 }),  // 5 minutes timeout
-  getRdpFileUrl: (id) => `${API_BASE_URL}/servers/${id}/rdp-file`,
-  downloadRdpFile: (id) => api.get(`/servers/${id}/rdp-file`, { responseType: 'blob' })
+  getRdpFileUrl: (id, settings = {}) => {
+    const params = new URLSearchParams()
+    if (settings.width) params.set('width', settings.width)
+    if (settings.height) params.set('height', settings.height)
+    if (settings.fullscreen) params.set('fullscreen', '1')
+    if (settings.clipboard === false) params.set('clipboard', '0')
+    if (settings.drives) params.set('drives', '1')
+    if (settings.admin) params.set('admin', '1')
+    if (settings.multimon) params.set('multimon', '1')
+    const query = params.toString()
+    return `${API_BASE_URL}/servers/${id}/rdp-file${query ? '?' + query : ''}`
+  },
+  downloadRdpFile: (id, settings = {}) => {
+    const params = new URLSearchParams()
+    if (settings.width) params.set('width', settings.width)
+    if (settings.height) params.set('height', settings.height)
+    if (settings.fullscreen) params.set('fullscreen', '1')
+    if (settings.clipboard === false) params.set('clipboard', '0')
+    if (settings.drives) params.set('drives', '1')
+    if (settings.admin) params.set('admin', '1')
+    if (settings.multimon) params.set('multimon', '1')
+    const query = params.toString()
+    return api.get(`/servers/${id}/rdp-file${query ? '?' + query : ''}`, { responseType: 'blob' })
+  }
 }
 
 // Preferences API - 用户偏好设置（存储在服务器数据库）

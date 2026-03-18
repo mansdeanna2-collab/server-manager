@@ -695,6 +695,15 @@ def generate_rdp_file(_current_user, server_id):
 
     生成标准的.rdp文件，包含服务器地址、用户名等连接参数，
     支持后台连接（不锁定远程桌面控制台会话）。
+
+    Query Parameters (optional):
+        width: 桌面宽度 (默认1920, 范围800-3840)
+        height: 桌面高度 (默认1080, 范围600-2160)
+        fullscreen: 是否全屏 (0=窗口, 1=全屏, 默认0)
+        clipboard: 是否共享剪贴板 (0=关闭, 1=开启, 默认1)
+        drives: 是否映射驱动器 (0=关闭, 1=开启, 默认0)
+        admin: 是否以管理员会话连接 (0=否, 1=是, 默认0)
+        multimon: 是否多显示器 (0=关闭, 1=开启, 默认0)
     """
     server = db.session.get(Server, server_id)
 
@@ -704,14 +713,25 @@ def generate_rdp_file(_current_user, server_id):
     if server.port != 3389:
         return jsonify({'message': '仅支持RDP端口(3389)的服务器生成连接文件'}), 400
 
+    # Parse customizable settings from query parameters
+    width = min(max(int(request.args.get('width', 1920)), 800), 3840)
+    height = min(max(int(request.args.get('height', 1080)), 600), 2160)
+    fullscreen = 1 if request.args.get('fullscreen', '0') == '1' else 0
+    clipboard = 1 if request.args.get('clipboard', '1') != '0' else 0
+    drives = 1 if request.args.get('drives', '0') == '1' else 0
+    admin_session = 1 if request.args.get('admin', '0') == '1' else 0
+    multimon = 1 if request.args.get('multimon', '0') == '1' else 0
+
+    screen_mode = 2 if fullscreen else 1  # 1=windowed, 2=fullscreen
+
     # Build the RDP file content with settings optimized for background connection
     rdp_lines = [
         f'full address:s:{server.ip_address}:3389',
         f'username:s:{server.username}',
-        'screen mode id:i:1',           # 1=windowed, 2=fullscreen
-        'use multimon:i:0',
-        'desktopwidth:i:1920',
-        'desktopheight:i:1080',
+        f'screen mode id:i:{screen_mode}',
+        f'use multimon:i:{multimon}',
+        f'desktopwidth:i:{width}',
+        f'desktopheight:i:{height}',
         'session bpp:i:32',
         'compression:i:1',
         'keyboardhook:i:2',
@@ -730,11 +750,11 @@ def generate_rdp_file(_current_user, server_id):
         'disable themes:i:0',
         'disable cursor setting:i:0',
         'bitmapcachepersistenable:i:1',
-        'redirectclipboard:i:1',         # Enable clipboard sharing
+        f'redirectclipboard:i:{clipboard}',
         'redirectprinters:i:0',
         'redirectcomports:i:0',
         'redirectsmartcards:i:0',
-        'redirectdrives:i:0',
+        f'redirectdrives:i:{drives}',
         'autoreconnection enabled:i:1',  # Auto reconnect
         'authentication level:i:2',
         'prompt for credentials:i:0',    # Don't prompt (for background)
@@ -753,6 +773,10 @@ def generate_rdp_file(_current_user, server_id):
         'kdcproxyname:s:',
         'enablecredsspsupport:i:1',      # Enable CredSSP
     ]
+
+    # Add admin/console session if requested
+    if admin_session:
+        rdp_lines.append('administrative session:i:1')
 
     rdp_content = '\r\n'.join(rdp_lines) + '\r\n'
 

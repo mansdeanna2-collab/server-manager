@@ -145,3 +145,118 @@ class TestRdpFileGeneration:
         content = response.data.decode('utf-8')
         # RDP files should use CRLF line endings
         assert '\r\n' in content
+
+
+class TestRdpCustomSettings:
+    """Tests for customizable RDP file settings"""
+
+    def test_custom_resolution(self, client, auth_headers, rdp_server):
+        """Test RDP file with custom resolution"""
+        response = client.get(
+            f'/api/servers/{rdp_server}/rdp-file?width=1600&height=900',
+            headers=auth_headers
+        )
+        assert response.status_code == 200
+        content = response.data.decode('utf-8')
+        assert 'desktopwidth:i:1600' in content
+        assert 'desktopheight:i:900' in content
+
+    def test_fullscreen_mode(self, client, auth_headers, rdp_server):
+        """Test RDP file with fullscreen mode enabled"""
+        response = client.get(
+            f'/api/servers/{rdp_server}/rdp-file?fullscreen=1',
+            headers=auth_headers
+        )
+        assert response.status_code == 200
+        content = response.data.decode('utf-8')
+        assert 'screen mode id:i:2' in content
+
+    def test_windowed_mode_default(self, client, auth_headers, rdp_server):
+        """Test RDP file defaults to windowed mode"""
+        response = client.get(
+            f'/api/servers/{rdp_server}/rdp-file',
+            headers=auth_headers
+        )
+        content = response.data.decode('utf-8')
+        assert 'screen mode id:i:1' in content
+
+    def test_clipboard_disabled(self, client, auth_headers, rdp_server):
+        """Test RDP file with clipboard sharing disabled"""
+        response = client.get(
+            f'/api/servers/{rdp_server}/rdp-file?clipboard=0',
+            headers=auth_headers
+        )
+        content = response.data.decode('utf-8')
+        assert 'redirectclipboard:i:0' in content
+
+    def test_drives_enabled(self, client, auth_headers, rdp_server):
+        """Test RDP file with drive redirection enabled"""
+        response = client.get(
+            f'/api/servers/{rdp_server}/rdp-file?drives=1',
+            headers=auth_headers
+        )
+        content = response.data.decode('utf-8')
+        assert 'redirectdrives:i:1' in content
+
+    def test_admin_session(self, client, auth_headers, rdp_server):
+        """Test RDP file with admin/console session enabled"""
+        response = client.get(
+            f'/api/servers/{rdp_server}/rdp-file?admin=1',
+            headers=auth_headers
+        )
+        content = response.data.decode('utf-8')
+        assert 'administrative session:i:1' in content
+
+    def test_admin_session_not_present_by_default(self, client, auth_headers, rdp_server):
+        """Test admin session is not included by default"""
+        response = client.get(
+            f'/api/servers/{rdp_server}/rdp-file',
+            headers=auth_headers
+        )
+        content = response.data.decode('utf-8')
+        assert 'administrative session' not in content
+
+    def test_multimon_enabled(self, client, auth_headers, rdp_server):
+        """Test RDP file with multi-monitor enabled"""
+        response = client.get(
+            f'/api/servers/{rdp_server}/rdp-file?multimon=1',
+            headers=auth_headers
+        )
+        content = response.data.decode('utf-8')
+        assert 'use multimon:i:1' in content
+
+    def test_resolution_clamped_minimum(self, client, auth_headers, rdp_server):
+        """Test resolution values are clamped to minimum"""
+        response = client.get(
+            f'/api/servers/{rdp_server}/rdp-file?width=100&height=100',
+            headers=auth_headers
+        )
+        content = response.data.decode('utf-8')
+        assert 'desktopwidth:i:800' in content
+        assert 'desktopheight:i:600' in content
+
+    def test_resolution_clamped_maximum(self, client, auth_headers, rdp_server):
+        """Test resolution values are clamped to maximum"""
+        response = client.get(
+            f'/api/servers/{rdp_server}/rdp-file?width=9999&height=9999',
+            headers=auth_headers
+        )
+        content = response.data.decode('utf-8')
+        assert 'desktopwidth:i:3840' in content
+        assert 'desktopheight:i:2160' in content
+
+    def test_combined_settings(self, client, auth_headers, rdp_server):
+        """Test RDP file with multiple custom settings"""
+        response = client.get(
+            f'/api/servers/{rdp_server}/rdp-file?width=2560&height=1440&fullscreen=1&clipboard=0&drives=1&admin=1&multimon=1',
+            headers=auth_headers
+        )
+        assert response.status_code == 200
+        content = response.data.decode('utf-8')
+        assert 'desktopwidth:i:2560' in content
+        assert 'desktopheight:i:1440' in content
+        assert 'screen mode id:i:2' in content
+        assert 'redirectclipboard:i:0' in content
+        assert 'redirectdrives:i:1' in content
+        assert 'administrative session:i:1' in content
+        assert 'use multimon:i:1' in content
