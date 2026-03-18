@@ -2427,14 +2427,18 @@ const downloadRdpFile = async (server) => {
 const launchRdpConnection = (server) => {
   if (!server) return
   // Use ms-rd URI scheme to attempt to launch the system RDP client directly
-  const rdpUri = `ms-rd:full%20address=s:${server.ip_address}:3389&username=s:${server.username}`
+  const encodedUsername = encodeURIComponent(server.username)
+  const rdpUri = `ms-rd:full%20address=s:${server.ip_address}:3389&username=s:${encodedUsername}`
   const link = document.createElement('a')
   link.href = rdpUri
   link.style.display = 'none'
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
-  ElMessage.info('正在尝试启动远程桌面客户端...\n如未自动打开，请下载RDP文件后双击连接')
+  ElMessage.info({
+    message: '正在尝试启动远程桌面客户端，如未自动打开，请下载RDP文件后双击连接',
+    duration: 5000
+  })
 }
 
 const handleSubmit = async (formData) => {
