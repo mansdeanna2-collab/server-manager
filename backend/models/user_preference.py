@@ -157,6 +157,55 @@ class SegmentFavorite(db.Model):
         }
 
 
+class BatchQueryTask(db.Model):
+    """一键查询任务模型 - 存储IP段一键查询任务的状态和进度
+
+    This model persists the batch query task state so that:
+    - The task continues running in the background even after closing browser/computer
+    - Users can monitor progress after page refresh
+    - Cookie is auto-refreshed every 2 hours during the task
+    """
+    __tablename__ = 'batch_query_tasks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    segment = db.Column(db.String(45), nullable=False)  # IP segment e.g. "192.168.1"
+    status = db.Column(db.String(20), default='pending')  # pending, running, completed, failed, stopped
+    current_ip_index = db.Column(db.Integer, default=0)  # Current IP index being processed (1-255)
+    total_processed = db.Column(db.Integer, default=0)  # Total IPs processed
+    total_online = db.Column(db.Integer, default=0)  # Total servers found online
+    total_error = db.Column(db.Integer, default=0)  # Total servers with errors
+    total_skipped = db.Column(db.Integer, default=0)  # Total IPs skipped (already existing/online)
+    log_output = db.Column(db.Text)  # Real-time log output
+    cookie_last_updated = db.Column(db.DateTime, nullable=True)  # Last time cookie was refreshed
+    started_at = db.Column(db.DateTime, default=china_now)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=china_now)
+    updated_at = db.Column(db.DateTime, default=china_now, onupdate=china_now)
+
+    # 添加复合唯一约束
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'segment', name='uq_user_batch_query'),
+    )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'segment': self.segment,
+            'status': self.status,
+            'current_ip_index': self.current_ip_index,
+            'total_processed': self.total_processed,
+            'total_online': self.total_online,
+            'total_error': self.total_error,
+            'total_skipped': self.total_skipped,
+            'log_output': self.log_output,
+            'cookie_last_updated': self.cookie_last_updated.isoformat() if self.cookie_last_updated else None,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
 class ServerFavorite(db.Model):
     """服务器收藏模型 - 存储用户收藏的服务器"""
     __tablename__ = 'server_favorites'

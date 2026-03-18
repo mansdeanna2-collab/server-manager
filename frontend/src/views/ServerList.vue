@@ -138,6 +138,20 @@
                   <el-icon><Monitor /></el-icon>
                   电脑 {{ computerCount }}
                 </el-button>
+                <el-button
+                  color="#10b981"
+                  @click="showFilteredServersDialog('batch_online')"
+                >
+                  <el-icon><Promotion /></el-icon>
+                  一键查询在线 {{ batchOnlineCount }}
+                </el-button>
+                <el-button
+                  color="#f43f5e"
+                  @click="showFilteredServersDialog('batch_error')"
+                >
+                  <el-icon><WarnTriangleFilled /></el-icon>
+                  一键查询错误 {{ batchErrorCount }}
+                </el-button>
               </div>
             </div>
             
@@ -1543,7 +1557,8 @@ import {
   Monitor, Odometer, User, ArrowDown, Plus, Refresh,
   Search, View, Edit, Delete, OfficeBuilding, Connection, CopyDocument, Loading,
   CircleCheck, CircleClose, Download, QuestionFilled, WarningFilled, Cpu, Star, EditPen,
-  Clock, Sort, Folder, FolderOpened, Document as DocumentIcon, Link, Setting, Tools
+  Clock, Sort, Folder, FolderOpened, Document as DocumentIcon, Link, Setting, Tools,
+  Promotion, WarnTriangleFilled
 } from '@element-plus/icons-vue'
 import { serversAPI, authAPI, preferencesAPI } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -1989,6 +2004,10 @@ const unknownCount = computed(() => servers.value.filter(s => s.status === 'unkn
 const errorCount = computed(() => servers.value.filter(s => s.status === 'online' && s.error_type && s.username !== 'Administrator').length)
 // 电脑 (Windows RDP) - 包含Administrator用户的错误和离线状态
 const computerCount = computed(() => servers.value.filter(s => s.port === RDP_PORT).length)
+// 一键查询在线
+const batchOnlineCount = computed(() => servers.value.filter(s => s.source === 'batch_online').length)
+// 一键查询错误
+const batchErrorCount = computed(() => servers.value.filter(s => s.source === 'batch_error').length)
 
 // Show filtered servers in dialog
 const showFilteredServersDialog = (filterType) => {
@@ -2014,6 +2033,12 @@ const showFilteredServersDialog = (filterType) => {
     // 电脑对话框：显示所有Windows RDP服务器（包含Administrator的错误和离线状态）
     result = result.filter(server => server.port === RDP_PORT)
     title = '电脑 (Windows RDP)'
+  } else if (filterType === 'batch_online') {
+    result = result.filter(server => server.source === 'batch_online')
+    title = '一键查询在线'
+  } else if (filterType === 'batch_error') {
+    result = result.filter(server => server.source === 'batch_error')
+    title = '一键查询错误'
   }
   
   // 根据filterType设置排序逻辑

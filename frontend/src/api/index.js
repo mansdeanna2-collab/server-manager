@@ -206,4 +206,12 @@ export const preferencesAPI = {
   checkForUpdates: () => api.get('/preferences/version/check')
 }
 
+// Batch Query API - 一键查询
+export const batchQueryAPI = {
+  start: (segment) => api.post('/batch-query/start', { segment }),
+  stop: (segment) => api.post('/batch-query/stop', { segment }),
+  getStatus: (segment) => api.get(`/batch-query/status/${segment}`),
+  getTasks: () => api.get('/batch-query/tasks')
+}
+
 export default api

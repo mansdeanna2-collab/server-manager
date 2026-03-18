@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from models import db
 from models.user_preference import (
     IpCheckStatus, IpIdResult, SegmentNote, SegmentFavorite, ServerFavorite,
-    FetchServerTask
+    FetchServerTask, BatchQueryTask
 )
 from models.system_log import SystemLog
 from routes.auth import token_required
