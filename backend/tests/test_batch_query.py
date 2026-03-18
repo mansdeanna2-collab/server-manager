@@ -325,6 +325,7 @@ class TestBatchQueryErrorHandling:
 
     def test_run_batch_query_catches_exception(self, app):
         """Test that _run_batch_query catches unexpected errors and marks task as failed"""
+        from unittest.mock import patch
         from routes.batch_query import _run_batch_query
 
         with app.app_context():
@@ -336,17 +337,19 @@ class TestBatchQueryErrorHandling:
             db.session.add(task)
             db.session.commit()
 
-        # Run the batch query - it will fail because Python dir doesn't contain
-        # the expected scripts, but the top-level handler should catch any error
-        # and mark the task as failed instead of leaving it stuck in 'running'
-        _run_batch_query(app, app.test_user_id, '99.99.99')
+        # Patch _run_batch_query_inner to raise an exception, simulating unexpected error
+        with patch('routes.batch_query._run_batch_query_inner', side_effect=RuntimeError('test error')):
+            _run_batch_query(app, app.test_user_id, '99.99.99')
 
         with app.app_context():
             task = BatchQueryTask.query.filter_by(
                 user_id=app.test_user_id, segment='99.99.99'
             ).first()
-            # Task should be either completed or failed, not stuck in 'running'
-            assert task.status != 'running'
+            # Task should be specifically marked as 'failed'
+            assert task.status == 'failed'
+            assert task.completed_at is not None
+            # Error log should be appended
+            assert '任务异常终止' in (task.log_output or '')
 
     def test_failed_status_in_stop_endpoint(self, app, client, auth_headers):
         """Test that a failed task can't be stopped"""
@@ -369,3 +372,48 @@ class TestBatchQueryErrorHandling:
         from routes.batch_query import _script_execution_lock
         import threading
         assert isinstance(_script_execution_lock, type(threading.Lock()))
+
+    def test_run_batch_query_completes_normally(self, app):
+        """Test that _run_batch_query completes and marks task as completed when no errors"""
+        from routes.batch_query import _run_batch_query
+
+        with app.app_context():
+            task = BatchQueryTask(
+                user_id=app.test_user_id,
+                segment='99.99.99',
+                status='running'
+            )
+            db.session.add(task)
+            db.session.commit()
+
+        # Run the batch query - scripts won't exist so all IPs get "no ID found",
+        # but it should complete normally without leaving the task stuck in 'running'
+        _run_batch_query(app, app.test_user_id, '99.99.99')
+
+        with app.app_context():
+            task = BatchQueryTask.query.filter_by(
+                user_id=app.test_user_id, segment='99.99.99'
+            ).first()
+            # Task should be completed (all IPs processed without errors)
+            assert task.status == 'completed'
+            assert task.completed_at is not None
+
+    def test_run_batch_query_cleans_up_active_tasks(self, app):
+        """Test that _run_batch_query always cleans up from _active_tasks dict"""
+        from unittest.mock import patch
+        from routes.batch_query import _run_batch_query, _active_tasks
+
+        with app.app_context():
+            task = BatchQueryTask(
+                user_id=app.test_user_id,
+                segment='88.88.88',
+                status='running'
+            )
+            db.session.add(task)
+            db.session.commit()
+
+        # Even when inner function raises, active_tasks should be cleaned up
+        with patch('routes.batch_query._run_batch_query_inner', side_effect=RuntimeError('cleanup test')):
+            _run_batch_query(app, app.test_user_id, '88.88.88')
+
+        assert '88.88.88' not in _active_tasks
