@@ -962,23 +962,41 @@
         >
           <el-alert
             title="Windows 远程桌面"
-            type="warning"
+            type="info"
             :closable="false"
             show-icon
           >
             <template #default>
-              <p>端口 {{ RDP_PORT }} 为 Windows RDP 服务，请使用系统远程桌面连接。</p>
-              <div class="rdp-command-box">
-                <code class="rdp-command">{{ getSshCommand(terminalServer) }}</code>
+              <p>点击下方按钮即可后台连接到 Windows 远程桌面，无需手动输入地址。</p>
+              <div class="rdp-action-box">
                 <el-button
                   type="primary"
-                  size="small"
+                  @click="downloadRdpFile(terminalServer)"
+                >
+                  <el-icon><Download /></el-icon>
+                  下载RDP连接文件
+                </el-button>
+                <el-button
+                  type="success"
+                  @click="launchRdpConnection(terminalServer)"
+                >
+                  <el-icon><Connection /></el-icon>
+                  一键连接
+                </el-button>
+                <el-button
+                  size="default"
                   @click="copySshCommand(terminalServer)"
                 >
                   <el-icon><CopyDocument /></el-icon>
                   复制命令
                 </el-button>
               </div>
+              <div class="rdp-command-box">
+                <code class="rdp-command">{{ getSshCommand(terminalServer) }}</code>
+              </div>
+              <p class="rdp-tip">
+                提示：下载的 .rdp 文件已预配置服务器地址和用户名，双击即可在后台发起远程桌面连接。
+              </p>
             </template>
           </el-alert>
         </div>
@@ -2387,6 +2405,38 @@ const copySshCommand = async (server) => {
   }
 }
 
+const downloadRdpFile = async (server) => {
+  if (!server) return
+  try {
+    const response = await serversAPI.downloadRdpFile(server.id)
+    const blob = new Blob([response.data], { type: 'application/x-rdp' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${server.ip_address}.rdp`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('RDP连接文件已下载，双击文件即可后台连接远程桌面')
+  } catch (_error) {
+    ElMessage.error('下载RDP文件失败')
+  }
+}
+
+const launchRdpConnection = (server) => {
+  if (!server) return
+  // Use ms-rd URI scheme to attempt to launch the system RDP client directly
+  const rdpUri = `ms-rd:full%20address=s:${server.ip_address}:3389&username=s:${server.username}`
+  const link = document.createElement('a')
+  link.href = rdpUri
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  ElMessage.info('正在尝试启动远程桌面客户端...\n如未自动打开，请下载RDP文件后双击连接')
+}
+
 const handleSubmit = async (formData) => {
   try {
     if (isEdit.value) {
@@ -3534,6 +3584,14 @@ const handleChangePassword = async () => {
   margin-top: 16px;
 }
 
+.rdp-action-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  margin-bottom: 8px;
+}
+
 .rdp-command-box {
   display: flex;
   align-items: center;
@@ -3541,7 +3599,7 @@ const handleChangePassword = async () => {
   background: #1e1e1e;
   padding: 12px 16px;
   border-radius: 6px;
-  margin-top: 12px;
+  margin-top: 8px;
 }
 
 .rdp-command {
@@ -3549,6 +3607,13 @@ const handleChangePassword = async () => {
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
   font-size: 14px;
   color: #67c23a;
+}
+
+.rdp-tip {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.6;
 }
 
 .mono-text {

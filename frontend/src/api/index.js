@@ -105,7 +105,9 @@ export const serversAPI = {
   readFile: (id, filePath) => api.post(`/servers/${id}/read-file`, { file_path: filePath }),
   listDirectory: (id, dirPath) => api.post(`/servers/${id}/list-directory`, { dir_path: dirPath }),
   saveFile: (id, filePath, content) => api.post(`/servers/${id}/save-file`, { file_path: filePath, content }),
-  queryId: (ipAddress) => api.post('/servers/query-id', { ip_address: ipAddress }, { timeout: 300000 })  // 5 minutes timeout
+  queryId: (ipAddress) => api.post('/servers/query-id', { ip_address: ipAddress }, { timeout: 300000 }),  // 5 minutes timeout
+  getRdpFileUrl: (id) => `${API_BASE_URL}/servers/${id}/rdp-file`,
+  downloadRdpFile: (id) => api.get(`/servers/${id}/rdp-file`, { responseType: 'blob' })
 }
 
 // Preferences API - 用户偏好设置（存储在服务器数据库）
