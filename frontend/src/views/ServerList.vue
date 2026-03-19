@@ -716,6 +716,7 @@
       :title="filteredDialogTitle"
       width="1300px"
       class="filtered-dialog"
+      @closed="onFilteredDialogClosed"
     >
       <div v-if="filteredDialogServers.length > 0">
         <div class="segment-header">
@@ -774,6 +775,13 @@
                 >
                   {{ group.count }} 台
                 </el-tag>
+                <span
+                  v-if="group.note"
+                  class="batch-segment-note"
+                >
+                  <el-icon><EditPen /></el-icon>
+                  {{ group.note }}
+                </span>
               </div>
             </div>
             <div
@@ -2372,7 +2380,11 @@ const showFilteredServersDialog = (filterType) => {
   filteredDialogCurrentPage.value = 1
   // 一键查询对话框：初始化展开所有IP段
   if (filterType === 'batch_online' || filterType === 'batch_error') {
-    expandedBatchSegments.value = new Set(filteredDialogServers.value.map(server => getIpSegment(server.ip_address)))
+    expandedBatchSegments.value = new Set(
+      filteredDialogServers.value
+        .map(server => getIpSegment(server.ip_address))
+        .filter(segment => segment !== '')
+    )
     allBatchSegmentsExpanded.value = true
   }
   filteredDialogVisible.value = true
@@ -2528,6 +2540,7 @@ const groupedBatchServers = computed(() => {
   const segmentMap = new Map()
   filteredDialogServers.value.forEach(server => {
     const segment = getIpSegment(server.ip_address)
+    if (!segment) return // 跳过无效IP
     if (!segmentMap.has(segment)) {
       segmentMap.set(segment, [])
     }
@@ -2539,15 +2552,18 @@ const groupedBatchServers = computed(() => {
     result.push({
       segment,
       servers: sortedServers,
-      count: sortedServers.length
+      count: sortedServers.length,
+      note: getSegmentNote(segment)
     })
   })
-  // Sort segments numerically
+  // Sort segments numerically (NaN-safe)
   result.sort((a, b) => {
     const partsA = a.segment.split('.').map(Number)
     const partsB = b.segment.split('.').map(Number)
     for (let i = 0; i < Math.min(partsA.length, partsB.length); i++) {
-      if (partsA[i] !== partsB[i]) return partsA[i] - partsB[i]
+      const valA = isNaN(partsA[i]) ? 0 : partsA[i]
+      const valB = isNaN(partsB[i]) ? 0 : partsB[i]
+      if (valA !== valB) return valA - valB
     }
     return partsA.length - partsB.length
   })
@@ -2575,6 +2591,13 @@ const toggleAllBatchSegments = () => {
     expandedBatchSegments.value = new Set(groupedBatchServers.value.map(g => g.segment))
     allBatchSegmentsExpanded.value = true
   }
+}
+
+// 对话框关闭时重置状态
+const onFilteredDialogClosed = () => {
+  expandedBatchSegments.value = new Set()
+  allBatchSegmentsExpanded.value = true
+  filteredDialogType.value = ''
 }
 
 onMounted(async () => {
@@ -4386,6 +4409,9 @@ const handleChangePassword = async () => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .batch-segment-group {
@@ -4443,6 +4469,19 @@ const handleChangePassword = async () => {
 
 .batch-segment-group-body {
   border-top: 1px solid #e2e8f0;
+}
+
+.batch-segment-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #718096;
+  font-weight: 400;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Animations */

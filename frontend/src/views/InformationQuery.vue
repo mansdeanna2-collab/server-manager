@@ -396,18 +396,56 @@
       <div class="ip-list-content">
         <div class="ip-list-stats">
           <el-tag
-            type="success"
-            size="large"
-            effect="dark"
-          >
-            已存在 {{ existingIpCount }} 个
-          </el-tag>
-          <el-tag
+            :class="{ 'ip-list-filter-active': ipListFilter === 'all' }"
             type="info"
             size="large"
-            effect="dark"
+            :effect="ipListFilter === 'all' ? 'dark' : 'plain'"
+            class="ip-list-filter-tag"
+            @click="onIpListFilterChange('all')"
           >
-            未存在 {{ notExistingIpCount }} 个
+            全部 {{ currentIpList.length }}
+          </el-tag>
+          <el-tag
+            :class="{ 'ip-list-filter-active': ipListFilter === 'exists' }"
+            type="success"
+            size="large"
+            :effect="ipListFilter === 'exists' ? 'dark' : 'plain'"
+            class="ip-list-filter-tag"
+            @click="onIpListFilterChange('exists')"
+          >
+            已存在 {{ existingIpCount }}
+          </el-tag>
+          <el-tag
+            :class="{ 'ip-list-filter-active': ipListFilter === 'not_exists' }"
+            type="info"
+            size="large"
+            :effect="ipListFilter === 'not_exists' ? 'dark' : 'plain'"
+            class="ip-list-filter-tag"
+            @click="onIpListFilterChange('not_exists')"
+          >
+            未存在 {{ notExistingIpCount }}
+          </el-tag>
+          <el-tag
+            v-if="batchOnlineIpCount > 0"
+            :class="{ 'ip-list-filter-active': ipListFilter === 'batch_online' }"
+            color="#10b981"
+            size="large"
+            :effect="ipListFilter === 'batch_online' ? 'dark' : 'plain'"
+            class="ip-list-filter-tag"
+            @click="onIpListFilterChange('batch_online')"
+          >
+            查询在线 {{ batchOnlineIpCount }}
+          </el-tag>
+          <el-tag
+            v-if="batchErrorIpCount > 0"
+            :class="{ 'ip-list-filter-active': ipListFilter === 'batch_error' }"
+            color="#f43f5e"
+            size="large"
+            :effect="ipListFilter === 'batch_error' ? 'dark' : 'plain'"
+            class="ip-list-filter-tag"
+            @click="onIpListFilterChange('batch_error')"
+          >
+            查询错误 {{ batchErrorIpCount }}
           </el-tag>
         </div>
         <el-table
@@ -605,13 +643,13 @@
           </el-table-column>
         </el-table>
         <div
-          v-if="currentIpList.length > IP_LIST_PAGE_SIZE"
+          v-if="filteredIpList.length > IP_LIST_PAGE_SIZE"
           class="ip-list-pagination"
         >
           <el-pagination
             v-model:current-page="ipListCurrentPage"
             :page-size="IP_LIST_PAGE_SIZE"
-            :total="currentIpList.length"
+            :total="filteredIpList.length"
             layout="prev, pager, next"
             background
           />
@@ -759,6 +797,7 @@ const ipListDialogVisible = ref(false)
 const ipListDialogTitle = ref('')
 const currentIpList = ref([])
 const ipListCurrentPage = ref(1)
+const ipListFilter = ref('all') // 'all' | 'exists' | 'not_exists' | 'batch_online' | 'batch_error'
 const IP_LIST_PAGE_SIZE = 50
 const checkingIpStatus = ref(false)
 const BATCH_QUERY_POLL_INTERVAL = 3000  // Poll every 3 seconds
@@ -1007,23 +1046,49 @@ const notExistingIpCount = computed(() => {
   return currentIpList.value.filter(ip => !ip.exists).length
 })
 
+const batchOnlineIpCount = computed(() => {
+  return currentIpList.value.filter(ip => ip.source === 'batch_online').length
+})
+
+const batchErrorIpCount = computed(() => {
+  return currentIpList.value.filter(ip => ip.source === 'batch_error').length
+})
+
 // 是否所有IP都已检查过（用于区分"检查状态"和"重新检查"按钮文本）
 const allIpsChecked = computed(() => {
   return currentIpList.value.length > 0 && currentIpList.value.every(item => item.portChecked && item.pingChecked)
+})
+
+// 根据筛选条件过滤后的IP列表
+const filteredIpList = computed(() => {
+  const filter = ipListFilter.value
+  if (filter === 'all') return currentIpList.value
+  if (filter === 'exists') return currentIpList.value.filter(ip => ip.exists)
+  if (filter === 'not_exists') return currentIpList.value.filter(ip => !ip.exists)
+  if (filter === 'batch_online') return currentIpList.value.filter(ip => ip.source === 'batch_online')
+  if (filter === 'batch_error') return currentIpList.value.filter(ip => ip.source === 'batch_error')
+  return currentIpList.value
 })
 
 // 分页后的IP列表数据
 const paginatedIpList = computed(() => {
   const start = (ipListCurrentPage.value - 1) * IP_LIST_PAGE_SIZE
   const end = start + IP_LIST_PAGE_SIZE
-  return currentIpList.value.slice(start, end)
+  return filteredIpList.value.slice(start, end)
 })
+
+// 切换IP列表筛选条件
+const onIpListFilterChange = (filter) => {
+  ipListFilter.value = filter
+  ipListCurrentPage.value = 1
+}
 
 // 显示IP列表对话框
 const showIpListDialog = async (segmentData) => {
   const segment = segmentData.segment
   ipListDialogTitle.value = `IP段详情: ${segment}.1 - ${segment}.255`
   ipListCurrentPage.value = 1
+  ipListFilter.value = 'all'
   
   // 构建该IP段内所有服务器的IP映射，方便快速查找
   const serverIpMap = new Map()
@@ -2451,8 +2516,24 @@ const handleChangePassword = async () => {
 
 .ip-list-stats {
   display: flex;
-  gap: 16px;
+  gap: 12px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.ip-list-filter-tag {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.ip-list-filter-tag:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+.ip-list-filter-active {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .ip-address {
