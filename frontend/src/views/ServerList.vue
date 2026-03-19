@@ -2372,11 +2372,7 @@ const showFilteredServersDialog = (filterType) => {
   filteredDialogCurrentPage.value = 1
   // 一键查询对话框：初始化展开所有IP段
   if (filterType === 'batch_online' || filterType === 'batch_error') {
-    const segments = new Set()
-    filteredDialogServers.value.forEach(server => {
-      segments.add(getIpSegment(server.ip_address))
-    })
-    expandedBatchSegments.value = segments
+    expandedBatchSegments.value = new Set(filteredDialogServers.value.map(server => getIpSegment(server.ip_address)))
     allBatchSegmentsExpanded.value = true
   }
   filteredDialogVisible.value = true
@@ -2558,9 +2554,7 @@ const groupedBatchServers = computed(() => {
   return result
 })
 
-const isBatchSegmentExpanded = (segment) => {
-  return expandedBatchSegments.value.has(segment)
-}
+const isBatchSegmentExpanded = (segment) => expandedBatchSegments.value.has(segment)
 
 const toggleBatchSegment = (segment) => {
   const newSet = new Set(expandedBatchSegments.value)
