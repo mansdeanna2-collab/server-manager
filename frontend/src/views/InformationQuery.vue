@@ -259,15 +259,30 @@
                           <el-icon><View /></el-icon>
                           查看
                         </el-button>
+                        <template v-if="batchQueryTasks[scope.row.segment]?.status === 'running'">
+                          <el-button
+                            type="primary"
+                            size="small"
+                            @click="handleBatchQuery(scope.row)"
+                          >
+                            <el-icon><View /></el-icon>
+                            查看进度
+                          </el-button>
+                          <el-button
+                            type="danger"
+                            size="small"
+                            @click="stopBatchQueryFromRow(scope.row.segment)"
+                          >
+                            停止
+                          </el-button>
+                        </template>
                         <el-button
+                          v-else
                           :type="getBatchQueryButtonType(scope.row.segment)"
                           size="small"
-                          :loading="batchQueryTasks[scope.row.segment]?.status === 'running'"
                           @click="handleBatchQuery(scope.row)"
                         >
-                          <el-icon v-if="batchQueryTasks[scope.row.segment]?.status !== 'running'">
-                            <Promotion />
-                          </el-icon>
+                          <el-icon><Promotion /></el-icon>
                           {{ getBatchQueryButtonText(scope.row.segment) }}
                         </el-button>
                       </div>
@@ -1864,7 +1879,7 @@ const startBatchQuery = async (segment) => {
   }
 }
 
-// 停止一键查询
+// 停止一键查询（从对话框内）
 const stopBatchQuery = async () => {
   const segment = currentBatchQuerySegment.value
   if (!segment) return
@@ -1877,6 +1892,13 @@ const stopBatchQuery = async () => {
     const message = error.response?.data?.message || error.message || '停止失败'
     ElMessage.error(`停止失败: ${message}`)
   }
+}
+
+// 从表格行直接停止一键查询
+const stopBatchQueryFromRow = async (segment) => {
+  if (!segment) return
+  currentBatchQuerySegment.value = segment
+  await stopBatchQuery()
 }
 
 // 轮询一键查询进度
