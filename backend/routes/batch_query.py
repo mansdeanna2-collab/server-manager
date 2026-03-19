@@ -461,7 +461,7 @@ def _run_batch_query_inner(app, user_id, segment):
             )
             continue
 
-        # Check if port 22 is open (from saved check data or real-time check)
+        # Check if port 22 is open (from saved IpCheckStatus data)
         # Only process IPs where port 22 is confirmed open
         if not _is_port_22_open(app, user_id, ip_address):
             total_skipped += 1
