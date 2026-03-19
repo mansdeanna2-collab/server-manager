@@ -34,6 +34,10 @@ class Server(db.Model):
         db.String(50),
         comment='最近一次检测的错误类型代码（如auth_failed, port_closed）'
     )
+    source = db.Column(
+        db.String(50),
+        comment='服务器来源标识（batch_online=一键查询在线, batch_error=一键查询错误）'
+    )
 
     def to_dict(self):
         """将模型转换为字典"""
@@ -53,5 +57,6 @@ class Server(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'check_detail': self.check_detail,
-            'error_type': self.error_type
+            'error_type': self.error_type,
+            'source': self.source
         }

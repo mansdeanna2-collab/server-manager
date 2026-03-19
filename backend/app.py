@@ -8,6 +8,7 @@ from models.user import User
 from routes.auth import auth_bp
 from routes.servers import servers_bp
 from routes.preferences import preferences_bp
+from routes.batch_query import batch_query_bp
 from extensions import limiter
 from config import Config
 import logging
@@ -45,6 +46,9 @@ def _migrate_add_missing_columns(db_engine):
         if 'error_type' not in columns:
             conn.execute(text('ALTER TABLE servers ADD COLUMN error_type VARCHAR(50)'))
             logger.info("Added 'error_type' column to servers table")
+        if 'source' not in columns:
+            conn.execute(text('ALTER TABLE servers ADD COLUMN source VARCHAR(50)'))
+            logger.info("Added 'source' column to servers table")
         conn.commit()
 
     # Add TOTP columns to users table if not exist
@@ -111,6 +115,7 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(servers_bp)
     app.register_blueprint(preferences_bp)
+    app.register_blueprint(batch_query_bp)
 
     # Register terminal WebSocket events
     from routes.terminal import register_terminal_events

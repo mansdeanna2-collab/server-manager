@@ -246,18 +246,31 @@
                   </el-table-column>
                   <el-table-column
                     label="操作"
-                    width="100"
+                    width="230"
                     align="center"
                   >
                     <template #default="scope">
-                      <el-button
-                        type="primary"
-                        size="small"
-                        @click="showIpListDialog(scope.row)"
-                      >
-                        <el-icon><View /></el-icon>
-                        查看
-                      </el-button>
+                      <div class="segment-operation-buttons">
+                        <el-button
+                          type="primary"
+                          size="small"
+                          @click="showIpListDialog(scope.row)"
+                        >
+                          <el-icon><View /></el-icon>
+                          查看
+                        </el-button>
+                        <el-button
+                          :type="getBatchQueryButtonType(scope.row.segment)"
+                          size="small"
+                          :loading="batchQueryTasks[scope.row.segment]?.status === 'running'"
+                          @click="handleBatchQuery(scope.row)"
+                        >
+                          <el-icon v-if="batchQueryTasks[scope.row.segment]?.status !== 'running'">
+                            <Promotion />
+                          </el-icon>
+                          {{ getBatchQueryButtonText(scope.row.segment) }}
+                        </el-button>
+                      </div>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -592,17 +605,88 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- Batch Query Progress Dialog -->
+    <el-dialog
+      v-model="batchQueryDialogVisible"
+      :title="batchQueryDialogTitle"
+      width="800px"
+      class="batch-query-dialog"
+      @close="onBatchQueryDialogClose"
+    >
+      <div
+        v-if="currentBatchQueryTask"
+        class="batch-query-content"
+      >
+        <div class="batch-query-stats">
+          <el-tag
+            type="info"
+            size="large"
+            effect="dark"
+          >
+            进度 {{ currentBatchQueryTask.current_ip_index }}/{{ IP_RANGE_MAX }}
+          </el-tag>
+          <el-tag
+            type="success"
+            size="large"
+            effect="dark"
+          >
+            在线 {{ currentBatchQueryTask.total_online }}
+          </el-tag>
+          <el-tag
+            type="danger"
+            size="large"
+            effect="dark"
+          >
+            错误 {{ currentBatchQueryTask.total_error }}
+          </el-tag>
+          <el-tag
+            type="warning"
+            size="large"
+            effect="dark"
+          >
+            跳过 {{ currentBatchQueryTask.total_skipped }}
+          </el-tag>
+        </div>
+        <el-progress
+          :percentage="Math.round((currentBatchQueryTask.current_ip_index / IP_RANGE_MAX) * 100)"
+          :status="currentBatchQueryTask.status === 'completed' ? 'success' : currentBatchQueryTask.status === 'failed' ? 'exception' : ''"
+          :stroke-width="20"
+          style="margin: 15px 0"
+        />
+        <div class="batch-query-log">
+          <pre class="log-output">{{ processedBatchQueryLog }}</pre>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button
+            v-if="currentBatchQueryTask?.status === 'running'"
+            type="danger"
+            @click="stopBatchQuery"
+          >
+            停止查询
+          </el-button>
+          <el-button
+            type="primary"
+            @click="batchQueryDialogVisible = false"
+          >
+            关闭
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  ArrowDown, Monitor, Odometer, OfficeBuilding, Search, User, Setting, FolderOpened, Refresh, Loading, View, Key, Document, Download, RefreshRight, Tools
+  ArrowDown, Monitor, Odometer, OfficeBuilding, Search, User, Setting, FolderOpened, Refresh, Loading, View, Key, Document, Download, RefreshRight, Tools, Promotion
 } from '@element-plus/icons-vue'
-import { authAPI, serversAPI, preferencesAPI } from '@/api'
+import { authAPI, serversAPI, preferencesAPI, batchQueryAPI } from '@/api'
 import { io } from 'socket.io-client'
 
 const router = useRouter()
@@ -624,6 +708,8 @@ const currentIpList = ref([])
 const ipListCurrentPage = ref(1)
 const IP_LIST_PAGE_SIZE = 50
 const checkingIpStatus = ref(false)
+const BATCH_QUERY_POLL_INTERVAL = 3000  // Poll every 3 seconds
+const IP_RANGE_MAX = 255  // IP segment range: 1-255
 
 // 更新Cookie状态
 const updatingCookie = ref(false)
@@ -647,6 +733,13 @@ const savedFetchServerTasks = ref({})
 const logDialogVisible = ref(false)
 const logDialogTitle = ref('')
 const logDialogContent = ref('')
+
+// 一键查询相关
+const batchQueryTasks = ref({})
+const batchQueryDialogVisible = ref(false)
+const batchQueryDialogTitle = ref('')
+const currentBatchQuerySegment = ref('')
+let batchQueryPollTimer = null
 
 // 检测是否是tqdm进度条行
 // tqdm format: "prefix:  XX%|███████   | N/M [time<remaining, rate]"
@@ -1675,6 +1768,156 @@ const handleUpdateCookie = async () => {
   }
 }
 
+// ============ 一键查询 (Batch Query) ============
+
+// 获取当前一键查询任务的数据
+const currentBatchQueryTask = computed(() => {
+  const seg = currentBatchQuerySegment.value
+  if (!seg) return null
+  return batchQueryTasks.value[seg] || null
+})
+
+// 处理一键查询日志
+const processedBatchQueryLog = computed(() => {
+  return processLogContent(currentBatchQueryTask.value?.log_output || '')
+})
+
+// 获取一键查询按钮文字
+const getBatchQueryButtonText = (segment) => {
+  const task = batchQueryTasks.value[segment]
+  if (!task) return '一键查询'
+  if (task.status === 'running') return '查询中...'
+  if (task.status === 'completed') return '已完成'
+  if (task.status === 'stopped') return '已停止'
+  if (task.status === 'failed') return '已失败'
+  return '一键查询'
+}
+
+// 获取一键查询按钮类型
+const getBatchQueryButtonType = (segment) => {
+  const task = batchQueryTasks.value[segment]
+  if (!task) return 'success'
+  if (task.status === 'running') return 'warning'
+  if (task.status === 'completed') return 'info'
+  if (task.status === 'stopped') return 'info'
+  if (task.status === 'failed') return 'danger'
+  return 'success'
+}
+
+// 处理一键查询按钮点击
+const handleBatchQuery = async (segmentData) => {
+  const segment = segmentData.segment
+  const task = batchQueryTasks.value[segment]
+
+  // If task is running, show progress dialog
+  if (task && task.status === 'running') {
+    currentBatchQuerySegment.value = segment
+    batchQueryDialogTitle.value = `一键查询 - ${segment}.x`
+    batchQueryDialogVisible.value = true
+    startBatchQueryPolling(segment)
+    return
+  }
+
+  // If task is completed/stopped/failed, allow re-run or show status
+  if (task && (task.status === 'completed' || task.status === 'stopped' || task.status === 'failed')) {
+    currentBatchQuerySegment.value = segment
+    batchQueryDialogTitle.value = `一键查询 - ${segment}.x`
+    batchQueryDialogVisible.value = true
+
+    const statusText = { completed: '已完成', stopped: '已停止', failed: '已失败' }
+    // Allow user to see previous result; they can start new query from dialog
+    try {
+      await ElMessageBox.confirm(
+        `该IP段已有查询记录（${statusText[task.status] || task.status}）。\n是否重新开始一键查询？`,
+        '确认',
+        {
+          confirmButtonText: '重新查询',
+          cancelButtonText: '查看结果',
+          type: 'info'
+        }
+      )
+      // User confirmed: start new query
+      await startBatchQuery(segment)
+    } catch (_e) {
+      // User cancelled: just show current status
+    }
+    return
+  }
+
+  // Start new query
+  currentBatchQuerySegment.value = segment
+  batchQueryDialogTitle.value = `一键查询 - ${segment}.x`
+  batchQueryDialogVisible.value = true
+  await startBatchQuery(segment)
+}
+
+// 启动一键查询
+const startBatchQuery = async (segment) => {
+  try {
+    const response = await batchQueryAPI.start(segment)
+    batchQueryTasks.value[segment] = response.data
+    ElMessage.success(`开始一键查询 ${segment}.x`)
+    startBatchQueryPolling(segment)
+  } catch (error) {
+    const message = error.response?.data?.message || error.message || '启动失败'
+    ElMessage.error(`一键查询启动失败: ${message}`)
+  }
+}
+
+// 停止一键查询
+const stopBatchQuery = async () => {
+  const segment = currentBatchQuerySegment.value
+  if (!segment) return
+  try {
+    const response = await batchQueryAPI.stop(segment)
+    batchQueryTasks.value[segment] = response.data
+    stopBatchQueryPolling()
+    ElMessage.success('一键查询已停止')
+  } catch (error) {
+    const message = error.response?.data?.message || error.message || '停止失败'
+    ElMessage.error(`停止失败: ${message}`)
+  }
+}
+
+// 轮询一键查询进度
+const startBatchQueryPolling = (segment) => {
+  stopBatchQueryPolling()
+  batchQueryPollTimer = setInterval(async () => {
+    try {
+      const response = await batchQueryAPI.getStatus(segment)
+      batchQueryTasks.value[segment] = response.data
+      // Stop polling if task is no longer running
+      if (response.data.status !== 'running') {
+        stopBatchQueryPolling()
+      }
+    } catch (_e) {
+      // Ignore polling errors
+    }
+  }, BATCH_QUERY_POLL_INTERVAL)
+}
+
+const stopBatchQueryPolling = () => {
+  if (batchQueryPollTimer) {
+    clearInterval(batchQueryPollTimer)
+    batchQueryPollTimer = null
+  }
+}
+
+// 对话框关闭时停止轮询（避免后台无意义的API调用）
+const onBatchQueryDialogClose = () => {
+  stopBatchQueryPolling()
+}
+
+// 初始化一键查询任务状态
+const initBatchQueryTasks = async () => {
+  try {
+    const response = await batchQueryAPI.getTasks()
+    batchQueryTasks.value = response.data || {}
+  } catch (_e) {
+    batchQueryTasks.value = {}
+  }
+}
+
 // 加载服务器数据
 const loadServers = async () => {
   loading.value = true
@@ -1763,6 +2006,7 @@ onMounted(async () => {
   await initIpCheckStatus()
   await initIpIdResults()
   await initFetchServerTasks()
+  await initBatchQueryTasks()
   await loadServers()
 })
 
@@ -1780,6 +2024,8 @@ onUnmounted(() => {
     subscribeSocket.disconnect()
     subscribeSocket = null
   }
+  // 清理一键查询轮询
+  stopBatchQueryPolling()
 })
 
 const handleMenuSelect = (index) => {
@@ -2205,5 +2451,29 @@ const handleChangePassword = async () => {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+/* 一键查询相关样式 */
+.segment-operation-buttons {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.batch-query-content {
+  padding: 0;
+}
+
+.batch-query-stats {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.batch-query-log {
+  max-height: 400px;
+  overflow: auto;
+  margin-top: 15px;
 }
 </style>

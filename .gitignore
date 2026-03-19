@@ -68,6 +68,9 @@ coverage.xml
 # Docker
 .docker/
 
+# Python script generated files
+backend/Python/ip.txt
+
 # Server files - keep directory but ignore actual server files
 server_files/*.txt
 server_files/*.json
