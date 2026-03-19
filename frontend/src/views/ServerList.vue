@@ -255,6 +255,22 @@
                     >
                       ✗ {{ segment.offlineCount }}
                     </el-tag>
+                    <el-tag
+                      v-if="segment.batchOnlineCount > 0"
+                      color="#10b981"
+                      size="default"
+                      effect="dark"
+                    >
+                      查询 {{ segment.batchOnlineCount }}
+                    </el-tag>
+                    <el-tag
+                      v-if="segment.batchErrorCount > 0"
+                      color="#f43f5e"
+                      size="default"
+                      effect="dark"
+                    >
+                      查询✗ {{ segment.batchErrorCount }}
+                    </el-tag>
                   </div>
                   <!-- 显示IP段备注信息 -->
                   <div
@@ -1990,20 +2006,24 @@ const getUpdatedTimestamp = (server) => {
 }
 
 // Computed counts for filter buttons
-// Helper function to check if a server is "normal" (root user + online + no error)
-const isNormalServer = (server) => {
-  return server.username === 'root' && server.status === 'online' && !server.error_type
+// Helper function to check if a server is from batch query (一键查询)
+const isBatchServer = (server) => {
+  return server.source === 'batch_online' || server.source === 'batch_error'
 }
-// 正常: root用户 + 在线 + 无错误
+// Helper function to check if a server is "normal" (root user + online + no error, excluding batch query servers)
+const isNormalServer = (server) => {
+  return server.username === 'root' && server.status === 'online' && !server.error_type && !isBatchServer(server)
+}
+// 正常: root用户 + 在线 + 无错误（排除一键查询服务器）
 const normalCount = computed(() => servers.value.filter(isNormalServer).length)
-// 离线 (排除Administrator用户)
-const offlineCount = computed(() => servers.value.filter(s => s.status === 'offline' && s.username !== 'Administrator').length)
-// 未知
-const unknownCount = computed(() => servers.value.filter(s => s.status === 'unknown').length)
-// 错误: 在线且有error_type的 (排除Administrator用户和离线的服务器)
-const errorCount = computed(() => servers.value.filter(s => s.status === 'online' && s.error_type && s.username !== 'Administrator').length)
-// 电脑 (Windows RDP) - 包含Administrator用户的错误和离线状态
-const computerCount = computed(() => servers.value.filter(s => s.port === RDP_PORT).length)
+// 离线 (排除Administrator用户和一键查询服务器)
+const offlineCount = computed(() => servers.value.filter(s => s.status === 'offline' && s.username !== 'Administrator' && !isBatchServer(s)).length)
+// 未知（排除一键查询服务器）
+const unknownCount = computed(() => servers.value.filter(s => s.status === 'unknown' && !isBatchServer(s)).length)
+// 错误: 在线且有error_type的 (排除Administrator用户、离线的服务器和一键查询服务器)
+const errorCount = computed(() => servers.value.filter(s => s.status === 'online' && s.error_type && s.username !== 'Administrator' && !isBatchServer(s)).length)
+// 电脑 (Windows RDP) - 包含Administrator用户的错误和离线状态（排除一键查询服务器）
+const computerCount = computed(() => servers.value.filter(s => s.port === RDP_PORT && !isBatchServer(s)).length)
 // 一键查询在线
 const batchOnlineCount = computed(() => servers.value.filter(s => s.source === 'batch_online').length)
 // 一键查询错误
@@ -2015,23 +2035,24 @@ const showFilteredServersDialog = (filterType) => {
   let title = ''
   
   if (filterType === 'normal') {
-    // 正常: root用户 + 在线 + 无错误
+    // 正常: root用户 + 在线 + 无错误（排除一键查询服务器）
     result = result.filter(isNormalServer)
     title = '正常服务器'
   } else if (filterType === 'offline') {
-    // 离线服务器：排除Administrator用户
-    result = result.filter(server => server.status === 'offline' && server.username !== 'Administrator')
+    // 离线服务器：排除Administrator用户和一键查询服务器
+    result = result.filter(server => server.status === 'offline' && server.username !== 'Administrator' && !isBatchServer(server))
     title = '离线服务器'
   } else if (filterType === 'unknown') {
-    result = result.filter(server => server.status === 'unknown')
+    // 未知状态服务器（排除一键查询服务器）
+    result = result.filter(server => server.status === 'unknown' && !isBatchServer(server))
     title = '未知状态服务器'
   } else if (filterType === 'error') {
-    // 错误服务器：在线但有error_type的（排除Administrator用户和离线的服务器）
-    result = result.filter(server => server.status === 'online' && server.error_type && server.username !== 'Administrator')
+    // 错误服务器：在线但有error_type的（排除Administrator用户、离线的服务器和一键查询服务器）
+    result = result.filter(server => server.status === 'online' && server.error_type && server.username !== 'Administrator' && !isBatchServer(server))
     title = '错误服务器'
   } else if (filterType === 'computer') {
-    // 电脑对话框：显示所有Windows RDP服务器（包含Administrator的错误和离线状态）
-    result = result.filter(server => server.port === RDP_PORT)
+    // 电脑对话框：显示所有Windows RDP服务器（包含Administrator的错误和离线状态，排除一键查询服务器）
+    result = result.filter(server => server.port === RDP_PORT && !isBatchServer(server))
     title = '电脑 (Windows RDP)'
   } else if (filterType === 'batch_online') {
     result = result.filter(server => server.source === 'batch_online')
@@ -2134,15 +2155,24 @@ const groupedServers = computed(() => {
   // Convert to tree structure for el-table
   const result = []
   segmentMap.forEach((serverList, segment) => {
-    // Count online, offline, and error servers in single pass
+    // Count online, offline, error, and batch servers in single pass
     let onlineCount = 0
     let offlineCount = 0
     let errorCount = 0
+    let batchOnlineCount = 0
+    let batchErrorCount = 0
     const sortedServers = [...serverList].sort(
       (a, b) => getUpdatedTimestamp(b) - getUpdatedTimestamp(a)
     )
     for (const s of sortedServers) {
-      if (s.status === 'online') {
+      // 一键查询服务器单独计数，不计入常规分类
+      if (s.source === 'batch_online' || s.source === 'batch_error') {
+        if (s.source === 'batch_online') {
+          batchOnlineCount++
+        } else {
+          batchErrorCount++
+        }
+      } else if (s.status === 'online') {
         onlineCount++
         // Count servers that have error_type as having errors
         if (s.error_type) {
@@ -2161,6 +2191,8 @@ const groupedServers = computed(() => {
       onlineCount: onlineCount,
       offlineCount: offlineCount,
       errorCount: errorCount,
+      batchOnlineCount: batchOnlineCount,
+      batchErrorCount: batchErrorCount,
       hasChildren: true,
       latestUpdated: getUpdatedTimestamp(sortedServers[0]),
       servers: sortedServers.map(s => ({
