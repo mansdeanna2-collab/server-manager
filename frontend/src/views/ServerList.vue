@@ -255,6 +255,22 @@
                     >
                       ✗ {{ segment.offlineCount }}
                     </el-tag>
+                    <el-tag
+                      v-if="segment.batchOnlineCount > 0"
+                      color="#10b981"
+                      size="default"
+                      effect="dark"
+                    >
+                      查询 {{ segment.batchOnlineCount }}
+                    </el-tag>
+                    <el-tag
+                      v-if="segment.batchErrorCount > 0"
+                      color="#f43f5e"
+                      size="default"
+                      effect="dark"
+                    >
+                      查询✗ {{ segment.batchErrorCount }}
+                    </el-tag>
                   </div>
                   <!-- 显示IP段备注信息 -->
                   <div
@@ -2139,15 +2155,24 @@ const groupedServers = computed(() => {
   // Convert to tree structure for el-table
   const result = []
   segmentMap.forEach((serverList, segment) => {
-    // Count online, offline, and error servers in single pass
+    // Count online, offline, error, and batch servers in single pass
     let onlineCount = 0
     let offlineCount = 0
     let errorCount = 0
+    let batchOnlineCount = 0
+    let batchErrorCount = 0
     const sortedServers = [...serverList].sort(
       (a, b) => getUpdatedTimestamp(b) - getUpdatedTimestamp(a)
     )
     for (const s of sortedServers) {
-      if (s.status === 'online') {
+      // 一键查询服务器单独计数，不计入常规分类
+      if (s.source === 'batch_online' || s.source === 'batch_error') {
+        if (s.source === 'batch_online') {
+          batchOnlineCount++
+        } else {
+          batchErrorCount++
+        }
+      } else if (s.status === 'online') {
         onlineCount++
         // Count servers that have error_type as having errors
         if (s.error_type) {
@@ -2166,6 +2191,8 @@ const groupedServers = computed(() => {
       onlineCount: onlineCount,
       offlineCount: offlineCount,
       errorCount: errorCount,
+      batchOnlineCount: batchOnlineCount,
+      batchErrorCount: batchErrorCount,
       hasChildren: true,
       latestUpdated: getUpdatedTimestamp(sortedServers[0]),
       servers: sortedServers.map(s => ({

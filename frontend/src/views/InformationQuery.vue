@@ -192,7 +192,7 @@
                   </el-table-column>
                   <el-table-column
                     label="在线状态"
-                    width="200"
+                    width="340"
                     align="center"
                   >
                     <template #default="scope">
@@ -217,6 +217,22 @@
                           size="small"
                         >
                           未知 {{ scope.row.unknownCount }}
+                        </el-tag>
+                        <el-tag
+                          v-if="scope.row.batchOnlineCount > 0"
+                          color="#10b981"
+                          size="small"
+                          effect="dark"
+                        >
+                          查询在线 {{ scope.row.batchOnlineCount }}
+                        </el-tag>
+                        <el-tag
+                          v-if="scope.row.batchErrorCount > 0"
+                          color="#f43f5e"
+                          size="small"
+                          effect="dark"
+                        >
+                          查询错误 {{ scope.row.batchErrorCount }}
                         </el-tag>
                       </div>
                     </template>
@@ -413,7 +429,7 @@
           </el-table-column>
           <el-table-column
             label="状态"
-            width="240"
+            width="280"
             align="center"
           >
             <template #default="scope">
@@ -424,6 +440,27 @@
                 >
                   {{ scope.row.exists ? '已存在' : '未存在' }}
                 </el-tag>
+                <!-- Show source tag for batch query servers -->
+                <template v-if="scope.row.source === 'batch_online'">
+                  <span class="status-separator">/</span>
+                  <el-tag
+                    color="#10b981"
+                    size="small"
+                    effect="dark"
+                  >
+                    一键查询在线
+                  </el-tag>
+                </template>
+                <template v-else-if="scope.row.source === 'batch_error'">
+                  <span class="status-separator">/</span>
+                  <el-tag
+                    color="#f43f5e"
+                    size="small"
+                    effect="dark"
+                  >
+                    一键查询错误
+                  </el-tag>
+                </template>
                 <!-- Show online status for all IPs that have been checked -->
                 <template v-if="scope.row.portChecked || scope.row.pingChecked">
                   <span class="status-separator">/</span>
@@ -588,7 +625,7 @@
             @click="checkAllIpStatus"
           >
             <el-icon><Search /></el-icon>
-            检查状态
+            {{ allIpsChecked ? '重新检查状态' : '检查状态' }}
           </el-button>
           <el-button
             type="primary"
@@ -919,6 +956,8 @@ const ipSegments = computed(() => {
         onlineCount: 0,
         offlineCount: 0,
         unknownCount: 0,
+        batchOnlineCount: 0,
+        batchErrorCount: 0,
         note: segmentNotes.value[segment] || ''
       })
     }
@@ -926,7 +965,15 @@ const ipSegments = computed(() => {
     const segmentData = segmentMap.get(segment)
     segmentData.count++
     
-    if (server.status === 'online') {
+    // 一键查询服务器单独计数，不计入常规分类
+    const isBatch = server.source === 'batch_online' || server.source === 'batch_error'
+    if (isBatch) {
+      if (server.source === 'batch_online') {
+        segmentData.batchOnlineCount++
+      } else {
+        segmentData.batchErrorCount++
+      }
+    } else if (server.status === 'online') {
       segmentData.onlineCount++
     } else if (server.status === 'offline') {
       segmentData.offlineCount++
@@ -958,6 +1005,11 @@ const existingIpCount = computed(() => {
 
 const notExistingIpCount = computed(() => {
   return currentIpList.value.filter(ip => !ip.exists).length
+})
+
+// 是否所有IP都已检查过（用于区分"检查状态"和"重新检查"按钮文本）
+const allIpsChecked = computed(() => {
+  return currentIpList.value.length > 0 && currentIpList.value.every(item => item.portChecked && item.pingChecked)
 })
 
 // 分页后的IP列表数据
@@ -1003,6 +1055,7 @@ const showIpListDialog = async (segmentData) => {
         note: server.notes || '',
         onlineStatus: server.status || null,
         errorType: server.error_type || null,
+        source: server.source || null,
         checking: false,
         queryingId: false,
         fetchingServer: isTaskRunning,
@@ -1021,6 +1074,7 @@ const showIpListDialog = async (segmentData) => {
         note: NOT_EXISTS_NOTE,
         onlineStatus: null,
         errorType: null,
+        source: null,
         checking: false,
         queryingId: false,
         fetchingServer: isTaskRunning,
@@ -1706,6 +1760,24 @@ const subscribeToRunningTasks = (segment) => {
 
 // 检查所有IP的状态
 const checkAllIpStatus = async () => {
+  // 如果所有IP都已检查过，弹出确认对话框
+  if (allIpsChecked.value) {
+    try {
+      await ElMessageBox.confirm(
+        `所有 ${currentIpList.value.length} 个IP都已检查过。确定要重新检查所有IP的状态吗？`,
+        '确认重新检查',
+        {
+          confirmButtonText: '重新检查',
+          cancelButtonText: '取消',
+          type: 'info'
+        }
+      )
+    } catch (_e) {
+      // 用户取消
+      return
+    }
+  }
+
   checkingIpStatus.value = true
   
   // 检查所有IP的状态（包括已检查过的IP，允许重新检查以更新状态）
