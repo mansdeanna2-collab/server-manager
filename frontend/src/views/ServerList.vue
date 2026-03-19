@@ -719,226 +719,477 @@
     >
       <div v-if="filteredDialogServers.length > 0">
         <div class="segment-header">
-          <span class="segment-count">共 {{ filteredDialogServers.length }} 台服务器</span>
-          <el-button
-            v-if="filteredDialogType === 'normal'"
-            type="success"
-            size="small"
-            :loading="batchGettingSystemInfo"
-            @click="batchGetSystemInfo"
-          >
-            <el-icon><Cpu /></el-icon>
-            一键获取系统信息
-          </el-button>
+          <span class="segment-count">共 {{ filteredDialogServers.length }} 台服务器<template v-if="isBatchDialogType">，{{ groupedBatchServers.length }} 个IP段</template></span>
+          <div class="segment-header-actions">
+            <el-button
+              v-if="isBatchDialogType"
+              size="small"
+              @click="toggleAllBatchSegments"
+            >
+              <el-icon><FolderOpened v-if="allBatchSegmentsExpanded" /><Folder v-else /></el-icon>
+              {{ allBatchSegmentsExpanded ? '全部收起' : '全部展开' }}
+            </el-button>
+            <el-button
+              v-if="filteredDialogType === 'normal'"
+              type="success"
+              size="small"
+              :loading="batchGettingSystemInfo"
+              @click="batchGetSystemInfo"
+            >
+              <el-icon><Cpu /></el-icon>
+              一键获取系统信息
+            </el-button>
+          </div>
         </div>
-        <el-table
-          :data="paginatedFilteredServers"
-          style="width: 100%"
-          stripe
-          :row-class-name="getRowClassName"
+        <!-- 一键查询：按IP段分组显示 -->
+        <div
+          v-if="isBatchDialogType"
+          class="batch-segment-groups"
         >
-          <el-table-column
-            label="IP地址"
-            width="160"
+          <div
+            v-for="group in groupedBatchServers"
+            :key="group.segment"
+            class="batch-segment-group"
           >
-            <template #default="scope">
-              <div class="ip-cell">
+            <div
+              class="batch-segment-group-header"
+              role="button"
+              tabindex="0"
+              @click="toggleBatchSegment(group.segment)"
+              @keydown.enter="toggleBatchSegment(group.segment)"
+              @keydown.space.prevent="toggleBatchSegment(group.segment)"
+            >
+              <div class="batch-segment-group-left">
                 <el-icon
-                  v-if="isServerFavorited(scope.row.id)"
-                  class="favorite-star-icon"
+                  class="batch-segment-arrow"
+                  :class="{ 'is-expanded': isBatchSegmentExpanded(group.segment) }"
                 >
-                  <Star />
+                  <ArrowDown />
                 </el-icon>
-                <span class="ip-text">{{ scope.row.ip_address }}</span>
-                <span class="updated-time">
-                  更新时间：{{ formatDate(getLastUpdateTime(scope.row)) }}
-                </span>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column
-            label="端口 / 配置"
-            width="160"
-          >
-            <template #default="scope">
-              <div class="port-cell">
-                <div class="port-row">
-                  <el-tag
-                    :type="getPortTagType(scope.row.port)"
-                    size="small"
-                    effect="dark"
-                    round
-                  >
-                    {{ getPortTypeIcon(scope.row.port) }} {{ scope.row.port }}
-                  </el-tag>
-                </div>
-                <div
-                  v-if="getServerSpecs(scope.row)"
-                  class="specs-row"
+                <span class="batch-segment-name">{{ group.segment }}.x</span>
+                <el-tag
+                  :color="filteredDialogType === 'batch_online' ? '#10b981' : '#f43f5e'"
+                  size="small"
+                  effect="dark"
                 >
-                  <el-tag
-                    size="small"
-                    effect="plain"
-                    type="info"
-                    class="specs-tag"
-                  >
-                    💻 {{ getServerSpecs(scope.row) }}
-                  </el-tag>
-                </div>
+                  {{ group.count }} 台
+                </el-tag>
               </div>
-            </template>
-          </el-table-column>
-          <el-table-column
-            prop="username"
-            label="用户名"
-            width="100"
-          />
-          <el-table-column
-            label="状态"
-            width="100"
-          >
-            <template #default="scope">
-              <StatusBadge
-                :status="scope.row.status"
-                :detail="scope.row.checkDetail"
-                :error-type="scope.row.error_type"
-                size="small"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column
-            prop="os_info"
-            label="系统信息"
-            min-width="140"
-          >
-            <template #default="scope">
-              <span v-if="scope.row.os_info">
-                {{ getOsIcon(scope.row.os_info) }} {{ scope.row.os_info }}
-              </span>
-              <span
-                v-else
-                class="no-info"
-              >-</span>
-            </template>
-          </el-table-column>
-          <el-table-column
-            prop="notes"
-            label="备注"
-            min-width="150"
-          >
-            <template #default="scope">
-              <div
-                class="editable-note"
-                role="button"
-                tabindex="0"
-                @click="editServerNote(scope.row)"
-                @keydown.enter="editServerNote(scope.row)"
-                @keydown.space.prevent="editServerNote(scope.row)"
+            </div>
+            <div
+              v-show="isBatchSegmentExpanded(group.segment)"
+              class="batch-segment-group-body"
+            >
+              <el-table
+                :data="group.servers"
+                style="width: 100%"
+                stripe
+                :row-class-name="getRowClassName"
               >
-                <span
-                  v-if="scope.row.notes"
-                  class="notes-text"
-                >{{ scope.row.notes }}</span>
+                <el-table-column
+                  label="IP地址"
+                  width="160"
+                >
+                  <template #default="scope">
+                    <div class="ip-cell">
+                      <el-icon
+                        v-if="isServerFavorited(scope.row.id)"
+                        class="favorite-star-icon"
+                      >
+                        <Star />
+                      </el-icon>
+                      <span class="ip-text">{{ scope.row.ip_address }}</span>
+                      <span class="updated-time">
+                        更新时间：{{ formatDate(getLastUpdateTime(scope.row)) }}
+                      </span>
+                    </div>
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  label="端口 / 配置"
+                  width="160"
+                >
+                  <template #default="scope">
+                    <div class="port-cell">
+                      <div class="port-row">
+                        <el-tag
+                          :type="getPortTagType(scope.row.port)"
+                          size="small"
+                          effect="dark"
+                          round
+                        >
+                          {{ getPortTypeIcon(scope.row.port) }} {{ scope.row.port }}
+                        </el-tag>
+                      </div>
+                      <div
+                        v-if="getServerSpecs(scope.row)"
+                        class="specs-row"
+                      >
+                        <el-tag
+                          size="small"
+                          effect="plain"
+                          type="info"
+                          class="specs-tag"
+                        >
+                          💻 {{ getServerSpecs(scope.row) }}
+                        </el-tag>
+                      </div>
+                    </div>
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  prop="username"
+                  label="用户名"
+                  width="100"
+                />
+                <el-table-column
+                  label="状态"
+                  width="100"
+                >
+                  <template #default="scope">
+                    <StatusBadge
+                      :status="scope.row.status"
+                      :detail="scope.row.checkDetail"
+                      :error-type="scope.row.error_type"
+                      size="small"
+                    />
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  prop="os_info"
+                  label="系统信息"
+                  min-width="140"
+                >
+                  <template #default="scope">
+                    <span v-if="scope.row.os_info">
+                      {{ getOsIcon(scope.row.os_info) }} {{ scope.row.os_info }}
+                    </span>
+                    <span
+                      v-else
+                      class="no-info"
+                    >-</span>
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  prop="notes"
+                  label="备注"
+                  min-width="150"
+                >
+                  <template #default="scope">
+                    <div
+                      class="editable-note"
+                      role="button"
+                      tabindex="0"
+                      @click="editServerNote(scope.row)"
+                      @keydown.enter="editServerNote(scope.row)"
+                      @keydown.space.prevent="editServerNote(scope.row)"
+                    >
+                      <span
+                        v-if="scope.row.notes"
+                        class="notes-text"
+                      >{{ scope.row.notes }}</span>
+                      <span
+                        v-else
+                        class="no-info clickable"
+                      >点击添加备注</span>
+                      <el-icon class="edit-note-icon">
+                        <EditPen />
+                      </el-icon>
+                    </div>
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  label="操作"
+                  width="400"
+                  fixed="right"
+                >
+                  <template #default="scope">
+                    <div class="action-buttons">
+                      <el-tooltip
+                        :content="isServerFavorited(scope.row.id) ? '取消收藏' : '收藏'"
+                        placement="top"
+                      >
+                        <el-button
+                          size="small"
+                          :class="{ 'is-favorited-btn': isServerFavorited(scope.row.id) }"
+                          circle
+                          @click="toggleServerFavorite(scope.row)"
+                        >
+                          <el-icon><Star /></el-icon>
+                        </el-button>
+                      </el-tooltip>
+                      <el-tooltip
+                        v-if="scope.row.port === RDP_PORT"
+                        content="下载RDP文件"
+                        placement="top"
+                      >
+                        <el-button
+                          size="small"
+                          type="primary"
+                          @click="downloadRdpFile(scope.row)"
+                        >
+                          <el-icon><Download /></el-icon>
+                          RDP
+                        </el-button>
+                      </el-tooltip>
+                      <el-button
+                        size="small"
+                        type="success"
+                        @click="openTerminal(scope.row)"
+                      >
+                        <el-icon><Connection /></el-icon>
+                        连接
+                      </el-button>
+                      <el-button
+                        size="small"
+                        type="warning"
+                        :loading="scope.row.checking"
+                        @click="checkServer(scope.row)"
+                      >
+                        <el-icon><Search /></el-icon>
+                        检测
+                      </el-button>
+                      <el-button
+                        size="small"
+                        @click="viewServer(scope.row)"
+                      >
+                        <el-icon><View /></el-icon>
+                        详情
+                      </el-button>
+                      <el-button
+                        size="small"
+                        type="primary"
+                        @click="editServer(scope.row)"
+                      >
+                        <el-icon><Edit /></el-icon>
+                        编辑
+                      </el-button>
+                      <el-button
+                        size="small"
+                        type="danger"
+                        @click="deleteServer(scope.row)"
+                      >
+                        <el-icon><Delete /></el-icon>
+                        删除
+                      </el-button>
+                    </div>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </div>
+        </div>
+        <!-- 其他类型：平铺显示 -->
+        <template v-else>
+          <el-table
+            :data="paginatedFilteredServers"
+            style="width: 100%"
+            stripe
+            :row-class-name="getRowClassName"
+          >
+            <el-table-column
+              label="IP地址"
+              width="160"
+            >
+              <template #default="scope">
+                <div class="ip-cell">
+                  <el-icon
+                    v-if="isServerFavorited(scope.row.id)"
+                    class="favorite-star-icon"
+                  >
+                    <Star />
+                  </el-icon>
+                  <span class="ip-text">{{ scope.row.ip_address }}</span>
+                  <span class="updated-time">
+                    更新时间：{{ formatDate(getLastUpdateTime(scope.row)) }}
+                  </span>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column
+              label="端口 / 配置"
+              width="160"
+            >
+              <template #default="scope">
+                <div class="port-cell">
+                  <div class="port-row">
+                    <el-tag
+                      :type="getPortTagType(scope.row.port)"
+                      size="small"
+                      effect="dark"
+                      round
+                    >
+                      {{ getPortTypeIcon(scope.row.port) }} {{ scope.row.port }}
+                    </el-tag>
+                  </div>
+                  <div
+                    v-if="getServerSpecs(scope.row)"
+                    class="specs-row"
+                  >
+                    <el-tag
+                      size="small"
+                      effect="plain"
+                      type="info"
+                      class="specs-tag"
+                    >
+                      💻 {{ getServerSpecs(scope.row) }}
+                    </el-tag>
+                  </div>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="username"
+              label="用户名"
+              width="100"
+            />
+            <el-table-column
+              label="状态"
+              width="100"
+            >
+              <template #default="scope">
+                <StatusBadge
+                  :status="scope.row.status"
+                  :detail="scope.row.checkDetail"
+                  :error-type="scope.row.error_type"
+                  size="small"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="os_info"
+              label="系统信息"
+              min-width="140"
+            >
+              <template #default="scope">
+                <span v-if="scope.row.os_info">
+                  {{ getOsIcon(scope.row.os_info) }} {{ scope.row.os_info }}
+                </span>
                 <span
                   v-else
-                  class="no-info clickable"
-                >点击添加备注</span>
-                <el-icon class="edit-note-icon">
-                  <EditPen />
-                </el-icon>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column
-            label="操作"
-            :width="filteredDialogType === 'computer' ? 460 : 400"
-            fixed="right"
-          >
-            <template #default="scope">
-              <div class="action-buttons">
-                <el-tooltip
-                  :content="isServerFavorited(scope.row.id) ? '取消收藏' : '收藏'"
-                  placement="top"
+                  class="no-info"
+                >-</span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="notes"
+              label="备注"
+              min-width="150"
+            >
+              <template #default="scope">
+                <div
+                  class="editable-note"
+                  role="button"
+                  tabindex="0"
+                  @click="editServerNote(scope.row)"
+                  @keydown.enter="editServerNote(scope.row)"
+                  @keydown.space.prevent="editServerNote(scope.row)"
                 >
+                  <span
+                    v-if="scope.row.notes"
+                    class="notes-text"
+                  >{{ scope.row.notes }}</span>
+                  <span
+                    v-else
+                    class="no-info clickable"
+                  >点击添加备注</span>
+                  <el-icon class="edit-note-icon">
+                    <EditPen />
+                  </el-icon>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column
+              label="操作"
+              :width="filteredDialogType === 'computer' ? 460 : 400"
+              fixed="right"
+            >
+              <template #default="scope">
+                <div class="action-buttons">
+                  <el-tooltip
+                    :content="isServerFavorited(scope.row.id) ? '取消收藏' : '收藏'"
+                    placement="top"
+                  >
+                    <el-button
+                      size="small"
+                      :class="{ 'is-favorited-btn': isServerFavorited(scope.row.id) }"
+                      circle
+                      @click="toggleServerFavorite(scope.row)"
+                    >
+                      <el-icon><Star /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip
+                    v-if="scope.row.port === RDP_PORT"
+                    content="下载RDP文件"
+                    placement="top"
+                  >
+                    <el-button
+                      size="small"
+                      type="primary"
+                      @click="downloadRdpFile(scope.row)"
+                    >
+                      <el-icon><Download /></el-icon>
+                      RDP
+                    </el-button>
+                  </el-tooltip>
                   <el-button
                     size="small"
-                    :class="{ 'is-favorited-btn': isServerFavorited(scope.row.id) }"
-                    circle
-                    @click="toggleServerFavorite(scope.row)"
+                    type="success"
+                    @click="openTerminal(scope.row)"
                   >
-                    <el-icon><Star /></el-icon>
+                    <el-icon><Connection /></el-icon>
+                    连接
                   </el-button>
-                </el-tooltip>
-                <el-tooltip
-                  v-if="scope.row.port === RDP_PORT"
-                  content="下载RDP文件"
-                  placement="top"
-                >
+                  <el-button
+                    size="small"
+                    type="warning"
+                    :loading="scope.row.checking"
+                    @click="checkServer(scope.row)"
+                  >
+                    <el-icon><Search /></el-icon>
+                    检测
+                  </el-button>
+                  <el-button
+                    size="small"
+                    @click="viewServer(scope.row)"
+                  >
+                    <el-icon><View /></el-icon>
+                    详情
+                  </el-button>
                   <el-button
                     size="small"
                     type="primary"
-                    @click="downloadRdpFile(scope.row)"
+                    @click="editServer(scope.row)"
                   >
-                    <el-icon><Download /></el-icon>
-                    RDP
+                    <el-icon><Edit /></el-icon>
+                    编辑
                   </el-button>
-                </el-tooltip>
-                <el-button
-                  size="small"
-                  type="success"
-                  @click="openTerminal(scope.row)"
-                >
-                  <el-icon><Connection /></el-icon>
-                  连接
-                </el-button>
-                <el-button
-                  size="small"
-                  type="warning"
-                  :loading="scope.row.checking"
-                  @click="checkServer(scope.row)"
-                >
-                  <el-icon><Search /></el-icon>
-                  检测
-                </el-button>
-                <el-button
-                  size="small"
-                  @click="viewServer(scope.row)"
-                >
-                  <el-icon><View /></el-icon>
-                  详情
-                </el-button>
-                <el-button
-                  size="small"
-                  type="primary"
-                  @click="editServer(scope.row)"
-                >
-                  <el-icon><Edit /></el-icon>
-                  编辑
-                </el-button>
-                <el-button
-                  size="small"
-                  type="danger"
-                  @click="deleteServer(scope.row)"
-                >
-                  <el-icon><Delete /></el-icon>
-                  删除
-                </el-button>
-              </div>
-            </template>
-          </el-table-column>
-        </el-table>
-        <div
-          v-if="filteredDialogServers.length > PAGE_SIZE"
-          class="pagination-container"
-        >
-          <el-pagination
-            v-model:current-page="filteredDialogCurrentPage"
-            :page-size="PAGE_SIZE"
-            :total="filteredDialogServers.length"
-            layout="prev, pager, next"
-            background
-          />
-        </div>
+                  <el-button
+                    size="small"
+                    type="danger"
+                    @click="deleteServer(scope.row)"
+                  >
+                    <el-icon><Delete /></el-icon>
+                    删除
+                  </el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div
+            v-if="filteredDialogServers.length > PAGE_SIZE"
+            class="pagination-container"
+          >
+            <el-pagination
+              v-model:current-page="filteredDialogCurrentPage"
+              :page-size="PAGE_SIZE"
+              :total="filteredDialogServers.length"
+              layout="prev, pager, next"
+              background
+            />
+          </div>
+        </template>
       </div>
       <el-empty
         v-else
@@ -1633,6 +1884,8 @@ const filteredDialogTitle = ref('')
 const filteredDialogServers = ref([])
 const filteredDialogType = ref('')
 const batchGettingSystemInfo = ref(false)
+const expandedBatchSegments = ref(new Set())
+const allBatchSegmentsExpanded = ref(true)
 const passwordDialogVisible = ref(false)
 const changingPassword = ref(false)
 const passwordFormRef = ref(null)
@@ -2117,6 +2370,15 @@ const showFilteredServersDialog = (filterType) => {
   
   filteredDialogTitle.value = title
   filteredDialogCurrentPage.value = 1
+  // 一键查询对话框：初始化展开所有IP段
+  if (filterType === 'batch_online' || filterType === 'batch_error') {
+    const segments = new Set()
+    filteredDialogServers.value.forEach(server => {
+      segments.add(getIpSegment(server.ip_address))
+    })
+    expandedBatchSegments.value = segments
+    allBatchSegmentsExpanded.value = true
+  }
   filteredDialogVisible.value = true
 }
 
@@ -2259,6 +2521,67 @@ const paginatedFilteredServers = computed(() => {
   const end = start + PAGE_SIZE
   return filteredDialogServers.value.slice(start, end)
 })
+
+// 一键查询按IP段分组
+const isBatchDialogType = computed(() => {
+  return filteredDialogType.value === 'batch_online' || filteredDialogType.value === 'batch_error'
+})
+
+const groupedBatchServers = computed(() => {
+  if (!isBatchDialogType.value) return []
+  const segmentMap = new Map()
+  filteredDialogServers.value.forEach(server => {
+    const segment = getIpSegment(server.ip_address)
+    if (!segmentMap.has(segment)) {
+      segmentMap.set(segment, [])
+    }
+    segmentMap.get(segment).push(server)
+  })
+  const result = []
+  segmentMap.forEach((serverList, segment) => {
+    const sortedServers = [...serverList].sort(compareIpAddresses)
+    result.push({
+      segment,
+      servers: sortedServers,
+      count: sortedServers.length
+    })
+  })
+  // Sort segments numerically
+  result.sort((a, b) => {
+    const partsA = a.segment.split('.').map(Number)
+    const partsB = b.segment.split('.').map(Number)
+    for (let i = 0; i < Math.min(partsA.length, partsB.length); i++) {
+      if (partsA[i] !== partsB[i]) return partsA[i] - partsB[i]
+    }
+    return partsA.length - partsB.length
+  })
+  return result
+})
+
+const isBatchSegmentExpanded = (segment) => {
+  return expandedBatchSegments.value.has(segment)
+}
+
+const toggleBatchSegment = (segment) => {
+  const newSet = new Set(expandedBatchSegments.value)
+  if (newSet.has(segment)) {
+    newSet.delete(segment)
+  } else {
+    newSet.add(segment)
+  }
+  expandedBatchSegments.value = newSet
+  allBatchSegmentsExpanded.value = newSet.size === groupedBatchServers.value.length
+}
+
+const toggleAllBatchSegments = () => {
+  if (allBatchSegmentsExpanded.value) {
+    expandedBatchSegments.value = new Set()
+    allBatchSegmentsExpanded.value = false
+  } else {
+    expandedBatchSegments.value = new Set(groupedBatchServers.value.map(g => g.segment))
+    allBatchSegmentsExpanded.value = true
+  }
+}
 
 onMounted(async () => {
   await initSegmentData()
@@ -4056,6 +4379,76 @@ const handleChangePassword = async () => {
 .filtered-dialog :deep(.el-dialog__body) {
   padding: 32px;
   background: linear-gradient(135deg, #ebf8ff 0%, #e6fffa 100%);
+}
+
+/* 一键查询IP段分组样式 */
+.segment-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.batch-segment-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.batch-segment-group {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: box-shadow 0.2s ease;
+}
+
+.batch-segment-group:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.batch-segment-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s ease;
+}
+
+.batch-segment-group-header:hover {
+  background: linear-gradient(135deg, #edf2f7 0%, #e2e8f0 100%);
+}
+
+.batch-segment-group-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.batch-segment-arrow {
+  font-size: 14px;
+  color: #718096;
+  transition: transform 0.3s ease;
+  transform: rotate(-90deg);
+}
+
+.batch-segment-arrow.is-expanded {
+  transform: rotate(0deg);
+}
+
+.batch-segment-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #2d3748;
+  font-family: 'SF Mono', 'Cascadia Code', 'Courier New', monospace;
+  letter-spacing: 0.3px;
+}
+
+.batch-segment-group-body {
+  border-top: 1px solid #e2e8f0;
 }
 
 /* Animations */
