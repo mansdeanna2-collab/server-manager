@@ -246,7 +246,7 @@
                   </el-table-column>
                   <el-table-column
                     label="操作"
-                    width="230"
+                    width="310"
                     align="center"
                   >
                     <template #default="scope">
@@ -259,15 +259,31 @@
                           <el-icon><View /></el-icon>
                           查看
                         </el-button>
+                        <template v-if="batchQueryTasks[scope.row.segment]?.status === 'running'">
+                          <el-button
+                            type="warning"
+                            size="small"
+                            @click="handleBatchQuery(scope.row)"
+                          >
+                            <el-icon><Odometer /></el-icon>
+                            {{ getBatchQueryProgressText(scope.row.segment) }}
+                          </el-button>
+                          <el-button
+                            type="danger"
+                            size="small"
+                            @click="stopBatchQueryFromRow(scope.row.segment)"
+                          >
+                            <el-icon><CircleClose /></el-icon>
+                            停止
+                          </el-button>
+                        </template>
                         <el-button
+                          v-else
                           :type="getBatchQueryButtonType(scope.row.segment)"
                           size="small"
-                          :loading="batchQueryTasks[scope.row.segment]?.status === 'running'"
                           @click="handleBatchQuery(scope.row)"
                         >
-                          <el-icon v-if="batchQueryTasks[scope.row.segment]?.status !== 'running'">
-                            <Promotion />
-                          </el-icon>
+                          <el-icon><Promotion /></el-icon>
                           {{ getBatchQueryButtonText(scope.row.segment) }}
                         </el-button>
                       </div>
@@ -684,7 +700,7 @@ import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  ArrowDown, Monitor, Odometer, OfficeBuilding, Search, User, Setting, FolderOpened, Refresh, Loading, View, Key, Document, Download, RefreshRight, Tools, Promotion
+  ArrowDown, Monitor, Odometer, OfficeBuilding, Search, User, Setting, FolderOpened, Refresh, Loading, View, Key, Document, Download, RefreshRight, Tools, Promotion, CircleClose
 } from '@element-plus/icons-vue'
 import { authAPI, serversAPI, preferencesAPI, batchQueryAPI } from '@/api'
 import { io } from 'socket.io-client'
@@ -740,6 +756,7 @@ const batchQueryDialogVisible = ref(false)
 const batchQueryDialogTitle = ref('')
 const currentBatchQuerySegment = ref('')
 let batchQueryPollTimer = null
+let batchQueryBackgroundPollTimer = null
 
 // 检测是否是tqdm进度条行
 // tqdm format: "prefix:  XX%|███████   | N/M [time<remaining, rate]"
@@ -1804,6 +1821,14 @@ const getBatchQueryButtonType = (segment) => {
   return 'success'
 }
 
+// 获取运行中查询的进度文本（显示百分比）
+const getBatchQueryProgressText = (segment) => {
+  const task = batchQueryTasks.value[segment]
+  if (!task || task.status !== 'running') return '查看进度'
+  const pct = Math.round((task.current_ip_index / IP_RANGE_MAX) * 100)
+  return `进度 ${pct}%`
+}
+
 // 处理一键查询按钮点击
 const handleBatchQuery = async (segmentData) => {
   const segment = segmentData.segment
@@ -1858,6 +1883,7 @@ const startBatchQuery = async (segment) => {
     batchQueryTasks.value[segment] = response.data
     ElMessage.success(`开始一键查询 ${segment}.x`)
     startBatchQueryPolling(segment)
+    startBatchQueryBackgroundPolling()
   } catch (error) {
     const message = error.response?.data?.message || error.message || '启动失败'
     ElMessage.error(`一键查询启动失败: ${message}`)
@@ -1865,8 +1891,8 @@ const startBatchQuery = async (segment) => {
 }
 
 // 停止一键查询
-const stopBatchQuery = async () => {
-  const segment = currentBatchQuerySegment.value
+const stopBatchQuery = async (targetSegment) => {
+  const segment = targetSegment || currentBatchQuerySegment.value
   if (!segment) return
   try {
     const response = await batchQueryAPI.stop(segment)
@@ -1876,6 +1902,25 @@ const stopBatchQuery = async () => {
   } catch (error) {
     const message = error.response?.data?.message || error.message || '停止失败'
     ElMessage.error(`停止失败: ${message}`)
+  }
+}
+
+// 从表格行直接停止一键查询（带确认）
+const stopBatchQueryFromRow = async (segment) => {
+  if (!segment) return
+  try {
+    await ElMessageBox.confirm(
+      '确定要停止当前一键查询吗？已查询的进度不会丢失。',
+      '确认停止',
+      {
+        confirmButtonText: '确定停止',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    await stopBatchQuery(segment)
+  } catch (_e) {
+    // User cancelled confirmation
   }
 }
 
@@ -1903,9 +1948,35 @@ const stopBatchQueryPolling = () => {
   }
 }
 
-// 对话框关闭时停止轮询（避免后台无意义的API调用）
+// 对话框关闭时停止对话框轮询（后台轮询继续运行以更新表格按钮进度）
 const onBatchQueryDialogClose = () => {
   stopBatchQueryPolling()
+}
+
+// 后台轮询：更新所有运行中任务的状态（用于表格按钮进度显示）
+const startBatchQueryBackgroundPolling = () => {
+  stopBatchQueryBackgroundPolling()
+  batchQueryBackgroundPollTimer = setInterval(async () => {
+    try {
+      const response = await batchQueryAPI.getTasks()
+      const tasks = response.data || {}
+      batchQueryTasks.value = tasks
+      // 如果没有运行中的任务，自动停止后台轮询
+      const hasRunning = Object.values(tasks).some(t => t.status === 'running')
+      if (!hasRunning) {
+        stopBatchQueryBackgroundPolling()
+      }
+    } catch (_e) {
+      // Ignore polling errors
+    }
+  }, BATCH_QUERY_POLL_INTERVAL)
+}
+
+const stopBatchQueryBackgroundPolling = () => {
+  if (batchQueryBackgroundPollTimer) {
+    clearInterval(batchQueryBackgroundPollTimer)
+    batchQueryBackgroundPollTimer = null
+  }
 }
 
 // 初始化一键查询任务状态
@@ -1913,6 +1984,11 @@ const initBatchQueryTasks = async () => {
   try {
     const response = await batchQueryAPI.getTasks()
     batchQueryTasks.value = response.data || {}
+    // 如果有运行中的任务，自动开启后台轮询以更新表格按钮进度
+    const hasRunning = Object.values(batchQueryTasks.value).some(t => t.status === 'running')
+    if (hasRunning) {
+      startBatchQueryBackgroundPolling()
+    }
   } catch (_e) {
     batchQueryTasks.value = {}
   }
@@ -2026,6 +2102,7 @@ onUnmounted(() => {
   }
   // 清理一键查询轮询
   stopBatchQueryPolling()
+  stopBatchQueryBackgroundPolling()
 })
 
 const handleMenuSelect = (index) => {
