@@ -1990,20 +1990,24 @@ const getUpdatedTimestamp = (server) => {
 }
 
 // Computed counts for filter buttons
-// Helper function to check if a server is "normal" (root user + online + no error)
-const isNormalServer = (server) => {
-  return server.username === 'root' && server.status === 'online' && !server.error_type
+// Helper function to check if a server is from batch query (一键查询)
+const isBatchServer = (server) => {
+  return server.source === 'batch_online' || server.source === 'batch_error'
 }
-// 正常: root用户 + 在线 + 无错误
+// Helper function to check if a server is "normal" (root user + online + no error, excluding batch query servers)
+const isNormalServer = (server) => {
+  return server.username === 'root' && server.status === 'online' && !server.error_type && !isBatchServer(server)
+}
+// 正常: root用户 + 在线 + 无错误（排除一键查询服务器）
 const normalCount = computed(() => servers.value.filter(isNormalServer).length)
-// 离线 (排除Administrator用户)
-const offlineCount = computed(() => servers.value.filter(s => s.status === 'offline' && s.username !== 'Administrator').length)
-// 未知
-const unknownCount = computed(() => servers.value.filter(s => s.status === 'unknown').length)
-// 错误: 在线且有error_type的 (排除Administrator用户和离线的服务器)
-const errorCount = computed(() => servers.value.filter(s => s.status === 'online' && s.error_type && s.username !== 'Administrator').length)
-// 电脑 (Windows RDP) - 包含Administrator用户的错误和离线状态
-const computerCount = computed(() => servers.value.filter(s => s.port === RDP_PORT).length)
+// 离线 (排除Administrator用户和一键查询服务器)
+const offlineCount = computed(() => servers.value.filter(s => s.status === 'offline' && s.username !== 'Administrator' && !isBatchServer(s)).length)
+// 未知（排除一键查询服务器）
+const unknownCount = computed(() => servers.value.filter(s => s.status === 'unknown' && !isBatchServer(s)).length)
+// 错误: 在线且有error_type的 (排除Administrator用户、离线的服务器和一键查询服务器)
+const errorCount = computed(() => servers.value.filter(s => s.status === 'online' && s.error_type && s.username !== 'Administrator' && !isBatchServer(s)).length)
+// 电脑 (Windows RDP) - 包含Administrator用户的错误和离线状态（排除一键查询服务器）
+const computerCount = computed(() => servers.value.filter(s => s.port === RDP_PORT && !isBatchServer(s)).length)
 // 一键查询在线
 const batchOnlineCount = computed(() => servers.value.filter(s => s.source === 'batch_online').length)
 // 一键查询错误
@@ -2015,23 +2019,24 @@ const showFilteredServersDialog = (filterType) => {
   let title = ''
   
   if (filterType === 'normal') {
-    // 正常: root用户 + 在线 + 无错误
+    // 正常: root用户 + 在线 + 无错误（排除一键查询服务器）
     result = result.filter(isNormalServer)
     title = '正常服务器'
   } else if (filterType === 'offline') {
-    // 离线服务器：排除Administrator用户
-    result = result.filter(server => server.status === 'offline' && server.username !== 'Administrator')
+    // 离线服务器：排除Administrator用户和一键查询服务器
+    result = result.filter(server => server.status === 'offline' && server.username !== 'Administrator' && !isBatchServer(server))
     title = '离线服务器'
   } else if (filterType === 'unknown') {
-    result = result.filter(server => server.status === 'unknown')
+    // 未知状态服务器（排除一键查询服务器）
+    result = result.filter(server => server.status === 'unknown' && !isBatchServer(server))
     title = '未知状态服务器'
   } else if (filterType === 'error') {
-    // 错误服务器：在线但有error_type的（排除Administrator用户和离线的服务器）
-    result = result.filter(server => server.status === 'online' && server.error_type && server.username !== 'Administrator')
+    // 错误服务器：在线但有error_type的（排除Administrator用户、离线的服务器和一键查询服务器）
+    result = result.filter(server => server.status === 'online' && server.error_type && server.username !== 'Administrator' && !isBatchServer(server))
     title = '错误服务器'
   } else if (filterType === 'computer') {
-    // 电脑对话框：显示所有Windows RDP服务器（包含Administrator的错误和离线状态）
-    result = result.filter(server => server.port === RDP_PORT)
+    // 电脑对话框：显示所有Windows RDP服务器（包含Administrator的错误和离线状态，排除一键查询服务器）
+    result = result.filter(server => server.port === RDP_PORT && !isBatchServer(server))
     title = '电脑 (Windows RDP)'
   } else if (filterType === 'batch_online') {
     result = result.filter(server => server.source === 'batch_online')

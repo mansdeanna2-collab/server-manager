@@ -1708,9 +1708,8 @@ const subscribeToRunningTasks = (segment) => {
 const checkAllIpStatus = async () => {
   checkingIpStatus.value = true
   
-  // 检查所有尚未完成检查的IP（无论是否存在于系统中）
-  // 如果ping或port未检查，则需要重新检查
-  const ipsToCheck = currentIpList.value.filter(item => !item.portChecked || !item.pingChecked)
+  // 检查所有IP的状态（包括已检查过的IP，允许重新检查以更新状态）
+  const ipsToCheck = [...currentIpList.value]
   
   // 设置所有IP为检查中状态
   ipsToCheck.forEach(item => {
