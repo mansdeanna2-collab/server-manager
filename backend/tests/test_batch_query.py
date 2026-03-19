@@ -417,3 +417,136 @@ class TestBatchQueryErrorHandling:
             _run_batch_query(app, app.test_user_id, '88.88.88')
 
         assert '88.88.88' not in _active_tasks
+
+
+class TestPort22Filtering:
+    """Tests for port 22 open check in batch query"""
+
+    def test_is_port_22_open_with_saved_data_true(self, app):
+        """Test _is_port_22_open returns True when IpCheckStatus has port_22=True"""
+        from routes.batch_query import _is_port_22_open
+        from models.user_preference import IpCheckStatus
+
+        with app.app_context():
+            check_status = IpCheckStatus(
+                user_id=app.test_user_id,
+                ip_address='10.0.0.1',
+                port_checked=True,
+                port_22=True
+            )
+            db.session.add(check_status)
+            db.session.commit()
+
+        result = _is_port_22_open(app, app.test_user_id, '10.0.0.1')
+        assert result is True
+
+    def test_is_port_22_open_with_saved_data_false(self, app):
+        """Test _is_port_22_open returns False when IpCheckStatus has port_22=False"""
+        from routes.batch_query import _is_port_22_open
+        from models.user_preference import IpCheckStatus
+
+        with app.app_context():
+            check_status = IpCheckStatus(
+                user_id=app.test_user_id,
+                ip_address='10.0.0.2',
+                port_checked=True,
+                port_22=False
+            )
+            db.session.add(check_status)
+            db.session.commit()
+
+        result = _is_port_22_open(app, app.test_user_id, '10.0.0.2')
+        assert result is False
+
+    def test_is_port_22_open_no_saved_data(self, app):
+        """Test _is_port_22_open returns False when no IpCheckStatus exists"""
+        from routes.batch_query import _is_port_22_open
+
+        result = _is_port_22_open(app, app.test_user_id, '10.0.0.3')
+        assert result is False
+
+    def test_is_port_22_open_not_checked_yet(self, app):
+        """Test _is_port_22_open returns False when port_checked is False"""
+        from routes.batch_query import _is_port_22_open
+        from models.user_preference import IpCheckStatus
+
+        with app.app_context():
+            check_status = IpCheckStatus(
+                user_id=app.test_user_id,
+                ip_address='10.0.0.4',
+                port_checked=False,
+                port_22=False
+            )
+            db.session.add(check_status)
+            db.session.commit()
+
+        result = _is_port_22_open(app, app.test_user_id, '10.0.0.4')
+        assert result is False
+
+    def test_batch_query_skips_ips_without_port_22(self, app):
+        """Test that batch query skips IPs where port 22 is not open"""
+        from routes.batch_query import _run_batch_query
+        from models.user_preference import IpCheckStatus
+
+        segment = '77.77.77'
+        with app.app_context():
+            # Create batch query task
+            task = BatchQueryTask(
+                user_id=app.test_user_id,
+                segment=segment,
+                status='running'
+            )
+            db.session.add(task)
+
+            # Add IpCheckStatus for a few IPs - only one with port 22 open
+            for i in range(1, 256):
+                ip = f'{segment}.{i}'
+                check_status = IpCheckStatus(
+                    user_id=app.test_user_id,
+                    ip_address=ip,
+                    port_checked=True,
+                    port_22=(i == 100),  # Only IP .100 has port 22 open
+                    ping_online=(i == 100)
+                )
+                db.session.add(check_status)
+            db.session.commit()
+
+        # Run batch query
+        _run_batch_query(app, app.test_user_id, segment)
+
+        with app.app_context():
+            task = BatchQueryTask.query.filter_by(
+                user_id=app.test_user_id, segment=segment
+            ).first()
+            assert task.status == 'completed'
+            # 254 IPs should be skipped (port 22 not open)
+            # 1 IP (.100) has port 22 open but id.py script won't exist,
+            # so it gets processed but no ID found
+            assert task.total_skipped == 254
+            assert task.total_processed == 1
+
+    def test_batch_query_all_skipped_when_no_check_data(self, app):
+        """Test that batch query skips all IPs when no port check data exists"""
+        from routes.batch_query import _run_batch_query
+
+        segment = '66.66.66'
+        with app.app_context():
+            task = BatchQueryTask(
+                user_id=app.test_user_id,
+                segment=segment,
+                status='running'
+            )
+            db.session.add(task)
+            db.session.commit()
+
+        # Run batch query without any IpCheckStatus data
+        _run_batch_query(app, app.test_user_id, segment)
+
+        with app.app_context():
+            task = BatchQueryTask.query.filter_by(
+                user_id=app.test_user_id, segment=segment
+            ).first()
+            assert task.status == 'completed'
+            # All 255 IPs should be skipped (no port check data)
+            assert task.total_skipped == 255
+            assert task.total_processed == 0

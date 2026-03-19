@@ -1,6 +1,10 @@
 """Background batch query for IP segments.
 
-Processes all IPs in a segment that are not yet existing/online with port 22 open:
+Processes IPs in a segment that satisfy both conditions:
+- Not already existing as an online server with port 22 open
+- Port 22 is detected as open (from saved IpCheckStatus data)
+
+For each qualifying IP, processes sequentially (one at a time):
 1. Query ID via id.py script
 2. Fetch server via mm.py script
 3. Check connectivity
@@ -329,6 +333,30 @@ def _should_skip_ip(app, ip_address):
     return False
 
 
+def _is_port_22_open(app, user_id, ip_address):
+    """Check if port 22 is open on the given IP address.
+
+    Checks saved IpCheckStatus from previous port scanning.
+    If no port check data exists, returns False (user should run port
+    checks on the InformationQuery page before starting a batch query).
+
+    Returns True if port 22 is confirmed open.
+    """
+    try:
+        with app.app_context():
+            from models.user_preference import IpCheckStatus
+
+            check_status = IpCheckStatus.query.filter_by(
+                user_id=user_id, ip_address=ip_address
+            ).first()
+            if check_status and check_status.port_checked:
+                return check_status.port_22
+    except Exception as e:
+        logger.error(f"Error checking IpCheckStatus for {ip_address}: {str(e)}")
+
+    return False
+
+
 def _is_task_stopped(app, user_id, segment):
     """Check if the task has been stopped by the user."""
     try:
@@ -348,12 +376,12 @@ def _is_task_stopped(app, user_id, segment):
 def _run_batch_query(app, user_id, segment):
     """Main batch query background task.
 
-    Iterates through all IPs in the segment (1-255), skipping those that
-    are already existing/online with port 22 open. For each remaining IP:
-    1. Check if cookie needs refreshing (every 2 hours)
-    2. Query ID via id.py
-    3. Fetch server via mm.py
-    4. Check connectivity and categorize
+    Iterates through all IPs in the segment (1-255). For each IP:
+    1. Skip if already exists as online server with port 22 (no errors)
+    2. Skip if port 22 is not open (from saved IpCheckStatus data)
+    3. Query ID via id.py (one IP at a time)
+    4. Fetch server via mm.py
+    5. Check connectivity and categorize
 
     Wrapped in a top-level try/except to ensure the task is always marked
     as failed if an unexpected error occurs (prevents stuck 'running' tasks).
@@ -423,8 +451,19 @@ def _run_batch_query_inner(app, user_id, segment):
             else:
                 _append_log(app, user_id, segment, 'Cookie刷新失败，继续执行')
 
-        # Check if IP should be skipped
+        # Check if IP should be skipped (already exists as online server with port 22)
         if _should_skip_ip(app, ip_address):
+            total_skipped += 1
+            _update_task_progress(
+                app, user_id, segment,
+                current_ip_index=i,
+                total_skipped=total_skipped
+            )
+            continue
+
+        # Check if port 22 is open (from saved check data or real-time check)
+        # Only process IPs where port 22 is confirmed open
+        if not _is_port_22_open(app, user_id, ip_address):
             total_skipped += 1
             _update_task_progress(
                 app, user_id, segment,
