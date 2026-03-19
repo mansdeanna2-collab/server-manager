@@ -403,7 +403,7 @@
             class="ip-list-filter-tag"
             @click="onIpListFilterChange('all')"
           >
-            全部 {{ currentIpList.length }}
+            全部 {{ totalIpCount }}
           </el-tag>
           <el-tag
             :class="{ 'ip-list-filter-active': ipListFilter === 'exists' }"
@@ -1038,6 +1038,10 @@ const paginatedSegments = computed(() => {
 })
 
 // IP列表统计
+const totalIpCount = computed(() => {
+  return currentIpList.value.length
+})
+
 const existingIpCount = computed(() => {
   return currentIpList.value.filter(ip => ip.exists).length
 })

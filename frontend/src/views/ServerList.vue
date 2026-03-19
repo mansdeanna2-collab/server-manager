@@ -2540,7 +2540,7 @@ const groupedBatchServers = computed(() => {
   const segmentMap = new Map()
   filteredDialogServers.value.forEach(server => {
     const segment = getIpSegment(server.ip_address)
-    if (!segment) return // 跳过无效IP
+    if (!segment) return // 跳过空IP段
     if (!segmentMap.has(segment)) {
       segmentMap.set(segment, [])
     }
@@ -2556,13 +2556,13 @@ const groupedBatchServers = computed(() => {
       note: getSegmentNote(segment)
     })
   })
-  // Sort segments numerically (NaN-safe)
+  // Sort segments numerically (NaN treated as -1, sorted to beginning)
   result.sort((a, b) => {
     const partsA = a.segment.split('.').map(Number)
     const partsB = b.segment.split('.').map(Number)
     for (let i = 0; i < Math.min(partsA.length, partsB.length); i++) {
-      const valA = isNaN(partsA[i]) ? 0 : partsA[i]
-      const valB = isNaN(partsB[i]) ? 0 : partsB[i]
+      const valA = isNaN(partsA[i]) ? -1 : partsA[i]
+      const valB = isNaN(partsB[i]) ? -1 : partsB[i]
       if (valA !== valB) return valA - valB
     }
     return partsA.length - partsB.length
