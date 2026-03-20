@@ -754,9 +754,11 @@
           <el-button
             v-if="currentBatchQueryTask?.status === 'running'"
             type="danger"
+            :loading="batchQueryStopping"
+            :disabled="batchQueryStopping"
             @click="stopBatchQuery"
           >
-            停止查询
+            {{ batchQueryStopping ? '正在停止...' : '停止查询' }}
           </el-button>
           <el-button
             type="primary"
@@ -831,6 +833,7 @@ const batchQueryTasks = ref({})
 const batchQueryDialogVisible = ref(false)
 const batchQueryDialogTitle = ref('')
 const currentBatchQuerySegment = ref('')
+const batchQueryStopping = ref(false)
 let batchQueryPollTimer = null
 let batchQueryBackgroundPollTimer = null
 let batchQueryPollErrorCount = 0
@@ -2039,34 +2042,55 @@ const STOP_RETRY_DELAY = 1000
 const stopBatchQuery = async (targetSegment) => {
   const segment = targetSegment || currentBatchQuerySegment.value
   if (!segment) return
+  if (batchQueryStopping.value) return // Prevent double-click
 
+  batchQueryStopping.value = true
   let lastError = null
-  for (let attempt = 0; attempt < STOP_MAX_RETRIES; attempt++) {
-    try {
-      const response = await batchQueryAPI.stop(segment)
-      batchQueryTasks.value[segment] = response.data
-      stopBatchQueryPolling()
-      ElMessage.success('一键查询已停止')
-      return
-    } catch (error) {
-      lastError = error
-      if (attempt < STOP_MAX_RETRIES - 1) {
-        await new Promise(resolve => setTimeout(resolve, STOP_RETRY_DELAY))
+  try {
+    for (let attempt = 0; attempt < STOP_MAX_RETRIES; attempt++) {
+      try {
+        const response = await batchQueryAPI.stop(segment)
+        batchQueryTasks.value[segment] = response.data
+        stopBatchQueryPolling()
+        ElMessage.success('一键查询已停止')
+        return
+      } catch (error) {
+        lastError = error
+        // Don't retry if task is already not running (400) or not found (404)
+        const status = error.response?.status
+        if (status === 400 || status === 404) {
+          // Task already stopped/completed/not found - refresh status
+          try {
+            const statusResponse = await batchQueryAPI.getStatus(segment)
+            batchQueryTasks.value[segment] = statusResponse.data
+          } catch (_e) {
+            // Ignore status fetch error
+          }
+          stopBatchQueryPolling()
+          const message = error.response?.data?.message || '任务已不在运行中'
+          ElMessage.info(message)
+          return
+        }
+        if (attempt < STOP_MAX_RETRIES - 1) {
+          await new Promise(resolve => setTimeout(resolve, STOP_RETRY_DELAY))
+        }
       }
     }
-  }
 
-  // All retries failed - update local state to allow UI to recover
-  const message = lastError?.response?.data?.message || lastError?.message || '停止失败'
-  ElMessage.error(`停止失败: ${message}，请稍后重试`)
-  // Force local status update so user can try again
-  if (batchQueryTasks.value[segment]) {
-    batchQueryTasks.value[segment] = {
-      ...batchQueryTasks.value[segment],
-      status: 'failed'
+    // All retries failed - update local state to allow UI to recover
+    const message = lastError?.response?.data?.message || lastError?.message || '停止失败'
+    ElMessage.error(`停止失败: ${message}，请稍后重试`)
+    // Force local status update so user can try again
+    if (batchQueryTasks.value[segment]) {
+      batchQueryTasks.value[segment] = {
+        ...batchQueryTasks.value[segment],
+        status: 'failed'
+      }
     }
+    stopBatchQueryPolling()
+  } finally {
+    batchQueryStopping.value = false
   }
-  stopBatchQueryPolling()
 }
 
 // 从表格行直接停止一键查询（带确认）
@@ -2122,6 +2146,7 @@ const stopBatchQueryPolling = () => {
 // 对话框关闭时停止对话框轮询（后台轮询继续运行以更新表格按钮进度）
 const onBatchQueryDialogClose = () => {
   stopBatchQueryPolling()
+  batchQueryStopping.value = false
 }
 
 // 后台轮询：更新所有运行中任务的状态（用于表格按钮进度显示）
@@ -2134,7 +2159,15 @@ const startBatchQueryBackgroundPolling = () => {
     try {
       const response = await batchQueryAPI.getTasks()
       const tasks = response.data || {}
-      batchQueryTasks.value = tasks
+      // Merge with existing tasks instead of replacing entirely,
+      // to avoid overwriting foreground polling updates for the active dialog
+      for (const [seg, taskData] of Object.entries(tasks)) {
+        // Only update if foreground polling is NOT active for this segment,
+        // or if the background data is more recent
+        if (seg !== currentBatchQuerySegment.value || !batchQueryPollTimer) {
+          batchQueryTasks.value[seg] = taskData
+        }
+      }
       batchQueryBgPollErrorCount = 0
       // 如果没有运行中的任务，自动停止后台轮询
       const hasRunning = Object.values(tasks).some(t => t.status === 'running')

@@ -58,6 +58,10 @@ STOP_CHECK_INTERVAL = 1.0
 DB_RETRY_COUNT = 3
 DB_RETRY_DELAY = 0.5
 
+# Maximum log output size in characters (~500KB) to prevent unbounded DB growth
+MAX_LOG_SIZE = 500000
+LOG_TRUNCATE_KEEP = 100000  # Keep last ~100KB when truncating
+
 
 def _get_stop_event(segment):
     """Get the stop event for a segment task."""
@@ -85,6 +89,14 @@ def _kill_current_process(segment):
                 task_info['process'].kill()
             except (OSError, ProcessLookupError):
                 pass
+
+
+def _clear_current_process(segment):
+    """Clear the current subprocess reference after script completes."""
+    with _active_tasks_lock:
+        task_info = _active_tasks.get(segment)
+        if task_info:
+            task_info['process'] = None
 
 
 def _read_subprocess_output(process, stop_event=None, timeout=300):
@@ -149,7 +161,10 @@ def _read_subprocess_output(process, stop_event=None, timeout=300):
 
 
 def _append_log(app, user_id, segment, message):
-    """Append a log line to the batch query task in the database."""
+    """Append a log line to the batch query task in the database.
+
+    Includes log truncation to prevent unbounded growth.
+    """
     try:
         with app.app_context():
             from models import db
@@ -160,11 +175,20 @@ def _append_log(app, user_id, segment, message):
             ).first()
             if task:
                 current_log = task.log_output or ''
-                task.log_output = current_log + message + '\n'
+                new_log = current_log + message + '\n'
+                # Truncate if log exceeds maximum size
+                if len(new_log) > MAX_LOG_SIZE:
+                    new_log = '[...日志已截断...]\n' + new_log[-LOG_TRUNCATE_KEEP:]
+                task.log_output = new_log
                 task.updated_at = china_now()
                 db.session.commit()
     except Exception as e:
         logger.error(f"Error appending log: {str(e)}")
+        try:
+            from models import db
+            db.session.rollback()
+        except Exception:
+            pass
 
 
 def _update_task_progress(app, user_id, segment, **kwargs):
@@ -185,6 +209,11 @@ def _update_task_progress(app, user_id, segment, **kwargs):
                 db.session.commit()
     except Exception as e:
         logger.error(f"Error updating task progress: {str(e)}")
+        try:
+            from models import db
+            db.session.rollback()
+        except Exception:
+            pass
 
 
 def _refresh_cookie(app, python_dir):
@@ -413,14 +442,20 @@ def _should_skip_ip(app, ip_address):
     """Check if an IP should be skipped (already exists and is online with port 22).
 
     Returns True if the IP should be skipped.
+    On DB error, returns False to allow processing (non-critical check).
     """
     try:
         with app.app_context():
             from models.server import Server
 
             server = Server.query.filter_by(ip_address=ip_address).first()
-            if server and server.status == 'online' and server.port == SSH_PORT and not server.error_type:
-                return True
+            if server:
+                # Skip if server already exists as online with port 22 and no errors
+                if server.status == 'online' and server.port == SSH_PORT and not server.error_type:
+                    return True
+                # Also skip if server already exists from batch query (any source)
+                if server.source in ('batch_online', 'batch_error'):
+                    return True
     except Exception as e:
         logger.error(f"Error checking if IP should be skipped: {str(e)}")
     return False
@@ -521,6 +556,22 @@ def _run_batch_query_inner(app, user_id, segment, stop_event=None):
     total_processed = 0
     cookie_last_updated = time.time()
 
+    def _handle_stop():
+        """Handle task stop - set status and log. Returns True if stopped."""
+        stopped = _is_task_stopped(app, user_id, segment)
+        # Also check local stop_event directly (covers case where task not in _active_tasks)
+        if not stopped and stop_event and stop_event.is_set():
+            stopped = True
+        if not stopped:
+            return False
+        _append_log(app, user_id, segment, f'\n[任务已被用户停止]')
+        _update_task_progress(
+            app, user_id, segment,
+            status='stopped',
+            completed_at=china_now()
+        )
+        return True
+
     # Initial cookie refresh
     _append_log(app, user_id, segment, f'[{segment}] 开始一键查询...')
     _append_log(app, user_id, segment, '正在刷新Cookie...')
@@ -533,13 +584,7 @@ def _run_batch_query_inner(app, user_id, segment, stop_event=None):
 
     for i in range(1, 256):
         # Check if task was stopped (checks stop_event first, then DB)
-        if _is_task_stopped(app, user_id, segment):
-            _append_log(app, user_id, segment, f'\n[任务已被用户停止]')
-            _update_task_progress(
-                app, user_id, segment,
-                status='stopped',
-                completed_at=china_now()
-            )
+        if _handle_stop():
             break
 
         ip_address = f'{segment}.{i}'
@@ -581,13 +626,7 @@ def _run_batch_query_inner(app, user_id, segment, stop_event=None):
         # Acquire script execution lock to prevent concurrent writes to ip.txt/mm.py
         with _script_execution_lock:
             # Check stop again before long-running script operations
-            if _is_task_stopped(app, user_id, segment):
-                _append_log(app, user_id, segment, f'\n[任务已被用户停止]')
-                _update_task_progress(
-                    app, user_id, segment,
-                    status='stopped',
-                    completed_at=china_now()
-                )
+            if _handle_stop():
                 break
 
             # Step 1: Query ID
@@ -595,15 +634,11 @@ def _run_batch_query_inner(app, user_id, segment, stop_event=None):
             id_result, id_log = _query_id_for_ip(
                 ip_address, python_dir, stop_event, segment
             )
+            # Clear process reference after script completes
+            _clear_current_process(segment)
 
             # Check if stopped during ID query
-            if stop_event and stop_event.is_set():
-                _append_log(app, user_id, segment, f'\n[任务已被用户停止]')
-                _update_task_progress(
-                    app, user_id, segment,
-                    status='stopped',
-                    completed_at=china_now()
-                )
+            if _handle_stop():
                 break
 
             if not id_result:
@@ -638,21 +673,22 @@ def _run_batch_query_inner(app, user_id, segment, stop_event=None):
                     db.session.commit()
             except Exception as e:
                 logger.error(f"Error saving ID result: {str(e)}")
+                try:
+                    from models import db
+                    db.session.rollback()
+                except Exception:
+                    pass
 
             # Step 2: Fetch server
             _append_log(app, user_id, segment, f'[{ip_address}] 正在获取服务器 (ID={id_result})...')
             added_servers, fetch_log = _fetch_server_for_ip(
                 ip_address, id_result, python_dir, app, stop_event, segment
             )
+            # Clear process reference after script completes
+            _clear_current_process(segment)
 
             # Check if stopped during server fetch
-            if stop_event and stop_event.is_set():
-                _append_log(app, user_id, segment, f'\n[任务已被用户停止]')
-                _update_task_progress(
-                    app, user_id, segment,
-                    status='stopped',
-                    completed_at=china_now()
-                )
+            if _handle_stop():
                 break
 
         total_processed += 1
@@ -871,6 +907,11 @@ def _cleanup_stale_task(task):
         logger.info(f"Cleaned up stale task for segment {task.segment}")
     except Exception as e:
         logger.error(f"Error cleaning up stale task: {str(e)}")
+        try:
+            from models import db
+            db.session.rollback()
+        except Exception:
+            pass
 
 
 @batch_query_bp.route('/status/<segment>', methods=['GET'])
