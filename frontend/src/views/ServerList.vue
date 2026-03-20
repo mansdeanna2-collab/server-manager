@@ -5188,3 +5188,109 @@ const handleChangePassword = async () => {
   gap: 12px;
 }
 </style>
+
+<!-- Non-scoped styles for teleported dialogs (el-dialog teleports to body, losing scoped data attributes) -->
+<style>
+/* Fix scrolling for filtered dialog (一键查询在线/错误, 正常/离线/未知/错误/电脑) */
+.filtered-dialog.el-dialog {
+  margin-top: 5vh;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 25px 80px rgba(66, 153, 225, 0.25);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+.filtered-dialog .el-dialog__header {
+  background: linear-gradient(135deg, #3182ce 0%, #63b3ed 50%, #90cdf4 100%);
+  color: white;
+  padding: 24px 32px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.filtered-dialog .el-dialog__title {
+  color: white;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.5px;
+}
+
+.filtered-dialog .el-dialog__headerbtn .el-dialog__close {
+  color: white;
+  font-size: 20px;
+}
+
+.filtered-dialog .el-dialog__headerbtn:hover .el-dialog__close {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.filtered-dialog .el-dialog__body {
+  padding: 32px;
+  background: linear-gradient(135deg, #ebf8ff 0%, #e6fffa 100%);
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Fix scrolling for segment dialog (查看IP段详情) */
+.segment-dialog.el-dialog {
+  margin-top: 5vh;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 25px 80px rgba(30, 58, 95, 0.25);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+.segment-dialog .el-dialog__header {
+  background: linear-gradient(135deg, #2c5282 0%, #3182ce 50%, #4299e1 100%);
+  color: white;
+  padding: 24px 32px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.segment-dialog .el-dialog__title {
+  color: white;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.5px;
+}
+
+.segment-dialog .el-dialog__headerbtn .el-dialog__close {
+  color: white;
+  font-size: 20px;
+}
+
+.segment-dialog .el-dialog__headerbtn:hover .el-dialog__close {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.segment-dialog .el-dialog__body {
+  padding: 32px;
+  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Fix scrolling for detail dialog (服务器详情) */
+.detail-dialog.el-dialog {
+  margin-top: 5vh;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 25px 80px rgba(39, 103, 73, 0.25);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+.detail-dialog .el-dialog__body {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+</style>
