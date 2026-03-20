@@ -138,7 +138,6 @@ class TestBatchQueryStatus:
 
     def test_get_status_existing(self, app, client, auth_headers):
         """Test getting status for existing task"""
-        from unittest.mock import MagicMock
         from routes.batch_query import _active_tasks, _active_tasks_lock
 
         with app.app_context():
@@ -194,7 +193,6 @@ class TestBatchQueryTasks:
 
     def test_get_all_tasks(self, app, client, auth_headers):
         """Test getting all tasks"""
-        from unittest.mock import MagicMock
         from routes.batch_query import _active_tasks, _active_tasks_lock
 
         with app.app_context():

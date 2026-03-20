@@ -2104,8 +2104,8 @@ const startBatchQueryPolling = (segment) => {
     } catch (_e) {
       batchQueryPollErrorCount++
       if (batchQueryPollErrorCount >= BATCH_QUERY_MAX_POLL_ERRORS) {
-        ElMessage.warning('查询状态获取失败次数过多，请检查网络连接')
-        batchQueryPollErrorCount = 0
+        ElMessage.warning('查询状态获取失败次数过多，已停止自动刷新，请检查网络连接后重新打开对话框')
+        stopBatchQueryPolling()
       }
     }
   }, BATCH_QUERY_POLL_INTERVAL)
