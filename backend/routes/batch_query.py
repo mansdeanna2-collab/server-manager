@@ -163,7 +163,9 @@ def _read_subprocess_output(process, stop_event=None, timeout=300):
 def _append_log(app, user_id, segment, message):
     """Append a log line to the batch query task in the database.
 
-    Includes log truncation to prevent unbounded growth.
+    Includes log truncation: when log exceeds MAX_LOG_SIZE (~500KB),
+    older entries are discarded keeping the last LOG_TRUNCATE_KEEP (~100KB)
+    with a '[...日志已截断...]' marker.
     """
     try:
         with app.app_context():
@@ -439,9 +441,11 @@ def _fetch_server_for_ip(ip_address, ipid, python_dir, app, stop_event=None, seg
 
 
 def _should_skip_ip(app, ip_address):
-    """Check if an IP should be skipped (already exists and is online with port 22).
+    """Check if an IP should be skipped during batch query processing.
 
-    Returns True if the IP should be skipped.
+    Returns True if the IP should be skipped because:
+    - It already exists as an online server with port 22 and no errors
+    - It was previously added from a batch query (source batch_online or batch_error)
     On DB error, returns False to allow processing (non-critical check).
     """
     try:
