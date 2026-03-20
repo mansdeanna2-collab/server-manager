@@ -209,9 +209,9 @@ export const preferencesAPI = {
 // Batch Query API - 一键查询
 export const batchQueryAPI = {
   start: (segment) => api.post('/batch-query/start', { segment }),
-  stop: (segment) => api.post('/batch-query/stop', { segment }),
-  getStatus: (segment) => api.get(`/batch-query/status/${segment}`),
-  getTasks: () => api.get('/batch-query/tasks')
+  stop: (segment) => api.post('/batch-query/stop', { segment }, { timeout: 15000 }),
+  getStatus: (segment) => api.get(`/batch-query/status/${segment}`, { timeout: 10000 }),
+  getTasks: () => api.get('/batch-query/tasks', { timeout: 10000 })
 }
 
 export default api
