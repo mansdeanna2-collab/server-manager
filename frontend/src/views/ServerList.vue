@@ -3845,7 +3845,7 @@ const handleChangePassword = async () => {
 
 .updated-time {
   font-size: 11px;
-  color: #a0aec0;
+  color: #718096;
   line-height: 1.2;
   display: inline-flex;
   align-items: center;
@@ -3898,7 +3898,8 @@ const handleChangePassword = async () => {
   color: #4a5568;
   font-size: 13px;
   word-break: break-word;
-  white-space: pre-wrap;
+  line-height: 1.3;
+  max-height: 2.6em;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
