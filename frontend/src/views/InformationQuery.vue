@@ -833,6 +833,8 @@ const batchQueryDialogTitle = ref('')
 const currentBatchQuerySegment = ref('')
 let batchQueryPollTimer = null
 let batchQueryBackgroundPollTimer = null
+let batchQueryPollErrorCount = 0
+const BATCH_QUERY_MAX_POLL_ERRORS = 10
 
 // 检测是否是tqdm进度条行
 // tqdm format: "prefix:  XX%|███████   | N/M [time<remaining, rate]"
@@ -2030,19 +2032,41 @@ const startBatchQuery = async (segment) => {
   }
 }
 
-// 停止一键查询
+// 停止一键查询（带重试机制）
+const STOP_MAX_RETRIES = 3
+const STOP_RETRY_DELAY = 1000
+
 const stopBatchQuery = async (targetSegment) => {
   const segment = targetSegment || currentBatchQuerySegment.value
   if (!segment) return
-  try {
-    const response = await batchQueryAPI.stop(segment)
-    batchQueryTasks.value[segment] = response.data
-    stopBatchQueryPolling()
-    ElMessage.success('一键查询已停止')
-  } catch (error) {
-    const message = error.response?.data?.message || error.message || '停止失败'
-    ElMessage.error(`停止失败: ${message}`)
+
+  let lastError = null
+  for (let attempt = 0; attempt < STOP_MAX_RETRIES; attempt++) {
+    try {
+      const response = await batchQueryAPI.stop(segment)
+      batchQueryTasks.value[segment] = response.data
+      stopBatchQueryPolling()
+      ElMessage.success('一键查询已停止')
+      return
+    } catch (error) {
+      lastError = error
+      if (attempt < STOP_MAX_RETRIES - 1) {
+        await new Promise(resolve => setTimeout(resolve, STOP_RETRY_DELAY))
+      }
+    }
   }
+
+  // All retries failed - update local state to allow UI to recover
+  const message = lastError?.response?.data?.message || lastError?.message || '停止失败'
+  ElMessage.error(`停止失败: ${message}，请稍后重试`)
+  // Force local status update so user can try again
+  if (batchQueryTasks.value[segment]) {
+    batchQueryTasks.value[segment] = {
+      ...batchQueryTasks.value[segment],
+      status: 'failed'
+    }
+  }
+  stopBatchQueryPolling()
 }
 
 // 从表格行直接停止一键查询（带确认）
@@ -2064,19 +2088,25 @@ const stopBatchQueryFromRow = async (segment) => {
   }
 }
 
-// 轮询一键查询进度
+// 轮询一键查询进度（带错误计数）
 const startBatchQueryPolling = (segment) => {
   stopBatchQueryPolling()
+  batchQueryPollErrorCount = 0
   batchQueryPollTimer = setInterval(async () => {
     try {
       const response = await batchQueryAPI.getStatus(segment)
       batchQueryTasks.value[segment] = response.data
+      batchQueryPollErrorCount = 0
       // Stop polling if task is no longer running
       if (response.data.status !== 'running') {
         stopBatchQueryPolling()
       }
     } catch (_e) {
-      // Ignore polling errors
+      batchQueryPollErrorCount++
+      if (batchQueryPollErrorCount >= BATCH_QUERY_MAX_POLL_ERRORS) {
+        ElMessage.warning('查询状态获取失败次数过多，请检查网络连接')
+        batchQueryPollErrorCount = 0
+      }
     }
   }, BATCH_QUERY_POLL_INTERVAL)
 }
@@ -2086,6 +2116,7 @@ const stopBatchQueryPolling = () => {
     clearInterval(batchQueryPollTimer)
     batchQueryPollTimer = null
   }
+  batchQueryPollErrorCount = 0
 }
 
 // 对话框关闭时停止对话框轮询（后台轮询继续运行以更新表格按钮进度）
@@ -2094,20 +2125,27 @@ const onBatchQueryDialogClose = () => {
 }
 
 // 后台轮询：更新所有运行中任务的状态（用于表格按钮进度显示）
+let batchQueryBgPollErrorCount = 0
+
 const startBatchQueryBackgroundPolling = () => {
   stopBatchQueryBackgroundPolling()
+  batchQueryBgPollErrorCount = 0
   batchQueryBackgroundPollTimer = setInterval(async () => {
     try {
       const response = await batchQueryAPI.getTasks()
       const tasks = response.data || {}
       batchQueryTasks.value = tasks
+      batchQueryBgPollErrorCount = 0
       // 如果没有运行中的任务，自动停止后台轮询
       const hasRunning = Object.values(tasks).some(t => t.status === 'running')
       if (!hasRunning) {
         stopBatchQueryBackgroundPolling()
       }
     } catch (_e) {
-      // Ignore polling errors
+      batchQueryBgPollErrorCount++
+      if (batchQueryBgPollErrorCount >= BATCH_QUERY_MAX_POLL_ERRORS) {
+        stopBatchQueryBackgroundPolling()
+      }
     }
   }, BATCH_QUERY_POLL_INTERVAL)
 }
@@ -2117,6 +2155,7 @@ const stopBatchQueryBackgroundPolling = () => {
     clearInterval(batchQueryBackgroundPollTimer)
     batchQueryBackgroundPollTimer = null
   }
+  batchQueryBgPollErrorCount = 0
 }
 
 // 初始化一键查询任务状态
