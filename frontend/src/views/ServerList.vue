@@ -575,7 +575,7 @@
           <el-table-column
             prop="username"
             label="用户名"
-            width="100"
+            width="120"
           />
           <el-table-column
             label="状态"
@@ -635,7 +635,7 @@
           </el-table-column>
           <el-table-column
             label="操作"
-            width="400"
+            width="280"
             fixed="right"
           >
             <template #default="scope">
@@ -653,46 +653,85 @@
                     <el-icon><Star /></el-icon>
                   </el-button>
                 </el-tooltip>
-                <el-button
-                  size="small"
-                  type="success"
-                  @click="openTerminal(scope.row)"
+                <el-tooltip
+                  v-if="scope.row.port === RDP_PORT"
+                  content="下载RDP文件"
+                  placement="top"
                 >
-                  <el-icon><Connection /></el-icon>
-                  连接
-                </el-button>
-                <el-button
-                  size="small"
-                  type="warning"
-                  :loading="scope.row.checking"
-                  @click="checkServer(scope.row)"
+                  <el-button
+                    size="small"
+                    type="primary"
+                    circle
+                    @click="downloadRdpFile(scope.row)"
+                  >
+                    <el-icon><Download /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip
+                  content="连接"
+                  placement="top"
                 >
-                  <el-icon><Search /></el-icon>
-                  检测
-                </el-button>
-                <el-button
-                  size="small"
-                  @click="viewServer(scope.row)"
+                  <el-button
+                    size="small"
+                    type="success"
+                    circle
+                    @click="openTerminal(scope.row)"
+                  >
+                    <el-icon><Connection /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip
+                  content="检测"
+                  placement="top"
                 >
-                  <el-icon><View /></el-icon>
-                  详情
-                </el-button>
-                <el-button
-                  size="small"
-                  type="primary"
-                  @click="editServer(scope.row)"
+                  <el-button
+                    size="small"
+                    type="warning"
+                    circle
+                    :loading="scope.row.checking"
+                    @click="checkServer(scope.row)"
+                  >
+                    <el-icon><Search /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip
+                  content="详情"
+                  placement="top"
                 >
-                  <el-icon><Edit /></el-icon>
-                  编辑
-                </el-button>
-                <el-button
-                  size="small"
-                  type="danger"
-                  @click="deleteServer(scope.row)"
+                  <el-button
+                    size="small"
+                    circle
+                    @click="viewServer(scope.row)"
+                  >
+                    <el-icon><View /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip
+                  content="编辑"
+                  placement="top"
                 >
-                  <el-icon><Delete /></el-icon>
-                  删除
-                </el-button>
+                  <el-button
+                    size="small"
+                    type="primary"
+                    circle
+                    @click="editServer(scope.row)"
+                  >
+                    <el-icon><Edit /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip
+                  content="删除"
+                  placement="top"
+                >
+                  <el-button
+                    size="small"
+                    type="danger"
+                    circle
+                    @click="deleteServer(scope.row)"
+                  >
+                    <el-icon><Delete /></el-icon>
+                  </el-button>
+                </el-tooltip>
               </div>
             </template>
           </el-table-column>
@@ -848,7 +887,7 @@
                 <el-table-column
                   prop="username"
                   label="用户名"
-                  width="100"
+                  width="120"
                 />
                 <el-table-column
                   label="状态"
@@ -908,7 +947,7 @@
                 </el-table-column>
                 <el-table-column
                   label="操作"
-                  width="400"
+                  width="280"
                   fixed="right"
                 >
                   <template #default="scope">
@@ -934,52 +973,77 @@
                         <el-button
                           size="small"
                           type="primary"
+                          circle
                           @click="downloadRdpFile(scope.row)"
                         >
                           <el-icon><Download /></el-icon>
-                          RDP
                         </el-button>
                       </el-tooltip>
-                      <el-button
-                        size="small"
-                        type="success"
-                        @click="openTerminal(scope.row)"
+                      <el-tooltip
+                        content="连接"
+                        placement="top"
                       >
-                        <el-icon><Connection /></el-icon>
-                        连接
-                      </el-button>
-                      <el-button
-                        size="small"
-                        type="warning"
-                        :loading="scope.row.checking"
-                        @click="checkServer(scope.row)"
+                        <el-button
+                          size="small"
+                          type="success"
+                          circle
+                          @click="openTerminal(scope.row)"
+                        >
+                          <el-icon><Connection /></el-icon>
+                        </el-button>
+                      </el-tooltip>
+                      <el-tooltip
+                        content="检测"
+                        placement="top"
                       >
-                        <el-icon><Search /></el-icon>
-                        检测
-                      </el-button>
-                      <el-button
-                        size="small"
-                        @click="viewServer(scope.row)"
+                        <el-button
+                          size="small"
+                          type="warning"
+                          circle
+                          :loading="scope.row.checking"
+                          @click="checkServer(scope.row)"
+                        >
+                          <el-icon><Search /></el-icon>
+                        </el-button>
+                      </el-tooltip>
+                      <el-tooltip
+                        content="详情"
+                        placement="top"
                       >
-                        <el-icon><View /></el-icon>
-                        详情
-                      </el-button>
-                      <el-button
-                        size="small"
-                        type="primary"
-                        @click="editServer(scope.row)"
+                        <el-button
+                          size="small"
+                          circle
+                          @click="viewServer(scope.row)"
+                        >
+                          <el-icon><View /></el-icon>
+                        </el-button>
+                      </el-tooltip>
+                      <el-tooltip
+                        content="编辑"
+                        placement="top"
                       >
-                        <el-icon><Edit /></el-icon>
-                        编辑
-                      </el-button>
-                      <el-button
-                        size="small"
-                        type="danger"
-                        @click="deleteServer(scope.row)"
+                        <el-button
+                          size="small"
+                          type="primary"
+                          circle
+                          @click="editServer(scope.row)"
+                        >
+                          <el-icon><Edit /></el-icon>
+                        </el-button>
+                      </el-tooltip>
+                      <el-tooltip
+                        content="删除"
+                        placement="top"
                       >
-                        <el-icon><Delete /></el-icon>
-                        删除
-                      </el-button>
+                        <el-button
+                          size="small"
+                          type="danger"
+                          circle
+                          @click="deleteServer(scope.row)"
+                        >
+                          <el-icon><Delete /></el-icon>
+                        </el-button>
+                      </el-tooltip>
                     </div>
                   </template>
                 </el-table-column>
@@ -1049,7 +1113,7 @@
             <el-table-column
               prop="username"
               label="用户名"
-              width="100"
+              width="120"
             />
             <el-table-column
               label="状态"
@@ -1109,7 +1173,7 @@
             </el-table-column>
             <el-table-column
               label="操作"
-              :width="filteredDialogType === 'computer' ? 460 : 400"
+              width="280"
               fixed="right"
             >
               <template #default="scope">
@@ -1135,52 +1199,77 @@
                     <el-button
                       size="small"
                       type="primary"
+                      circle
                       @click="downloadRdpFile(scope.row)"
                     >
                       <el-icon><Download /></el-icon>
-                      RDP
                     </el-button>
                   </el-tooltip>
-                  <el-button
-                    size="small"
-                    type="success"
-                    @click="openTerminal(scope.row)"
+                  <el-tooltip
+                    content="连接"
+                    placement="top"
                   >
-                    <el-icon><Connection /></el-icon>
-                    连接
-                  </el-button>
-                  <el-button
-                    size="small"
-                    type="warning"
-                    :loading="scope.row.checking"
-                    @click="checkServer(scope.row)"
+                    <el-button
+                      size="small"
+                      type="success"
+                      circle
+                      @click="openTerminal(scope.row)"
+                    >
+                      <el-icon><Connection /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip
+                    content="检测"
+                    placement="top"
                   >
-                    <el-icon><Search /></el-icon>
-                    检测
-                  </el-button>
-                  <el-button
-                    size="small"
-                    @click="viewServer(scope.row)"
+                    <el-button
+                      size="small"
+                      type="warning"
+                      circle
+                      :loading="scope.row.checking"
+                      @click="checkServer(scope.row)"
+                    >
+                      <el-icon><Search /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip
+                    content="详情"
+                    placement="top"
                   >
-                    <el-icon><View /></el-icon>
-                    详情
-                  </el-button>
-                  <el-button
-                    size="small"
-                    type="primary"
-                    @click="editServer(scope.row)"
+                    <el-button
+                      size="small"
+                      circle
+                      @click="viewServer(scope.row)"
+                    >
+                      <el-icon><View /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip
+                    content="编辑"
+                    placement="top"
                   >
-                    <el-icon><Edit /></el-icon>
-                    编辑
-                  </el-button>
-                  <el-button
-                    size="small"
-                    type="danger"
-                    @click="deleteServer(scope.row)"
+                    <el-button
+                      size="small"
+                      type="primary"
+                      circle
+                      @click="editServer(scope.row)"
+                    >
+                      <el-icon><Edit /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip
+                    content="删除"
+                    placement="top"
                   >
-                    <el-icon><Delete /></el-icon>
-                    删除
-                  </el-button>
+                    <el-button
+                      size="small"
+                      type="danger"
+                      circle
+                      @click="deleteServer(scope.row)"
+                    >
+                      <el-icon><Delete /></el-icon>
+                    </el-button>
+                  </el-tooltip>
                 </div>
               </template>
             </el-table-column>
@@ -3833,7 +3922,7 @@ const handleChangePassword = async () => {
 /* Action buttons in table */
 .action-buttons {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
   align-items: center;
 }
