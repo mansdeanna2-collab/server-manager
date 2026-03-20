@@ -906,3 +906,246 @@ class TestBatchQueryStopDuringExecution:
             ).first()
             assert task.status == 'stopped'
             assert task.completed_at is not None
+
+
+class TestLogTruncation:
+    """Tests for log output truncation to prevent unbounded growth"""
+
+    def test_log_truncated_when_exceeding_max_size(self, app):
+        """Test that log output is truncated when it exceeds MAX_LOG_SIZE"""
+        from routes.batch_query import _append_log, MAX_LOG_SIZE, LOG_TRUNCATE_KEEP
+
+        segment = 'log.trunc.1'
+        with app.app_context():
+            task = BatchQueryTask(
+                user_id=app.test_user_id,
+                segment=segment,
+                status='running',
+                log_output=''
+            )
+            db.session.add(task)
+            db.session.commit()
+
+        # Build log that exceeds MAX_LOG_SIZE
+        large_msg = 'x' * (MAX_LOG_SIZE + 1000)
+        _append_log(app, app.test_user_id, segment, large_msg)
+
+        with app.app_context():
+            task = BatchQueryTask.query.filter_by(
+                user_id=app.test_user_id, segment=segment
+            ).first()
+            # Log should be truncated - contains truncation marker
+            assert '日志已截断' in task.log_output
+            # Should keep approximately LOG_TRUNCATE_KEEP characters
+            assert len(task.log_output) <= LOG_TRUNCATE_KEEP + 200  # Allow for marker
+
+    def test_log_not_truncated_when_under_limit(self, app):
+        """Test that log is not truncated when within limits"""
+        from routes.batch_query import _append_log
+
+        segment = 'log.trunc.2'
+        with app.app_context():
+            task = BatchQueryTask(
+                user_id=app.test_user_id,
+                segment=segment,
+                status='running',
+                log_output=''
+            )
+            db.session.add(task)
+            db.session.commit()
+
+        _append_log(app, app.test_user_id, segment, 'Normal log message')
+
+        with app.app_context():
+            task = BatchQueryTask.query.filter_by(
+                user_id=app.test_user_id, segment=segment
+            ).first()
+            assert '日志已截断' not in task.log_output
+            assert 'Normal log message' in task.log_output
+
+
+class TestShouldSkipIpLogic:
+    """Tests for improved _should_skip_ip logic"""
+
+    def test_skip_existing_online_server(self, app):
+        """Test that existing online servers with port 22 are skipped"""
+        from routes.batch_query import _should_skip_ip
+        from utils.crypto import PasswordEncryption
+        from config import Config
+
+        with app.app_context():
+            encryptor = PasswordEncryption(Config.ENCRYPTION_KEY)
+            server = Server(
+                ip_address='10.10.10.1',
+                port=22,
+                username='root',
+                encrypted_password=encryptor.encrypt('pass'),
+                status='online',
+                error_type=None
+            )
+            db.session.add(server)
+            db.session.commit()
+
+        result = _should_skip_ip(app, '10.10.10.1')
+        assert result is True
+
+    def test_skip_existing_batch_online_server(self, app):
+        """Test that servers from batch_online source are skipped"""
+        from routes.batch_query import _should_skip_ip
+        from utils.crypto import PasswordEncryption
+        from config import Config
+
+        with app.app_context():
+            encryptor = PasswordEncryption(Config.ENCRYPTION_KEY)
+            server = Server(
+                ip_address='10.10.10.2',
+                port=22,
+                username='root',
+                encrypted_password=encryptor.encrypt('pass'),
+                status='online',
+                source='batch_online'
+            )
+            db.session.add(server)
+            db.session.commit()
+
+        result = _should_skip_ip(app, '10.10.10.2')
+        assert result is True
+
+    def test_skip_existing_batch_error_server(self, app):
+        """Test that servers from batch_error source are skipped"""
+        from routes.batch_query import _should_skip_ip
+        from utils.crypto import PasswordEncryption
+        from config import Config
+
+        with app.app_context():
+            encryptor = PasswordEncryption(Config.ENCRYPTION_KEY)
+            server = Server(
+                ip_address='10.10.10.3',
+                port=22,
+                username='root',
+                encrypted_password=encryptor.encrypt('pass'),
+                status='unknown',
+                source='batch_error'
+            )
+            db.session.add(server)
+            db.session.commit()
+
+        result = _should_skip_ip(app, '10.10.10.3')
+        assert result is True
+
+    def test_no_skip_nonexistent_ip(self, app):
+        """Test that nonexistent IPs are not skipped"""
+        from routes.batch_query import _should_skip_ip
+
+        result = _should_skip_ip(app, '10.10.10.99')
+        assert result is False
+
+    def test_no_skip_offline_server_without_batch_source(self, app):
+        """Test that offline non-batch servers are not skipped"""
+        from routes.batch_query import _should_skip_ip
+        from utils.crypto import PasswordEncryption
+        from config import Config
+
+        with app.app_context():
+            encryptor = PasswordEncryption(Config.ENCRYPTION_KEY)
+            server = Server(
+                ip_address='10.10.10.4',
+                port=22,
+                username='root',
+                encrypted_password=encryptor.encrypt('pass'),
+                status='offline',
+                source=None
+            )
+            db.session.add(server)
+            db.session.commit()
+
+        result = _should_skip_ip(app, '10.10.10.4')
+        assert result is False
+
+
+class TestProcessCleanup:
+    """Tests for subprocess process reference cleanup"""
+
+    def test_clear_current_process(self):
+        """Test that _clear_current_process removes process reference"""
+        from routes.batch_query import (
+            _set_current_process, _clear_current_process,
+            _active_tasks, _active_tasks_lock
+        )
+
+        segment = 'cleanup.test'
+        with _active_tasks_lock:
+            _active_tasks[segment] = {
+                'thread': MagicMock(),
+                'stop_event': MagicMock(),
+                'process': None
+            }
+
+        try:
+            # Set a process reference
+            mock_process = MagicMock()
+            _set_current_process(segment, mock_process)
+
+            with _active_tasks_lock:
+                assert _active_tasks[segment]['process'] is mock_process
+
+            # Clear it
+            _clear_current_process(segment)
+
+            with _active_tasks_lock:
+                assert _active_tasks[segment]['process'] is None
+        finally:
+            with _active_tasks_lock:
+                _active_tasks.pop(segment, None)
+
+    def test_clear_current_process_nonexistent_segment(self):
+        """Test that _clear_current_process handles nonexistent segment gracefully"""
+        from routes.batch_query import _clear_current_process
+
+        # Should not raise
+        _clear_current_process('nonexistent.segment')
+
+
+class TestConcurrentStop:
+    """Tests for concurrent stop scenarios"""
+
+    def test_double_stop_second_returns_400(self, app, client, auth_headers):
+        """Test that stopping an already-stopped task returns 400"""
+        from routes.batch_query import _active_tasks, _active_tasks_lock
+
+        stop_event = threading.Event()
+
+        with app.app_context():
+            task = BatchQueryTask(
+                user_id=app.test_user_id,
+                segment='double.stop',
+                status='running'
+            )
+            db.session.add(task)
+            db.session.commit()
+
+        fake_thread = MagicMock()
+        fake_thread.is_alive.return_value = True
+        with _active_tasks_lock:
+            _active_tasks['double.stop'] = {
+                'thread': fake_thread,
+                'stop_event': stop_event,
+                'process': None
+            }
+
+        try:
+            # First stop succeeds
+            response1 = client.post('/api/batch-query/stop',
+                headers=auth_headers,
+                json={'segment': 'double.stop'})
+            assert response1.status_code == 200
+            assert response1.get_json()['status'] == 'stopped'
+
+            # Second stop returns 400 (task no longer running)
+            response2 = client.post('/api/batch-query/stop',
+                headers=auth_headers,
+                json={'segment': 'double.stop'})
+            assert response2.status_code == 400
+        finally:
+            with _active_tasks_lock:
+                _active_tasks.pop('double.stop', None)
