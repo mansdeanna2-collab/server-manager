@@ -535,14 +535,14 @@
                 </el-icon>
                 <span class="ip-text">{{ scope.row.ip_address }}</span>
                 <span class="updated-time">
-                  更新时间：{{ formatDate(getLastUpdateTime(scope.row)) }}
+                  <el-icon class="time-icon"><Clock /></el-icon>{{ formatDate(getLastUpdateTime(scope.row)) }}
                 </span>
               </div>
             </template>
           </el-table-column>
           <el-table-column
             label="端口 / 配置"
-            width="160"
+            width="140"
           >
             <template #default="scope">
               <div class="port-cell">
@@ -575,7 +575,7 @@
           <el-table-column
             prop="username"
             label="用户名"
-            width="100"
+            width="120"
           />
           <el-table-column
             label="状态"
@@ -593,10 +593,13 @@
           <el-table-column
             prop="os_info"
             label="系统信息"
-            min-width="140"
+            min-width="120"
           >
             <template #default="scope">
-              <span v-if="scope.row.os_info">
+              <span
+                v-if="scope.row.os_info"
+                class="os-info-text"
+              >
                 {{ getOsIcon(scope.row.os_info) }} {{ scope.row.os_info }}
               </span>
               <span
@@ -635,7 +638,7 @@
           </el-table-column>
           <el-table-column
             label="操作"
-            width="400"
+            width="250"
             fixed="right"
           >
             <template #default="scope">
@@ -653,46 +656,85 @@
                     <el-icon><Star /></el-icon>
                   </el-button>
                 </el-tooltip>
-                <el-button
-                  size="small"
-                  type="success"
-                  @click="openTerminal(scope.row)"
+                <el-tooltip
+                  v-if="scope.row.port === RDP_PORT"
+                  content="下载RDP文件"
+                  placement="top"
                 >
-                  <el-icon><Connection /></el-icon>
-                  连接
-                </el-button>
-                <el-button
-                  size="small"
-                  type="warning"
-                  :loading="scope.row.checking"
-                  @click="checkServer(scope.row)"
+                  <el-button
+                    size="small"
+                    type="primary"
+                    circle
+                    @click="downloadRdpFile(scope.row)"
+                  >
+                    <el-icon><Download /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip
+                  content="连接"
+                  placement="top"
                 >
-                  <el-icon><Search /></el-icon>
-                  检测
-                </el-button>
-                <el-button
-                  size="small"
-                  @click="viewServer(scope.row)"
+                  <el-button
+                    size="small"
+                    type="success"
+                    circle
+                    @click="openTerminal(scope.row)"
+                  >
+                    <el-icon><Connection /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip
+                  content="检测"
+                  placement="top"
                 >
-                  <el-icon><View /></el-icon>
-                  详情
-                </el-button>
-                <el-button
-                  size="small"
-                  type="primary"
-                  @click="editServer(scope.row)"
+                  <el-button
+                    size="small"
+                    type="warning"
+                    circle
+                    :loading="scope.row.checking"
+                    @click="checkServer(scope.row)"
+                  >
+                    <el-icon><Search /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip
+                  content="详情"
+                  placement="top"
                 >
-                  <el-icon><Edit /></el-icon>
-                  编辑
-                </el-button>
-                <el-button
-                  size="small"
-                  type="danger"
-                  @click="deleteServer(scope.row)"
+                  <el-button
+                    size="small"
+                    circle
+                    @click="viewServer(scope.row)"
+                  >
+                    <el-icon><View /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip
+                  content="编辑"
+                  placement="top"
                 >
-                  <el-icon><Delete /></el-icon>
-                  删除
-                </el-button>
+                  <el-button
+                    size="small"
+                    type="primary"
+                    circle
+                    @click="editServer(scope.row)"
+                  >
+                    <el-icon><Edit /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip
+                  content="删除"
+                  placement="top"
+                >
+                  <el-button
+                    size="small"
+                    type="danger"
+                    circle
+                    @click="deleteServer(scope.row)"
+                  >
+                    <el-icon><Delete /></el-icon>
+                  </el-button>
+                </el-tooltip>
               </div>
             </template>
           </el-table-column>
@@ -808,14 +850,14 @@
                       </el-icon>
                       <span class="ip-text">{{ scope.row.ip_address }}</span>
                       <span class="updated-time">
-                        更新时间：{{ formatDate(getLastUpdateTime(scope.row)) }}
+                        <el-icon class="time-icon"><Clock /></el-icon>{{ formatDate(getLastUpdateTime(scope.row)) }}
                       </span>
                     </div>
                   </template>
                 </el-table-column>
                 <el-table-column
                   label="端口 / 配置"
-                  width="160"
+                  width="140"
                 >
                   <template #default="scope">
                     <div class="port-cell">
@@ -848,7 +890,7 @@
                 <el-table-column
                   prop="username"
                   label="用户名"
-                  width="100"
+                  width="120"
                 />
                 <el-table-column
                   label="状态"
@@ -866,10 +908,13 @@
                 <el-table-column
                   prop="os_info"
                   label="系统信息"
-                  min-width="140"
+                  min-width="120"
                 >
                   <template #default="scope">
-                    <span v-if="scope.row.os_info">
+                    <span
+                      v-if="scope.row.os_info"
+                      class="os-info-text"
+                    >
                       {{ getOsIcon(scope.row.os_info) }} {{ scope.row.os_info }}
                     </span>
                     <span
@@ -908,7 +953,7 @@
                 </el-table-column>
                 <el-table-column
                   label="操作"
-                  width="400"
+                  width="250"
                   fixed="right"
                 >
                   <template #default="scope">
@@ -934,52 +979,77 @@
                         <el-button
                           size="small"
                           type="primary"
+                          circle
                           @click="downloadRdpFile(scope.row)"
                         >
                           <el-icon><Download /></el-icon>
-                          RDP
                         </el-button>
                       </el-tooltip>
-                      <el-button
-                        size="small"
-                        type="success"
-                        @click="openTerminal(scope.row)"
+                      <el-tooltip
+                        content="连接"
+                        placement="top"
                       >
-                        <el-icon><Connection /></el-icon>
-                        连接
-                      </el-button>
-                      <el-button
-                        size="small"
-                        type="warning"
-                        :loading="scope.row.checking"
-                        @click="checkServer(scope.row)"
+                        <el-button
+                          size="small"
+                          type="success"
+                          circle
+                          @click="openTerminal(scope.row)"
+                        >
+                          <el-icon><Connection /></el-icon>
+                        </el-button>
+                      </el-tooltip>
+                      <el-tooltip
+                        content="检测"
+                        placement="top"
                       >
-                        <el-icon><Search /></el-icon>
-                        检测
-                      </el-button>
-                      <el-button
-                        size="small"
-                        @click="viewServer(scope.row)"
+                        <el-button
+                          size="small"
+                          type="warning"
+                          circle
+                          :loading="scope.row.checking"
+                          @click="checkServer(scope.row)"
+                        >
+                          <el-icon><Search /></el-icon>
+                        </el-button>
+                      </el-tooltip>
+                      <el-tooltip
+                        content="详情"
+                        placement="top"
                       >
-                        <el-icon><View /></el-icon>
-                        详情
-                      </el-button>
-                      <el-button
-                        size="small"
-                        type="primary"
-                        @click="editServer(scope.row)"
+                        <el-button
+                          size="small"
+                          circle
+                          @click="viewServer(scope.row)"
+                        >
+                          <el-icon><View /></el-icon>
+                        </el-button>
+                      </el-tooltip>
+                      <el-tooltip
+                        content="编辑"
+                        placement="top"
                       >
-                        <el-icon><Edit /></el-icon>
-                        编辑
-                      </el-button>
-                      <el-button
-                        size="small"
-                        type="danger"
-                        @click="deleteServer(scope.row)"
+                        <el-button
+                          size="small"
+                          type="primary"
+                          circle
+                          @click="editServer(scope.row)"
+                        >
+                          <el-icon><Edit /></el-icon>
+                        </el-button>
+                      </el-tooltip>
+                      <el-tooltip
+                        content="删除"
+                        placement="top"
                       >
-                        <el-icon><Delete /></el-icon>
-                        删除
-                      </el-button>
+                        <el-button
+                          size="small"
+                          type="danger"
+                          circle
+                          @click="deleteServer(scope.row)"
+                        >
+                          <el-icon><Delete /></el-icon>
+                        </el-button>
+                      </el-tooltip>
                     </div>
                   </template>
                 </el-table-column>
@@ -1009,14 +1079,14 @@
                   </el-icon>
                   <span class="ip-text">{{ scope.row.ip_address }}</span>
                   <span class="updated-time">
-                    更新时间：{{ formatDate(getLastUpdateTime(scope.row)) }}
+                    <el-icon class="time-icon"><Clock /></el-icon>{{ formatDate(getLastUpdateTime(scope.row)) }}
                   </span>
                 </div>
               </template>
             </el-table-column>
             <el-table-column
               label="端口 / 配置"
-              width="160"
+              width="140"
             >
               <template #default="scope">
                 <div class="port-cell">
@@ -1049,7 +1119,7 @@
             <el-table-column
               prop="username"
               label="用户名"
-              width="100"
+              width="120"
             />
             <el-table-column
               label="状态"
@@ -1067,10 +1137,13 @@
             <el-table-column
               prop="os_info"
               label="系统信息"
-              min-width="140"
+              min-width="120"
             >
               <template #default="scope">
-                <span v-if="scope.row.os_info">
+                <span
+                  v-if="scope.row.os_info"
+                  class="os-info-text"
+                >
                   {{ getOsIcon(scope.row.os_info) }} {{ scope.row.os_info }}
                 </span>
                 <span
@@ -1109,7 +1182,7 @@
             </el-table-column>
             <el-table-column
               label="操作"
-              :width="filteredDialogType === 'computer' ? 460 : 400"
+              width="250"
               fixed="right"
             >
               <template #default="scope">
@@ -1135,52 +1208,77 @@
                     <el-button
                       size="small"
                       type="primary"
+                      circle
                       @click="downloadRdpFile(scope.row)"
                     >
                       <el-icon><Download /></el-icon>
-                      RDP
                     </el-button>
                   </el-tooltip>
-                  <el-button
-                    size="small"
-                    type="success"
-                    @click="openTerminal(scope.row)"
+                  <el-tooltip
+                    content="连接"
+                    placement="top"
                   >
-                    <el-icon><Connection /></el-icon>
-                    连接
-                  </el-button>
-                  <el-button
-                    size="small"
-                    type="warning"
-                    :loading="scope.row.checking"
-                    @click="checkServer(scope.row)"
+                    <el-button
+                      size="small"
+                      type="success"
+                      circle
+                      @click="openTerminal(scope.row)"
+                    >
+                      <el-icon><Connection /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip
+                    content="检测"
+                    placement="top"
                   >
-                    <el-icon><Search /></el-icon>
-                    检测
-                  </el-button>
-                  <el-button
-                    size="small"
-                    @click="viewServer(scope.row)"
+                    <el-button
+                      size="small"
+                      type="warning"
+                      circle
+                      :loading="scope.row.checking"
+                      @click="checkServer(scope.row)"
+                    >
+                      <el-icon><Search /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip
+                    content="详情"
+                    placement="top"
                   >
-                    <el-icon><View /></el-icon>
-                    详情
-                  </el-button>
-                  <el-button
-                    size="small"
-                    type="primary"
-                    @click="editServer(scope.row)"
+                    <el-button
+                      size="small"
+                      circle
+                      @click="viewServer(scope.row)"
+                    >
+                      <el-icon><View /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip
+                    content="编辑"
+                    placement="top"
                   >
-                    <el-icon><Edit /></el-icon>
-                    编辑
-                  </el-button>
-                  <el-button
-                    size="small"
-                    type="danger"
-                    @click="deleteServer(scope.row)"
+                    <el-button
+                      size="small"
+                      type="primary"
+                      circle
+                      @click="editServer(scope.row)"
+                    >
+                      <el-icon><Edit /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip
+                    content="删除"
+                    placement="top"
                   >
-                    <el-icon><Delete /></el-icon>
-                    删除
-                  </el-button>
+                    <el-button
+                      size="small"
+                      type="danger"
+                      circle
+                      @click="deleteServer(scope.row)"
+                    >
+                      <el-icon><Delete /></el-icon>
+                    </el-button>
+                  </el-tooltip>
                 </div>
               </template>
             </el-table-column>
@@ -3733,7 +3831,7 @@ const handleChangePassword = async () => {
 /* IP cell styles */
 .ip-cell {
   display: flex;
-  gap: 8px;
+  gap: 2px;
   flex-direction: column;
   align-items: flex-start;
 }
@@ -3746,16 +3844,23 @@ const handleChangePassword = async () => {
 }
 
 .updated-time {
-  font-size: 12px;
-  color: #909399;
+  font-size: 11px;
+  color: #718096;
   line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.time-icon {
+  font-size: 11px;
 }
 
 /* Port cell styles */
 .port-cell {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 3px;
 }
 
 .port-row {
@@ -3778,21 +3883,36 @@ const handleChangePassword = async () => {
   font-weight: 500;
 }
 
+/* OS info text in table */
+.os-info-text {
+  font-size: 13px;
+  color: #4a5568;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Notes text in table */
 .notes-text {
   color: #4a5568;
-  font-size: 14px;
+  font-size: 13px;
   word-break: break-word;
-  white-space: pre-wrap;
+  line-height: 1.3;
+  max-height: 2.6em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* Editable note styles in table */
 .editable-note {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 8px;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.3s ease;
   background: transparent;
@@ -3833,8 +3953,8 @@ const handleChangePassword = async () => {
 /* Action buttons in table */
 .action-buttons {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-wrap: nowrap;
+  gap: 4px;
   align-items: center;
 }
 
@@ -3843,7 +3963,7 @@ const handleChangePassword = async () => {
 }
 
 .action-buttons :deep(.el-button.is-circle) {
-  padding: 8px;
+  padding: 6px;
 }
 
 /* 收藏按钮自定义样式 */
@@ -4531,7 +4651,7 @@ const handleChangePassword = async () => {
 
 :deep(.el-table td) {
   border-bottom: 1px solid #e2e8f0;
-  padding: 14px 0;
+  padding: 8px 0;
 }
 
 /* 收藏行高亮样式 - 高级美化 */
