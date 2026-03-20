@@ -4529,8 +4529,6 @@ const handleChangePassword = async () => {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-height: 70vh;
-  overflow-y: auto;
   padding-right: 4px;
 }
 
@@ -5186,5 +5184,389 @@ const handleChangePassword = async () => {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+</style>
+
+<!-- Non-scoped styles for teleported dialogs (el-dialog teleports to body, losing scoped data attributes) -->
+<style>
+/* ============================================================
+   Filtered dialog (一键查询在线/错误, 正常/离线/未知/错误/电脑)
+   ============================================================ */
+.filtered-dialog.el-dialog {
+  margin: 3vh auto 0;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 25px 80px rgba(66, 153, 225, 0.25);
+  display: flex;
+  flex-direction: column;
+  max-height: 94vh;
+}
+
+.filtered-dialog .el-dialog__header {
+  background: linear-gradient(135deg, #3182ce 0%, #63b3ed 50%, #90cdf4 100%);
+  color: white;
+  padding: 24px 32px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.filtered-dialog .el-dialog__title {
+  color: white;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.5px;
+}
+
+.filtered-dialog .el-dialog__headerbtn .el-dialog__close {
+  color: white;
+  font-size: 20px;
+}
+
+.filtered-dialog .el-dialog__headerbtn:hover .el-dialog__close {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.filtered-dialog .el-dialog__body {
+  padding: 32px;
+  background: linear-gradient(135deg, #ebf8ff 0%, #e6fffa 100%);
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ============================================================
+   Segment dialog (查看IP段详情)
+   ============================================================ */
+.segment-dialog.el-dialog {
+  margin: 3vh auto 0;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 25px 80px rgba(30, 58, 95, 0.25);
+  display: flex;
+  flex-direction: column;
+  max-height: 94vh;
+}
+
+.segment-dialog .el-dialog__header {
+  background: linear-gradient(135deg, #2c5282 0%, #3182ce 50%, #4299e1 100%);
+  color: white;
+  padding: 24px 32px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.segment-dialog .el-dialog__title {
+  color: white;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.5px;
+}
+
+.segment-dialog .el-dialog__headerbtn .el-dialog__close {
+  color: white;
+  font-size: 20px;
+}
+
+.segment-dialog .el-dialog__headerbtn:hover .el-dialog__close {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.segment-dialog .el-dialog__body {
+  padding: 32px;
+  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ============================================================
+   Detail dialog (服务器详情)
+   ============================================================ */
+.detail-dialog.el-dialog {
+  margin: 3vh auto 0;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 25px 80px rgba(39, 103, 73, 0.25);
+  display: flex;
+  flex-direction: column;
+  max-height: 94vh;
+}
+
+.detail-dialog .el-dialog__header {
+  background: linear-gradient(135deg, #276749 0%, #38a169 50%, #48bb78 100%);
+  color: white;
+  padding: 24px 32px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.detail-dialog .el-dialog__title {
+  color: white;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.5px;
+}
+
+.detail-dialog .el-dialog__headerbtn .el-dialog__close {
+  color: white;
+  font-size: 20px;
+}
+
+.detail-dialog .el-dialog__headerbtn:hover .el-dialog__close {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.detail-dialog .el-dialog__body {
+  padding: 32px;
+  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ============================================================
+   Form dialog (新增/编辑服务器)
+   ============================================================ */
+.form-dialog.el-dialog {
+  margin: 5vh auto 0;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 25px 80px rgba(30, 58, 95, 0.25);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+.form-dialog .el-dialog__header {
+  background: linear-gradient(135deg, #2c5282 0%, #3182ce 50%, #4299e1 100%);
+  color: white;
+  padding: 24px 32px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.form-dialog .el-dialog__title {
+  color: white;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.5px;
+}
+
+.form-dialog .el-dialog__headerbtn .el-dialog__close {
+  color: white;
+  font-size: 20px;
+}
+
+.form-dialog .el-dialog__headerbtn:hover .el-dialog__close {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.form-dialog .el-dialog__body {
+  padding: 32px;
+  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ============================================================
+   Password dialog (修改密码)
+   ============================================================ */
+.password-dialog.el-dialog {
+  margin: 8vh auto 0;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 25px 80px rgba(197, 48, 48, 0.25);
+  display: flex;
+  flex-direction: column;
+  max-height: 84vh;
+}
+
+.password-dialog .el-dialog__header {
+  background: linear-gradient(135deg, #c53030 0%, #e53e3e 50%, #fc8181 100%);
+  color: white;
+  padding: 24px 32px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.password-dialog .el-dialog__title {
+  color: white;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.5px;
+}
+
+.password-dialog .el-dialog__headerbtn .el-dialog__close {
+  color: white;
+  font-size: 20px;
+}
+
+.password-dialog .el-dialog__headerbtn:hover .el-dialog__close {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.password-dialog .el-dialog__body {
+  padding: 32px;
+  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ============================================================
+   Terminal dialog (终端连接)
+   ============================================================ */
+.terminal-dialog.el-dialog {
+  margin: 3vh auto 0;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  max-height: 94vh;
+}
+
+.terminal-dialog .el-dialog__header {
+  background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+  color: white;
+  padding: 20px 28px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.terminal-dialog .el-dialog__title {
+  color: #68d391;
+  font-weight: 700;
+  font-size: 18px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+}
+
+.terminal-dialog .el-dialog__headerbtn .el-dialog__close {
+  color: #a0aec0;
+  font-size: 20px;
+}
+
+.terminal-dialog .el-dialog__headerbtn:hover .el-dialog__close {
+  color: #fc8181;
+}
+
+.terminal-dialog .el-dialog__body {
+  padding: 24px;
+  background: #1a202c;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* RDP Dialog header override */
+.rdp-dialog .el-dialog__header {
+  background: linear-gradient(135deg, #0078d4 0%, #106ebe 50%, #005a9e 100%);
+  color: white;
+  padding: 16px 24px;
+  margin: 0;
+}
+
+.rdp-dialog .el-dialog__title {
+  color: white;
+  font-weight: 600;
+}
+
+/* ============================================================
+   File dialog (文件内容查看)
+   ============================================================ */
+.file-dialog.el-dialog {
+  margin: 5vh auto 0;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 25px 80px rgba(66, 153, 225, 0.25);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+.file-dialog .el-dialog__header {
+  background: linear-gradient(135deg, #3182ce 0%, #63b3ed 50%, #90cdf4 100%);
+  color: white;
+  padding: 24px 32px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.file-dialog .el-dialog__title {
+  color: white;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.5px;
+}
+
+.file-dialog .el-dialog__headerbtn .el-dialog__close {
+  color: white;
+  font-size: 20px;
+}
+
+.file-dialog .el-dialog__headerbtn:hover .el-dialog__close {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.file-dialog .el-dialog__body {
+  padding: 32px;
+  background: linear-gradient(135deg, #ebf8ff 0%, #e6fffa 100%);
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ============================================================
+   File Editor dialog (文件编辑器)
+   ============================================================ */
+.file-editor-dialog.el-dialog {
+  margin: 2vh auto 0;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5);
+  border: 1px solid #30363d;
+  display: flex;
+  flex-direction: column;
+  max-height: 96vh;
+}
+
+.file-editor-dialog .el-dialog__header {
+  background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+  color: white;
+  padding: 20px 28px;
+  margin: 0;
+  border-bottom: 1px solid #30363d;
+  flex-shrink: 0;
+}
+
+.file-editor-dialog .el-dialog__title {
+  color: #f0f6fc;
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.file-editor-dialog .el-dialog__headerbtn .el-dialog__close {
+  color: #8b949e;
+  font-size: 20px;
+}
+
+.file-editor-dialog .el-dialog__headerbtn:hover .el-dialog__close {
+  color: #f85149;
+}
+
+.file-editor-dialog .el-dialog__body {
+  padding: 0;
+  background: #0d1117;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.file-editor-dialog .el-dialog__footer {
+  background: #161b22;
+  border-top: 1px solid #30363d;
+  padding: 16px 24px;
+  flex-shrink: 0;
 }
 </style>
