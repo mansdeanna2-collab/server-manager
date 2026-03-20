@@ -30,7 +30,8 @@ logger = logging.getLogger(__name__)
 
 batch_query_bp = Blueprint('batch_query', __name__, url_prefix='/api/batch-query')
 
-# Store active batch query tasks in memory: {segment: thread}
+# Store active batch query tasks in memory:
+# {segment: {'thread': Thread, 'stop_event': Event, 'process': Popen|None}}
 _active_tasks = {}
 _active_tasks_lock = threading.Lock()
 
@@ -49,6 +50,102 @@ SSH_PORT = 22
 
 # Maximum length for error_type field (must match Server model VARCHAR(50))
 ERROR_TYPE_MAX_LENGTH = 50
+
+# Stop check interval during subprocess execution (seconds)
+STOP_CHECK_INTERVAL = 1.0
+
+# Maximum retries for database operations during stop
+DB_RETRY_COUNT = 3
+DB_RETRY_DELAY = 0.5
+
+
+def _get_stop_event(segment):
+    """Get the stop event for a segment task."""
+    with _active_tasks_lock:
+        task_info = _active_tasks.get(segment)
+        if task_info:
+            return task_info.get('stop_event')
+    return None
+
+
+def _set_current_process(segment, process):
+    """Store reference to the current subprocess for force-killing."""
+    with _active_tasks_lock:
+        task_info = _active_tasks.get(segment)
+        if task_info:
+            task_info['process'] = process
+
+
+def _kill_current_process(segment):
+    """Kill the current subprocess for a segment task."""
+    with _active_tasks_lock:
+        task_info = _active_tasks.get(segment)
+        if task_info and task_info.get('process'):
+            try:
+                task_info['process'].kill()
+            except (OSError, ProcessLookupError):
+                pass
+
+
+def _read_subprocess_output(process, stop_event=None, timeout=300):
+    """Read subprocess output using a reader thread with stop event checking.
+
+    Instead of blocking on readline() forever, uses a separate reader thread
+    so the main thread can periodically check the stop event and timeout.
+
+    Returns (output_string, was_stopped) tuple.
+    """
+    output_lines = []
+    reader_done = threading.Event()
+
+    def _reader():
+        try:
+            for line in iter(process.stdout.readline, ''):
+                if line:
+                    output_lines.append(line)
+        except Exception:
+            pass
+        finally:
+            reader_done.set()
+
+    reader_thread = threading.Thread(target=_reader, daemon=True)
+    reader_thread.start()
+
+    start_time = time.time()
+    while not reader_done.is_set():
+        # Check stop event
+        if stop_event and stop_event.is_set():
+            try:
+                process.kill()
+            except (OSError, ProcessLookupError):
+                pass
+            reader_thread.join(timeout=5)
+            return ''.join(output_lines), True
+
+        # Check timeout
+        if time.time() - start_time > timeout:
+            try:
+                process.kill()
+            except (OSError, ProcessLookupError):
+                pass
+            reader_thread.join(timeout=5)
+            return ''.join(output_lines) + '\n[执行超时]', False
+
+        # Wait briefly before next check
+        reader_done.wait(timeout=STOP_CHECK_INTERVAL)
+
+    # Process exited normally, collect remaining output
+    reader_thread.join(timeout=5)
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        try:
+            process.kill()
+        except (OSError, ProcessLookupError):
+            pass
+        process.wait()
+
+    return ''.join(output_lines), False
 
 
 def _append_log(app, user_id, segment, message):
@@ -119,10 +216,11 @@ def _refresh_cookie(app, python_dir):
         return False
 
 
-def _query_id_for_ip(ip_address, python_dir):
+def _query_id_for_ip(ip_address, python_dir, stop_event=None, segment=None):
     """Run id.py script to query the ID for an IP address.
 
     Returns (id_result, log_output) tuple.
+    Uses non-blocking output reading with stop event support.
     """
     ip_file = os.path.join(python_dir, 'ip.txt')
     id_py_file = os.path.join(python_dir, 'id.py')
@@ -146,20 +244,17 @@ def _query_id_for_ip(ip_address, python_dir):
             bufsize=1
         )
 
-        full_output = ''
-        try:
-            for line in iter(process.stdout.readline, ''):
-                if line:
-                    full_output += line
-        except Exception as e:
-            logger.warning(f"Error reading id.py output: {str(e)}")
+        # Store process reference for force-killing on stop
+        if segment:
+            _set_current_process(segment, process)
 
-        try:
-            process.wait(timeout=ID_QUERY_TIMEOUT)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait()
-            return None, full_output + '\n[id.py execution timed out]'
+        # Read output with stop event and timeout support
+        full_output, was_stopped = _read_subprocess_output(
+            process, stop_event, timeout=ID_QUERY_TIMEOUT
+        )
+
+        if was_stopped:
+            return None, full_output + '\n[任务已停止]'
 
         # Extract ID from output
         id_result = None
@@ -177,11 +272,12 @@ def _query_id_for_ip(ip_address, python_dir):
         return None, f'Error running id.py: {str(e)}'
 
 
-def _fetch_server_for_ip(ip_address, ipid, python_dir, app):
+def _fetch_server_for_ip(ip_address, ipid, python_dir, app, stop_event=None, segment=None):
     """Run mm.py script to fetch server for an IP with given ID.
 
     Returns (added_servers, log_output) tuple.
     added_servers is a list of dicts with server info.
+    Uses non-blocking output reading with stop event support.
     """
     mm_py_file = os.path.join(python_dir, 'mm.py')
 
@@ -213,20 +309,17 @@ def _fetch_server_for_ip(ip_address, ipid, python_dir, app):
             bufsize=1
         )
 
-        full_output = ''
-        try:
-            for line in iter(process.stdout.readline, ''):
-                if line:
-                    full_output += line
-        except Exception as e:
-            logger.warning(f"Error reading mm.py output: {str(e)}")
+        # Store process reference for force-killing on stop
+        if segment:
+            _set_current_process(segment, process)
 
-        try:
-            process.wait(timeout=FETCH_SERVER_TIMEOUT)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait()
-            return [], full_output + '\n[mm.py execution timed out]'
+        # Read output with stop event and timeout support
+        full_output, was_stopped = _read_subprocess_output(
+            process, stop_event, timeout=FETCH_SERVER_TIMEOUT
+        )
+
+        if was_stopped:
+            return [], full_output + '\n[任务已停止]'
 
         # Parse server info from output (reuse logic from fetch_server.py)
         from routes.fetch_server import _parse_server_info, _determine_port_and_username
@@ -358,7 +451,17 @@ def _is_port_22_open(app, user_id, ip_address):
 
 
 def _is_task_stopped(app, user_id, segment):
-    """Check if the task has been stopped by the user."""
+    """Check if the task has been stopped by the user.
+
+    First checks the in-memory stop event (fast, no DB needed),
+    then falls back to checking the database status.
+    """
+    # Fast check via stop event (no DB access needed)
+    stop_event = _get_stop_event(segment)
+    if stop_event and stop_event.is_set():
+        return True
+
+    # Fallback: check database status
     try:
         with app.app_context():
             from models.user_preference import BatchQueryTask
@@ -373,7 +476,7 @@ def _is_task_stopped(app, user_id, segment):
     return False
 
 
-def _run_batch_query(app, user_id, segment):
+def _run_batch_query(app, user_id, segment, stop_event=None):
     """Main batch query background task.
 
     Iterates through all IPs in the segment (1-255). For each IP:
@@ -387,7 +490,7 @@ def _run_batch_query(app, user_id, segment):
     as failed if an unexpected error occurs (prevents stuck 'running' tasks).
     """
     try:
-        _run_batch_query_inner(app, user_id, segment)
+        _run_batch_query_inner(app, user_id, segment, stop_event)
     except Exception as e:
         logger.error(f"Batch query for {segment} failed with unexpected error: {str(e)}")
         try:
@@ -406,7 +509,7 @@ def _run_batch_query(app, user_id, segment):
             _active_tasks.pop(segment, None)
 
 
-def _run_batch_query_inner(app, user_id, segment):
+def _run_batch_query_inner(app, user_id, segment, stop_event=None):
     """Inner implementation of the batch query task."""
     backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     python_dir = os.path.join(backend_dir, 'Python')
@@ -429,7 +532,7 @@ def _run_batch_query_inner(app, user_id, segment):
         _append_log(app, user_id, segment, 'Cookie刷新失败，继续执行（可能使用旧Cookie）')
 
     for i in range(1, 256):
-        # Check if task was stopped
+        # Check if task was stopped (checks stop_event first, then DB)
         if _is_task_stopped(app, user_id, segment):
             _append_log(app, user_id, segment, f'\n[任务已被用户停止]')
             _update_task_progress(
@@ -477,9 +580,31 @@ def _run_batch_query_inner(app, user_id, segment):
 
         # Acquire script execution lock to prevent concurrent writes to ip.txt/mm.py
         with _script_execution_lock:
+            # Check stop again before long-running script operations
+            if _is_task_stopped(app, user_id, segment):
+                _append_log(app, user_id, segment, f'\n[任务已被用户停止]')
+                _update_task_progress(
+                    app, user_id, segment,
+                    status='stopped',
+                    completed_at=china_now()
+                )
+                break
+
             # Step 1: Query ID
             _append_log(app, user_id, segment, f'[{ip_address}] 正在查询ID...')
-            id_result, id_log = _query_id_for_ip(ip_address, python_dir)
+            id_result, id_log = _query_id_for_ip(
+                ip_address, python_dir, stop_event, segment
+            )
+
+            # Check if stopped during ID query
+            if stop_event and stop_event.is_set():
+                _append_log(app, user_id, segment, f'\n[任务已被用户停止]')
+                _update_task_progress(
+                    app, user_id, segment,
+                    status='stopped',
+                    completed_at=china_now()
+                )
+                break
 
             if not id_result:
                 _append_log(app, user_id, segment, f'[{ip_address}] 未获取到ID，跳过')
@@ -516,7 +641,19 @@ def _run_batch_query_inner(app, user_id, segment):
 
             # Step 2: Fetch server
             _append_log(app, user_id, segment, f'[{ip_address}] 正在获取服务器 (ID={id_result})...')
-            added_servers, fetch_log = _fetch_server_for_ip(ip_address, id_result, python_dir, app)
+            added_servers, fetch_log = _fetch_server_for_ip(
+                ip_address, id_result, python_dir, app, stop_event, segment
+            )
+
+            # Check if stopped during server fetch
+            if stop_event and stop_event.is_set():
+                _append_log(app, user_id, segment, f'\n[任务已被用户停止]')
+                _update_task_progress(
+                    app, user_id, segment,
+                    status='stopped',
+                    completed_at=china_now()
+                )
+                break
 
         total_processed += 1
 
@@ -580,7 +717,8 @@ def start_batch_query(current_user):
 
     # Check if task is already running
     with _active_tasks_lock:
-        if segment in _active_tasks and _active_tasks[segment].is_alive():
+        task_info = _active_tasks.get(segment)
+        if task_info and task_info['thread'].is_alive():
             return jsonify({'message': '该IP段正在查询中'}), 409
 
     # Create or update task in database
@@ -614,18 +752,23 @@ def start_batch_query(current_user):
 
     db.session.commit()
 
-    # Start background thread
+    # Start background thread with stop event
     app = current_app._get_current_object()
+    stop_event = threading.Event()
     thread = threading.Thread(
         target=_run_batch_query,
-        args=(app, current_user.id, segment),
+        args=(app, current_user.id, segment, stop_event),
         daemon=True,
         name=f'batch-query-{segment}'
     )
     thread.start()
 
     with _active_tasks_lock:
-        _active_tasks[segment] = thread
+        _active_tasks[segment] = {
+            'thread': thread,
+            'stop_event': stop_event,
+            'process': None
+        }
 
     return jsonify(task.to_dict()), 200
 
@@ -636,6 +779,11 @@ def stop_batch_query(current_user):
     """Stop a running batch query.
 
     Request body: { "segment": "192.168.1" }
+
+    Uses a multi-layer stop mechanism:
+    1. Set stop event (immediate, in-memory signal to background thread)
+    2. Kill running subprocess (force-stop any hanging script)
+    3. Update database status with retry (handles SQLite lock contention)
     """
     data = request.get_json()
     if not data or not data.get('segment'):
@@ -656,12 +804,73 @@ def stop_batch_query(current_user):
     if task.status != 'running':
         return jsonify({'message': '任务未在运行中'}), 400
 
-    # Set status to stopped - the background thread checks this
-    task.status = 'stopped'
-    task.updated_at = china_now()
-    db.session.commit()
+    # Step 1: Signal stop via event (immediate, no DB needed)
+    stop_event = _get_stop_event(segment)
+    if stop_event:
+        stop_event.set()
+
+    # Step 2: Kill running subprocess to unblock the background thread
+    _kill_current_process(segment)
+
+    # Step 3: Update database with retry for SQLite lock contention
+    for attempt in range(DB_RETRY_COUNT):
+        try:
+            # Re-fetch task to avoid stale session data after potential rollback
+            task = BatchQueryTask.query.filter_by(
+                user_id=current_user.id, segment=segment
+            ).first()
+            if task and task.status == 'running':
+                task.status = 'stopped'
+                task.completed_at = china_now()
+                task.updated_at = china_now()
+                db.session.commit()
+            break
+        except Exception as e:
+            db.session.rollback()
+            if attempt < DB_RETRY_COUNT - 1:
+                time.sleep(DB_RETRY_DELAY)
+            else:
+                logger.error(f"Failed to update task status after {DB_RETRY_COUNT} retries: {str(e)}")
+                # Even if DB update fails, the stop event is set and process killed,
+                # so the background thread will still stop
+                return jsonify({
+                    'message': '停止信号已发送，数据库更新稍后完成',
+                    'segment': segment,
+                    'status': 'stopped'
+                }), 200
+
+    # Re-fetch final state for response
+    task = BatchQueryTask.query.filter_by(
+        user_id=current_user.id, segment=segment
+    ).first()
 
     return jsonify(task.to_dict()), 200
+
+
+def _cleanup_stale_task(task):
+    """Check if a running task has no active thread and mark as failed.
+
+    This handles the case where the server was restarted while a task was running,
+    leaving the task stuck in 'running' status with no actual background thread.
+    """
+    if task.status != 'running':
+        return
+
+    with _active_tasks_lock:
+        task_info = _active_tasks.get(task.segment)
+        if task_info and task_info['thread'].is_alive():
+            return  # Thread is still running, task is not stale
+
+    # No active thread for this running task - mark as failed
+    try:
+        from models import db
+        task.status = 'failed'
+        task.completed_at = china_now()
+        task.log_output = (task.log_output or '') + '\n[任务异常终止：后台线程已停止]\n'
+        db.session.commit()
+        logger.info(f"Cleaned up stale task for segment {task.segment}")
+    except Exception as e:
+        logger.error(f"Error cleaning up stale task: {str(e)}")
 
 
 @batch_query_bp.route('/status/<segment>', methods=['GET'])
@@ -677,6 +886,9 @@ def get_batch_query_status(current_user, segment):
     if not task:
         return jsonify({'status': 'not_found'}), 404
 
+    # Clean up stale tasks (e.g., after server restart)
+    _cleanup_stale_task(task)
+
     return jsonify(task.to_dict()), 200
 
 
@@ -689,5 +901,7 @@ def get_all_batch_query_tasks(current_user):
     tasks = BatchQueryTask.query.filter_by(user_id=current_user.id).all()
     result = {}
     for task in tasks:
+        # Clean up stale tasks (e.g., after server restart)
+        _cleanup_stale_task(task)
         result[task.segment] = task.to_dict()
     return jsonify(result), 200
